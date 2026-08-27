@@ -1,0 +1,54 @@
+import type { ReactNode } from "react";
+import { Link } from "react-router-dom";
+
+import { useTheme } from "@/shared/theme/ThemeProvider";
+import { IconMoon, IconSun, IconTerminal } from "@/shared/ui/icons";
+
+// Общая обёртка экранов входа: логотип, стеклянная карточка, переключатель темы.
+export default function AuthLayout({
+  title,
+  subtitle,
+  children,
+  footer,
+}: {
+  title: string;
+  subtitle: string;
+  children: ReactNode;
+  footer?: ReactNode;
+}) {
+  const { mode, toggleMode } = useTheme();
+
+  return (
+    <div className="flex min-h-screen items-center justify-center px-4 py-10">
+      <button
+        className="btn btn-secondary fixed right-4 top-4 h-9 w-9 !p-0"
+        onClick={toggleMode}
+        aria-label="Сменить тему"
+      >
+        {mode === "dark" ? <IconSun size={18} /> : <IconMoon size={18} />}
+      </button>
+
+      <div className="w-full max-w-md">
+        <Link to="/login" className="mb-6 flex items-center justify-center gap-3">
+          <span
+            className="grid h-11 w-11 place-items-center rounded-[var(--radius-md)] text-accent-fg"
+            style={{ background: "var(--gradient)" }}
+          >
+            <IconTerminal size={24} />
+          </span>
+          <span className="text-xl font-extrabold tracking-tight">
+            DevOps <span className="gradient-text">Platform</span>
+          </span>
+        </Link>
+
+        <div className="card p-6 sm:p-8">
+          <h1 className="text-xl font-bold text-fg">{title}</h1>
+          <p className="mt-1 text-sm text-muted">{subtitle}</p>
+          <div className="mt-6">{children}</div>
+        </div>
+
+        {footer && <div className="mt-4 text-center text-sm text-muted">{footer}</div>}
+      </div>
+    </div>
+  );
+}

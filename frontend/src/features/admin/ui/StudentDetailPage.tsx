@@ -1,0 +1,313 @@
+import { useState } from "react";
+import { Link, useParams } from "react-router-dom";
+import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+
+import {
+  useEnrollMutation,
+  useGetUserQuery,
+  useResetUserPasswordMutation,
+  useUnenrollMutation,
+  useUpdateUserMutation,
+} from "@/features/admin/api/adminApi";
+import { useGetAdminCoursesQuery } from "@/features/admin/api/coursesApi";
+import { apiErrorMessage } from "@/shared/api/baseApi";
+import type { CreatedStudent, UserStatus } from "@/shared/types";
+import {
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  Field,
+  Modal,
+  PageHeader,
+  Progress,
+  Select,
+  Spinner,
+  StatCard,
+} from "@/shared/ui";
+import { IconBook, IconChart, IconClock, IconKey, IconTrash } from "@/shared/ui/icons";
+import { useToast } from "@/shared/ui/ToastProvider";
+
+const STATUS_LABEL: Record<UserStatus, string> = {
+  active: "Активен",
+  invited: "Приглашён",
+  blocked: "Заблокирован",
+};
+
+const dayFmt = new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "short" });
+
+export default function StudentDetailPage() {
+  const { id = "" } = useParams();
+  const { data, isLoading } = useGetUserQuery(id, { skip: !id });
+  const { data: courses = [] } = useGetAdminCoursesQuery();
+
+  const [updateUser] = useUpdateUserMutation();
+  const [enroll, { isLoading: enrolling }] = useEnrollMutation();
+  const [unenroll] = useUnenrollMutation();
+  const [resetPassword, { isLoading: resetting }] = useResetUserPasswordMutation();
+
+  const [courseId, setCourseId] = useState("");
+  const [newPassword, setNewPassword] = useState<CreatedStudent | null>(null);
+  const toast = useToast();
+
+  if (isLoading || !data) {
+    return (
+      <div className="grid place-items-center py-20 text-accent">
+        <Spinner size={32} />
+      </div>
+    );
+  }
+
+  const { user, summary, enrollments, activity } = data;
+  const enrolledIds = new Set(enrollments.map((e) => e.courseId));
+  const available = courses.filter((course) => !enrolledIds.has(course.id));
+
+  const chartData = activity.map((day) => ({
+    day: dayFmt.format(new Date(day.day)),
+    Минуты: Math.round(day.secondsSpent / 60),
+  }));
+
+  const changeStatus = async (status: UserStatus) => {
+    try {
+      await updateUser({ id: user.id, status }).unwrap();
+      toast.success("Статус обновлён");
+    } catch (err) {
+      toast.error(apiErrorMessage(err));
+    }
+  };
+
+  const assignCourse = async () => {
+    if (!courseId) return;
+    try {
+      await enroll({ userId: user.id, courseId }).unwrap();
+      setCourseId("");
+      toast.success("Курс назначен");
+    } catch (err) {
+      toast.error(apiErrorMessage(err));
+    }
+  };
+
+  const removeCourse = async (id: string) => {
+    try {
+      await unenroll({ userId: user.id, courseId: id }).unwrap();
+      toast.success("Курс снят");
+    } catch (err) {
+      toast.error(apiErrorMessage(err));
+    }
+  };
+
+  const issueNewPassword = async () => {
+    if (!window.confirm("Сгенерировать новый пароль? Все активные сессии студента закроются.")) return;
+    try {
+      const result = await resetPassword({ id: user.id, sendMail: true }).unwrap();
+      setNewPassword(result);
+    } catch (err) {
+      toast.error(apiErrorMessage(err));
+    }
+  };
+
+  return (
+    <>
+      <PageHeader
+        title={user.fullName || user.email}
+        subtitle={user.email}
+        actions={
+          <>
+            <Link to="/admin/students" className="btn btn-ghost">
+              К списку
+            </Link>
+            <Button icon={<IconKey size={18} />} onClick={issueNewPassword} loading={resetting}>
+              Новый пароль
+            </Button>
+            {user.status === "blocked" ? (
+              <Button variant="primary" onClick={() => changeStatus("active")}>
+                Разблокировать
+              </Button>
+            ) : (
+              <Button variant="danger" onClick={() => changeStatus("blocked")}>
+                Заблокировать
+              </Button>
+            )}
+          </>
+        }
+      />
+
+      <div className="mb-[var(--gap)] flex flex-wrap gap-2">
+        <Badge tone={user.role === "admin" ? "accent" : "default"}>
+          {user.role === "admin" ? "Администратор" : "Студент"}
+        </Badge>
+        <Badge
+          tone={
+            user.status === "active" ? "success" : user.status === "invited" ? "warning" : "danger"
+          }
+        >
+          {STATUS_LABEL[user.status]}
+        </Badge>
+        {user.emailVerified && <Badge tone="success">Почта подтверждена</Badge>}
+      </div>
+
+      <div className="grid gap-[var(--gap)] sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          label="Прогресс"
+          value={`${Math.round(summary.progress)}%`}
+          hint={`${summary.lessonsCompleted} из ${summary.lessonsTotal} уроков`}
+          icon={<IconChart size={20} />}
+        />
+        <StatCard
+          label="Курсов"
+          value={summary.courses}
+          hint="Назначено студенту"
+          icon={<IconBook size={20} />}
+        />
+        <StatCard
+          label="Дней посещения"
+          value={summary.daysVisited}
+          hint="Всего за время обучения"
+          icon={<IconClock size={20} />}
+        />
+        <StatCard
+          label="Времени на платформе"
+          value={`${Math.floor(summary.minutesSpent / 60)} ч`}
+          hint={`${summary.minutesSpent} минут суммарно`}
+          icon={<IconClock size={20} />}
+        />
+      </div>
+
+      <div className="mt-[var(--gap)] grid gap-[var(--gap)] lg:grid-cols-5">
+        <Card className="p-[var(--pad)] lg:col-span-3">
+          <h2 className="mb-4 text-base font-bold text-fg">Активность за 30 дней</h2>
+          {chartData.length === 0 ? (
+            <EmptyState title="Студент ещё не заходил" icon={<IconClock size={32} />} />
+          ) : (
+            <div className="h-56">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={chartData}>
+                  <defs>
+                    <linearGradient id="activityFill" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="var(--accent)" stopOpacity={0.5} />
+                      <stop offset="100%" stopColor="var(--accent)" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                  <XAxis
+                    dataKey="day"
+                    tick={{ fill: "var(--text-muted)", fontSize: 11 }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    tick={{ fill: "var(--text-muted)", fontSize: 11 }}
+                    axisLine={false}
+                    tickLine={false}
+                    allowDecimals={false}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      background: "var(--surface-solid)",
+                      border: "1px solid var(--border)",
+                      borderRadius: "var(--radius-md)",
+                      color: "var(--text)",
+                    }}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="Минуты"
+                    stroke="var(--accent)"
+                    strokeWidth={2}
+                    fill="url(#activityFill)"
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </Card>
+
+        <Card className="p-[var(--pad)] lg:col-span-2">
+          <h2 className="mb-4 text-base font-bold text-fg">Курсы студента</h2>
+
+          <div className="mb-4 flex gap-2">
+            <Field>
+              <Select value={courseId} onChange={(e) => setCourseId(e.target.value)}>
+                <option value="">Выберите курс…</option>
+                {available.map((course) => (
+                  <option key={course.id} value={course.id}>
+                    {course.title}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Button variant="primary" onClick={assignCourse} disabled={!courseId} loading={enrolling}>
+              Назначить
+            </Button>
+          </div>
+
+          {enrollments.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted">Курсы ещё не назначены</p>
+          ) : (
+            <ul className="space-y-2">
+              {enrollments.map((enrollment) => (
+                <li
+                  key={enrollment.id}
+                  className="card-flat flex items-center gap-3 p-3"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-fg">{enrollment.courseTitle}</p>
+                    <p className="text-xs text-faint">{enrollment.courseSlug}</p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    className="h-8 !px-2 text-danger"
+                    onClick={() => removeCourse(enrollment.courseId)}
+                    title="Снять курс"
+                  >
+                    <IconTrash size={16} />
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <div className="mt-4">
+            <p className="mb-1.5 text-xs font-semibold text-faint">Общий прогресс</p>
+            <Progress value={summary.progress} />
+          </div>
+        </Card>
+      </div>
+
+      <Modal
+        open={Boolean(newPassword)}
+        onClose={() => setNewPassword(null)}
+        title="Новый пароль выдан"
+        footer={
+          <Button variant="primary" onClick={() => setNewPassword(null)}>
+            Готово
+          </Button>
+        }
+      >
+        {newPassword && (
+          <div className="space-y-3 text-sm">
+            <div className="card-flat p-3 font-mono">
+              <p>
+                <span className="text-faint">Логин: </span>
+                <span className="font-bold text-fg">{newPassword.user.email}</span>
+              </p>
+              <p>
+                <span className="text-faint">Пароль: </span>
+                <span className="font-bold text-accent">{newPassword.tempPassword}</span>
+              </p>
+            </div>
+            {newPassword.mailSent ? (
+              <p className="rounded-[var(--radius-md)] bg-[var(--success-soft)] px-3 py-2 text-success">
+                Пароль отправлен студенту на почту
+              </p>
+            ) : (
+              <p className="rounded-[var(--radius-md)] bg-[var(--warning-soft)] px-3 py-2 text-warning">
+                {newPassword.mailError || "Письмо не отправлено — передайте пароль вручную"}
+              </p>
+            )}
+          </div>
+        )}
+      </Modal>
+    </>
+  );
+}
