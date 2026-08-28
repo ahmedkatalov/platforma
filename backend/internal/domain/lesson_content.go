@@ -2,6 +2,7 @@ package domain
 
 import (
 	"encoding/json"
+	"regexp"
 	"strings"
 )
 
@@ -266,6 +267,19 @@ func mustJSON(v any) json.RawMessage {
 		return json.RawMessage(`{}`)
 	}
 	return data
+}
+
+// RunCodeCheck проверяет решение студента по одному условию задания.
+func RunCodeCheck(check CodeCheck, code string) bool {
+	switch check.Type {
+	case "notContains":
+		return !strings.Contains(code, check.Value)
+	case "regex":
+		re, err := regexp.Compile(check.Value)
+		return err == nil && re.MatchString(code)
+	default: // contains
+		return strings.Contains(code, check.Value)
+	}
 }
 
 // NormalizeCommand приводит команду к виду, пригодному для сравнения:

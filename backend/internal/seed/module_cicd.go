@@ -69,6 +69,31 @@ func moduleCICD() ModuleSeed {
 						"        with:\n" +
 						"          go-version: '1.25'\n",
 					"hint": "Секреты подставляются как ${{ secrets.ИМЯ }}.",
+					"solution": "name: ci\n" +
+						"\n" +
+						"on:\n" +
+						"  push:\n" +
+						"    branches: [main]\n" +
+						"\n" +
+						"jobs:\n" +
+						"  build:\n" +
+						"    runs-on: ubuntu-latest\n" +
+						"    steps:\n" +
+						"      - uses: actions/checkout@v4\n" +
+						"\n" +
+						"      - name: Setup Go\n" +
+						"        uses: actions/setup-go@v5\n" +
+						"        with:\n" +
+						"          go-version: '1.25'\n" +
+						"\n" +
+						"      - name: Test\n" +
+						"        run: go test ./...\n" +
+						"\n" +
+						"      - name: Build image\n" +
+						"        run: docker build -t registry.example.com/api:${{ github.sha }} .\n" +
+						"\n" +
+						"      - name: Login to registry\n" +
+						"        run: echo \"${{ secrets.REGISTRY_PASSWORD }}\" | docker login registry.example.com -u ci --password-stdin\n",
 					"checks": []map[string]any{
 						{"type": "regex", "value": "branches:\\s*(\\[\\s*(main|\"main\"|'main')\\s*\\]|\\n\\s*-\\s*(main|\"main\"|'main'))", "message": "Workflow запускается на push в main"},
 						{"type": "contains", "value": "actions/checkout", "message": "Код выгружается шагом checkout"},
@@ -76,6 +101,63 @@ func moduleCICD() ModuleSeed {
 						{"type": "regex", "value": "docker\\s+build", "message": "Образ собирается"},
 						{"type": "regex", "value": "secrets\\.[A-Z_]+", "message": "Пароль берётся из секретов"},
 						{"type": "notContains", "value": "password: ", "message": "Пароль не записан открытым текстом"},
+					},
+				},
+			},
+			{
+				Title:       "Тренажёр: разбор конвейера",
+				Kind:        "terminal",
+				Summary:     "Проверьте, что собирается и выкатывается на самом деле",
+				DurationMin: 18,
+				Content: map[string]any{
+					"intro": "Пайплайн упал на выкате. Проверьте, что происходит на сервере сборки.",
+					"shell": "student@devops",
+					"tasks": []map[string]any{
+						{
+							"id":     "c1",
+							"prompt": "Посмотрите файл конвейера ~/projects/api/.github/workflows/ci.yml",
+							"expected": []string{
+								"cat ~/projects/api/.github/workflows/ci.yml",
+								"cat /home/student/projects/api/.github/workflows/ci.yml",
+							},
+							"hint":    "cat и путь к файлу",
+							"success": "Видно этапы: checkout и тесты.",
+						},
+						{
+							"id":     "c2",
+							"prompt": "Соберите образ api:1.4.2 из каталога ~/projects/api",
+							"expected": []string{
+								"docker build -t api:1.4.2 ~/projects/api",
+								"docker build -t api:1.4.2 .",
+							},
+							"hint":    "docker build -t имя:тег путь",
+							"success": "Образ собран с явным тегом версии.",
+						},
+						{
+							"id":       "c3",
+							"prompt":   "Посмотрите список локальных образов",
+							"expected": []string{"docker images", "docker image ls"},
+							"hint":     "docker images",
+							"success":  "Образ на месте — сборка отработала.",
+						},
+						{
+							"id":       "c4",
+							"prompt":   "Проверьте историю коммитов в компактном виде, чтобы понять, что выкатывается",
+							"expected": []string{"git log --oneline"},
+							"hint":     "git log --oneline",
+							"success":  "Понятно, какой коммит поедет в прод.",
+						},
+						{
+							"id":     "c5",
+							"prompt": "Проверьте статус выката деплоймента api в кластере",
+							"expected": []string{
+								"kubectl rollout status deploy/api",
+								"kubectl rollout status deployment/api",
+								"kubectl rollout status deployment api",
+							},
+							"hint":    "kubectl rollout status deploy/имя",
+							"success": "Выкат завис на одной реплике — дальше смотрим поды и логи.",
+						},
 					},
 				},
 			},

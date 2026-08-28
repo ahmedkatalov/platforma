@@ -124,6 +124,86 @@ func moduleKubernetes() ModuleSeed {
 				},
 			},
 			{
+				Title:       "Практика: конфигурация и секреты",
+				Kind:        "code",
+				Summary:     "Вынесите настройки из образа в ConfigMap и Secret",
+				DurationMin: 22,
+				Content: map[string]any{
+					"language": "yaml",
+					"task": "Допишите манифест так, чтобы:\n\n" +
+						"1. переменная `LOG_LEVEL` приходила из ConfigMap через `configMapKeyRef`;\n" +
+						"2. пароль базы приходил из Secret через `secretKeyRef`;\n" +
+						"3. в манифесте не осталось пароля открытым текстом;\n" +
+						"4. были заданы `resources` с `requests`;\n" +
+						"5. образ был с зафиксированной версией, без `latest`.",
+					"starter": "apiVersion: apps/v1\n" +
+						"kind: Deployment\n" +
+						"metadata:\n" +
+						"  name: api\n" +
+						"spec:\n" +
+						"  replicas: 2\n" +
+						"  selector:\n" +
+						"    matchLabels:\n" +
+						"      app: api\n" +
+						"  template:\n" +
+						"    metadata:\n" +
+						"      labels:\n" +
+						"        app: api\n" +
+						"    spec:\n" +
+						"      containers:\n" +
+						"        - name: api\n" +
+						"          image: registry.example.com/api:latest\n" +
+						"          env:\n" +
+						"            - name: LOG_LEVEL\n" +
+						"              value: debug\n" +
+						"            - name: DB_PASSWORD\n" +
+						"              value: supersecret\n",
+					"hint": "Ссылка на ConfigMap:\nvalueFrom:\n  configMapKeyRef:\n    name: api-config\n    key: log-level",
+					"solution": "apiVersion: apps/v1\n" +
+						"kind: Deployment\n" +
+						"metadata:\n" +
+						"  name: api\n" +
+						"spec:\n" +
+						"  replicas: 2\n" +
+						"  selector:\n" +
+						"    matchLabels:\n" +
+						"      app: api\n" +
+						"  template:\n" +
+						"    metadata:\n" +
+						"      labels:\n" +
+						"        app: api\n" +
+						"    spec:\n" +
+						"      containers:\n" +
+						"        - name: api\n" +
+						"          image: registry.example.com/api:1.4.2\n" +
+						"          resources:\n" +
+						"            requests:\n" +
+						"              cpu: 100m\n" +
+						"              memory: 128Mi\n" +
+						"            limits:\n" +
+						"              cpu: 500m\n" +
+						"              memory: 256Mi\n" +
+						"          env:\n" +
+						"            - name: LOG_LEVEL\n" +
+						"              valueFrom:\n" +
+						"                configMapKeyRef:\n" +
+						"                  name: api-config\n" +
+						"                  key: log-level\n" +
+						"            - name: DB_PASSWORD\n" +
+						"              valueFrom:\n" +
+						"                secretKeyRef:\n" +
+						"                  name: api-secrets\n" +
+						"                  key: db-password\n",
+					"checks": []map[string]any{
+						{"type": "contains", "value": "configMapKeyRef", "message": "LOG_LEVEL берётся из ConfigMap"},
+						{"type": "contains", "value": "secretKeyRef", "message": "Пароль берётся из Secret"},
+						{"type": "notContains", "value": "value: supersecret", "message": "Пароля нет в открытом виде"},
+						{"type": "regex", "value": "(?s)resources:.*requests:", "message": "Заданы запрошенные ресурсы"},
+						{"type": "notContains", "value": "latest", "message": "Версия образа зафиксирована"},
+					},
+				},
+			},
+			{
 				Title:       "Проверка: Kubernetes",
 				Kind:        "quiz",
 				Summary:     "Объекты, пробы и диагностика",

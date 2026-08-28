@@ -1,6 +1,25 @@
 // Учебный эмулятор командной строки: виртуальная файловая система и набор
-// команд, которых хватает для практики по Linux, Docker и Kubernetes.
-// Ничего не выполняется по-настоящему — вывод имитируется.
+// команд, которых хватает для практики по Linux, Git, сети, Docker,
+// Kubernetes, IaC и мониторингу. Ничего не выполняется по-настоящему —
+// вывод имитируется.
+
+import {
+  runAnsible,
+  runCurl,
+  runDate,
+  runDig,
+  runDu,
+  runFree,
+  runGit,
+  runHelm,
+  runNginx,
+  runOpenssl,
+  runPing,
+  runSs,
+  runSshKeygen,
+  runTerraform,
+  runUptime,
+} from "./shellTools";
 
 export type FsFile = { type: "file"; content: string; mode?: string };
 export type FsDir = { type: "dir"; children: Record<string, FsNode>; mode?: string };
@@ -45,6 +64,108 @@ const COMPOSE = [
   "    image: postgres:16",
 ].join("\n");
 
+const MAIN_TF = [
+  'terraform {',
+  '  required_providers {',
+  '    aws = {',
+  '      source  = "hashicorp/aws"',
+  '      version = "~> 5.0"',
+  '    }',
+  '  }',
+  '}',
+  '',
+  'resource "aws_instance" "app" {',
+  '  ami           = var.ami_id',
+  '  instance_type = "t3.micro"',
+  '',
+  '  tags = {',
+  '    Name = "app-server"',
+  '  }',
+  '}',
+].join("\n");
+
+const PLAYBOOK = [
+  "- name: Configure web servers",
+  "  hosts: web",
+  "  become: true",
+  "  tasks:",
+  "    - name: Install nginx",
+  "      apt:",
+  "        name: nginx",
+  "        state: present",
+  "",
+  "    - name: Start nginx service",
+  "      service:",
+  "        name: nginx",
+  "        state: started",
+  "        enabled: true",
+].join("\n");
+
+const PROMETHEUS_YML = [
+  "global:",
+  "  scrape_interval: 15s",
+  "",
+  "scrape_configs:",
+  "  - job_name: api",
+  "    static_configs:",
+  "      - targets: ['app:8080']",
+  "",
+  "rule_files:",
+  "  - /etc/prometheus/alerts.yml",
+].join("\n");
+
+const ALERTS_YML = [
+  "groups:",
+  "  - name: api",
+  "    rules:",
+  "      - alert: HighErrorRate",
+  "        expr: rate(http_requests_total{code=~\"5..\"}[5m]) > 0.05",
+  "        for: 10m",
+  "        labels:",
+  "          severity: critical",
+  "        annotations:",
+  "          summary: Больше 5% ошибок за пять минут",
+].join("\n");
+
+const CI_WORKFLOW = [
+  "name: ci",
+  "",
+  "on:",
+  "  push:",
+  "    branches: [main]",
+  "",
+  "jobs:",
+  "  build:",
+  "    runs-on: ubuntu-latest",
+  "    steps:",
+  "      - uses: actions/checkout@v4",
+  "      - run: go test ./...",
+].join("\n");
+
+const NGINX_ACCESS = [
+  '10.0.0.9 - - [27/Aug/2026:09:15:01 +0300] "GET /api/orders HTTP/1.1" 200 1832 "-" "curl/8.6.0"',
+  '10.0.0.9 - - [27/Aug/2026:09:15:02 +0300] "POST /api/orders HTTP/1.1" 500 214 "-" "curl/8.6.0"',
+  '10.0.0.11 - - [27/Aug/2026:09:15:04 +0300] "GET /health HTTP/1.1" 200 15 "-" "kube-probe/1.30"',
+  '10.0.0.9 - - [27/Aug/2026:09:15:09 +0300] "GET /api/orders HTTP/1.1" 500 214 "-" "curl/8.6.0"',
+  '10.0.0.12 - - [27/Aug/2026:09:15:12 +0300] "GET /static/app.js HTTP/1.1" 304 0 "-" "Mozilla/5.0"',
+].join("\n");
+
+const DOCKERFILE = [
+  "FROM golang:1.25-alpine AS build",
+  "WORKDIR /src",
+  "COPY go.mod go.sum ./",
+  "RUN go mod download",
+  "COPY . .",
+  "RUN go build -o /app ./cmd/api",
+  "",
+  "FROM alpine:3.20",
+  "RUN adduser -D -u 10001 app",
+  "USER app",
+  "COPY --from=build /app /app",
+  "EXPOSE 8080",
+  'ENTRYPOINT ["/app"]',
+].join("\n");
+
 function file(content: string, mode = "-rw-r--r--"): FsFile {
   return { type: "file", content, mode };
 }
@@ -64,19 +185,49 @@ export function defaultFs(): FsDir {
         "notes.txt": file("Заметки к практике DevOps.\n"),
         projects: dir({
           api: dir({
-            Dockerfile: file("FROM alpine:3.20\nCMD [\"/app\"]\n"),
+            Dockerfile: file(DOCKERFILE),
+            ".github": dir({
+              workflows: dir({ "ci.yml": file(CI_WORKFLOW) }),
+            }),
           }),
+        }),
+        infra: dir({
+          "main.tf": file(MAIN_TF),
+          "variables.tf": file('variable "ami_id" {\n  type    = string\n  default = "ami-0c55b159cbfafe1f0"\n}\n'),
+        }),
+        ansible: dir({
+          "playbook.yml": file(PLAYBOOK),
+          "inventory.ini": file("[web]\nweb-1 ansible_host=10.0.0.21\n"),
+        }),
+        ".ssh": dir({
+          "known_hosts": file("github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl\n"),
         }),
       }),
     }),
     etc: dir({
       hosts: file("127.0.0.1 localhost\n10.0.0.5 db\n"),
-      nginx: dir({ "nginx.conf": file(NGINX_CONF) }),
+      "resolv.conf": file("nameserver 10.0.0.2\nsearch cluster.local\n"),
+      nginx: dir({
+        "nginx.conf": file(NGINX_CONF),
+        "sites-enabled": dir({
+          "app.conf": file(NGINX_CONF),
+        }),
+      }),
+      prometheus: dir({
+        "prometheus.yml": file(PROMETHEUS_YML),
+        "alerts.yml": file(ALERTS_YML),
+      }),
     }),
     var: dir({
       log: dir({
         "app.log": file(APP_LOG),
         "syslog": file("Aug 27 09:00:01 devops systemd[1]: Started nginx.\n"),
+        nginx: dir({
+          "access.log": file(NGINX_ACCESS),
+          "error.log": file(
+            '2026/08/27 09:15:02 [error] 712#712: *184 connect() failed (111: Connection refused) while connecting to upstream, client: 10.0.0.9, server: app.example.com, upstream: "http://10.0.0.4:8080/api/orders"\n',
+          ),
+        }),
       }),
     }),
     tmp: dir({}),
@@ -270,11 +421,17 @@ function runKubectl(args: string[]): string {
 
 const HELP = [
   "Доступные команды учебного терминала:",
-  "  pwd, ls, cd, cat, head, tail, grep, find, echo",
-  "  mkdir, touch, rm, cp, mv, chmod, chown",
-  "  ps, whoami, uname, df, history, clear",
-  "  docker …, kubectl …, git …",
+  "  файлы:      pwd, ls, cd, cat, head, tail, grep, find, echo, sort, uniq, wc",
+  "              mkdir, touch, rm, cp, mv, chmod, chown, du",
+  "  система:    ps, whoami, uname, df, free, uptime, date, systemctl, journalctl",
+  "  сеть:       curl, wget, dig, ss, ping, nginx",
+  "  git:        status, log, branch, checkout, add, commit, push, pull, merge, diff, revert",
+  "  контейнеры: docker …, kubectl …, helm …",
+  "  инфра:      terraform …, ansible, ansible-playbook",
+  "  секреты:    openssl, ssh-keygen",
+  "  прочее:     history, clear, help",
   "",
+  "Работают конвейеры: например `cat app.log | grep ERROR | wc -l`.",
   "Подсказка: команда задания проверяется на сервере платформы.",
 ].join("\n");
 
@@ -585,20 +742,101 @@ function executeSingle(state: ShellState, input: string): CommandResult {
     case "kubectl":
       return { output: runKubectl(args), state };
 
-    case "git": {
-      if (args[0] === "status") {
-        return {
-          output: "On branch main\nnothing to commit, working tree clean",
-          state,
-        };
+    case "git":
+      return { output: runGit(args), state };
+
+    // --- Сеть ---
+    case "curl":
+      return { output: runCurl(args), state };
+
+    case "wget":
+      return {
+        output: "--2026-08-27 09:20:14--  " + (operands[0] ?? "") + "\nHTTP request sent, awaiting response... 200 OK\nSaved",
+        state,
+      };
+
+    case "dig":
+    case "nslookup":
+      return { output: runDig(args), state };
+
+    case "ss":
+    case "netstat":
+      return { output: runSs(args), state };
+
+    case "ping":
+      return { output: runPing(args), state };
+
+    case "nginx":
+      return { output: runNginx(args), state };
+
+    // --- Инфраструктура как код ---
+    case "terraform":
+      return { output: runTerraform(args), state };
+
+    case "ansible":
+    case "ansible-playbook":
+      return { output: runAnsible(command, args), state };
+
+    case "helm":
+      return { output: runHelm(args), state };
+
+    // --- Безопасность ---
+    case "openssl":
+      return { output: runOpenssl(args), state };
+
+    case "ssh-keygen":
+      return { output: runSshKeygen(args), state };
+
+    // --- Ресурсы системы ---
+    case "free":
+      return { output: runFree(args), state };
+
+    case "du":
+      return { output: runDu(args), state };
+
+    case "uptime":
+      return { output: runUptime(), state };
+
+    case "date":
+      return { output: runDate(), state };
+
+    case "sort": {
+      const target = operands[0];
+      const segments = target ? resolve(state, target) : null;
+      const node = segments && nodeAt(state, segments);
+      if (!node || node.type !== "file") {
+        return { output: `sort: ${target ?? ""}: нет такого файла`, state };
       }
-      if (args[0] === "log") {
-        return {
-          output: "c3f9a21 (HEAD -> main) feat: add healthcheck\n9d1b70e chore: bump deps",
-          state,
-        };
+      const rows = node.content.trimEnd().split("\n").sort();
+      if (hasFlag("r")) rows.reverse();
+      return { output: rows.join("\n"), state };
+    }
+
+    case "uniq": {
+      const target = operands[0];
+      const segments = target ? resolve(state, target) : null;
+      const node = segments && nodeAt(state, segments);
+      if (!node || node.type !== "file") {
+        return { output: `uniq: ${target ?? ""}: нет такого файла`, state };
       }
-      return { output: "", state };
+      const rows = node.content.trimEnd().split("\n");
+      const unique = rows.filter((row, index) => index === 0 || row !== rows[index - 1]);
+      return { output: unique.join("\n"), state };
+    }
+
+    case "wc": {
+      const target = operands[0];
+      const segments = target ? resolve(state, target) : null;
+      const node = segments && nodeAt(state, segments);
+      if (!node || node.type !== "file") {
+        return { output: `wc: ${target ?? ""}: нет такого файла`, state };
+      }
+      const content = node.content.trimEnd();
+      const lines = content ? content.split("\n").length : 0;
+      const words = content ? content.split(/\s+/).filter(Boolean).length : 0;
+      if (hasFlag("l")) return { output: `${lines} ${target}`, state };
+      if (hasFlag("w")) return { output: `${words} ${target}`, state };
+      return { output: `${lines} ${words} ${content.length} ${target}`, state };
     }
 
     case "exit":

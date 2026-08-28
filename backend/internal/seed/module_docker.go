@@ -148,7 +148,27 @@ func moduleDocker() ModuleSeed {
 						{"type": "regex", "value": "(?s)volumes:.*pgdata", "message": "Объявлен том pgdata"},
 						{"type": "notContains", "value": "latest", "message": "Версии образов зафиксированы, без latest"},
 					},
-					"solution": "services:\n  app:\n    build: .\n    ports:\n      - \"8080:8080\"\n    depends_on:\n      - db\n",
+					"solution": "services:\n" +
+						"  app:\n" +
+						"    build: .\n" +
+						"    ports:\n" +
+						"      - \"8080:8080\"\n" +
+						"    depends_on:\n" +
+						"      - db\n" +
+						"    environment:\n" +
+						"      DATABASE_URL: postgres://app:secret@db:5432/app\n" +
+						"\n" +
+						"  db:\n" +
+						"    image: postgres:16\n" +
+						"    environment:\n" +
+						"      POSTGRES_USER: app\n" +
+						"      POSTGRES_DB: app\n" +
+						"      POSTGRES_PASSWORD: secret\n" +
+						"    volumes:\n" +
+						"      - pgdata:/var/lib/postgresql/data\n" +
+						"\n" +
+						"volumes:\n" +
+						"  pgdata:\n",
 				},
 			},
 			{

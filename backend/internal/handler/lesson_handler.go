@@ -439,7 +439,7 @@ func (h *LessonHandler) checkCode(w http.ResponseWriter, r *http.Request) {
 	passedAll := true
 
 	for _, check := range code.Checks {
-		ok := runCodeCheck(check, body.Code)
+		ok := domain.RunCodeCheck(check, body.Code)
 		if !ok {
 			passedAll = false
 		}
@@ -519,18 +519,6 @@ func matchCommand(task *domain.TerminalTask, command string) bool {
 		}
 	}
 	return false
-}
-
-func runCodeCheck(check domain.CodeCheck, code string) bool {
-	switch check.Type {
-	case "notContains":
-		return !strings.Contains(code, check.Value)
-	case "regex":
-		re, err := regexp.Compile(check.Value)
-		return err == nil && re.MatchString(code)
-	default: // contains
-		return strings.Contains(code, check.Value)
-	}
 }
 
 func describeCheck(check domain.CodeCheck) string {
