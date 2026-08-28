@@ -1,0 +1,471 @@
+package handler
+
+import (
+	"errors"
+	"net/http"
+	"regexp"
+	"strings"
+
+	"platforma/backend/internal/domain"
+	"platforma/backend/internal/middleware"
+	"platforma/backend/internal/repository"
+
+	"github.com/go-chi/chi/v5"
+)
+
+// LessonHandler — прохождение уроков студентом: теория, квизы, терминал и код.
+type LessonHandler struct {
+	progress *repository.ProgressRepo
+	courses  *repository.CourseRepo
+	activity *repository.ActivityRepo
+}
+
+func NewLessonHandler(
+	progress *repository.ProgressRepo,
+	courses *repository.CourseRepo,
+	activity *repository.ActivityRepo,
+) *LessonHandler {
+	return &LessonHandler{progress: progress, courses: courses, activity: activity}
+}
+
+func (h *LessonHandler) Routes() http.Handler {
+	r := chi.NewRouter()
+	r.Get("/{id}", h.get)
+	r.Post("/{id}/start", h.start)
+	r.Post("/{id}/complete", h.complete)
+	r.Post("/{id}/quiz", h.submitQuiz)
+	r.Post("/{id}/terminal", h.checkTerminal)
+	r.Post("/{id}/code", h.checkCode)
+	return r
+}
+
+// access проверяет, что студент записан на курс урока (админу доступно всё).
+func (h *LessonHandler) access(r *http.Request, lessonID string) (*repository.LessonContext, error) {
+	lesson, err := h.progress.LessonWithCourse(r.Context(), lessonID)
+	if err != nil {
+		return nil, err
+	}
+
+	if middleware.Role(r.Context()) == domain.RoleAdmin {
+		return lesson, nil
+	}
+	if !lesson.Published {
+		return nil, repository.ErrNotFound
+	}
+
+	enrolled, err := h.courses.IsEnrolled(r.Context(), middleware.UserID(r.Context()), lesson.CourseID)
+	if err != nil {
+		return nil, err
+	}
+	if !enrolled {
+		return nil, errNoAccess
+	}
+	return lesson, nil
+}
+
+var errNoAccess = errors.New("курс вам ещё не открыт — обратитесь к администратору")
+
+func (h *LessonHandler) writeAccessError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, repository.ErrNotFound):
+		writeError(w, http.StatusNotFound, "Урок не найден")
+	case errors.Is(err, errNoAccess):
+		writeError(w, http.StatusForbidden, err.Error())
+	default:
+		writeError(w, http.StatusInternalServerError, "Не удалось открыть урок")
+	}
+}
+
+// GET /api/lessons/{id} — урок без правильных ответов, плюс прогресс студента.
+func (h *LessonHandler) get(w http.ResponseWriter, r *http.Request) {
+	lessonID := chi.URLParam(r, "id")
+
+	lesson, err := h.access(r, lessonID)
+	if err != nil {
+		h.writeAccessError(w, err)
+		return
+	}
+
+	userID := middleware.UserID(r.Context())
+	lesson.Lesson.Content = domain.SanitizeContent(lesson.Lesson.Kind, lesson.Lesson.Content)
+
+	progress, err := h.progress.ForCourse(r.Context(), userID, lesson.CourseID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Не удалось загрузить прогресс")
+		return
+	}
+
+	tasks, err := h.progress.Tasks(r.Context(), userID, lessonID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Не удалось загрузить задания")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"lesson":       lesson.Lesson,
+		"courseId":     lesson.CourseID,
+		"courseSlug":   lesson.CourseSlug,
+		"courseTitle":  lesson.CourseTitle,
+		"moduleTitle":  lesson.ModuleTitle,
+		"prevLessonId": lesson.PrevID,
+		"nextLessonId": lesson.NextID,
+		"progress":     progress,
+		"tasks":        tasks,
+	})
+}
+
+func (h *LessonHandler) start(w http.ResponseWriter, r *http.Request) {
+	lessonID := chi.URLParam(r, "id")
+	if _, err := h.access(r, lessonID); err != nil {
+		h.writeAccessError(w, err)
+		return
+	}
+
+	if err := h.progress.Start(r.Context(), middleware.UserID(r.Context()), lessonID); err != nil {
+		writeError(w, http.StatusInternalServerError, "Не удалось начать урок")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"message": "ok"})
+}
+
+// POST /api/lessons/{id}/complete — отметить теорию пройденной.
+func (h *LessonHandler) complete(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Seconds int `json:"seconds"`
+	}
+	if err := decodeJSON(w, r, &body); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	lessonID := chi.URLParam(r, "id")
+	if _, err := h.access(r, lessonID); err != nil {
+		h.writeAccessError(w, err)
+		return
+	}
+
+	userID := middleware.UserID(r.Context())
+	seconds := clampSeconds(body.Seconds)
+
+	if err := h.progress.Complete(r.Context(), userID, lessonID, nil, seconds); err != nil {
+		writeError(w, http.StatusInternalServerError, "Не удалось сохранить прогресс")
+		return
+	}
+	_ = h.activity.Touch(r.Context(), userID, seconds)
+
+	writeJSON(w, http.StatusOK, map[string]string{"message": "Урок отмечен пройденным"})
+}
+
+// POST /api/lessons/{id}/quiz — проверка ответов на сервере.
+func (h *LessonHandler) submitQuiz(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Answers []domain.QuizAnswer `json:"answers"`
+		Seconds int                 `json:"seconds"`
+	}
+	if err := decodeJSON(w, r, &body); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	lessonID := chi.URLParam(r, "id")
+	lesson, err := h.access(r, lessonID)
+	if err != nil {
+		h.writeAccessError(w, err)
+		return
+	}
+	if lesson.Lesson.Kind != domain.LessonQuiz {
+		writeError(w, http.StatusBadRequest, "Этот урок не является квизом")
+		return
+	}
+
+	quiz, err := domain.ParseQuiz(lesson.Lesson.Content)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Некорректное содержимое квиза")
+		return
+	}
+
+	result := domain.GradeQuiz(quiz, body.Answers)
+	userID := middleware.UserID(r.Context())
+	seconds := clampSeconds(body.Seconds)
+
+	attemptID, err := h.progress.SaveAttempt(r.Context(), userID, lessonID, domain.LessonQuiz,
+		result.Score, result.CorrectCount, result.TotalCount, result.Passed, seconds,
+		map[string]any{"questions": result.Questions})
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Не удалось сохранить попытку")
+		return
+	}
+
+	timings := make(map[string]int, len(body.Answers))
+	for _, answer := range body.Answers {
+		timings[answer.QuestionID] = clampSeconds(answer.SecondsSpent)
+	}
+	if err := h.progress.SaveQuizAnswers(r.Context(), attemptID, userID, lessonID,
+		result.Questions, timings); err != nil {
+		writeError(w, http.StatusInternalServerError, "Не удалось сохранить ответы")
+		return
+	}
+
+	score := result.Score
+	if result.Passed {
+		err = h.progress.Complete(r.Context(), userID, lessonID, &score, seconds)
+	} else {
+		err = h.progress.TouchAttempt(r.Context(), userID, lessonID, &score, seconds)
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Не удалось сохранить прогресс")
+		return
+	}
+	_ = h.activity.Touch(r.Context(), userID, seconds)
+
+	writeJSON(w, http.StatusOK, result)
+}
+
+// POST /api/lessons/{id}/terminal — проверка одной команды из задания.
+func (h *LessonHandler) checkTerminal(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		TaskID   string `json:"taskId"`
+		Command  string `json:"command"`
+		UsedHint bool   `json:"usedHint"`
+		Seconds  int    `json:"seconds"`
+	}
+	if err := decodeJSON(w, r, &body); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	lessonID := chi.URLParam(r, "id")
+	lesson, err := h.access(r, lessonID)
+	if err != nil {
+		h.writeAccessError(w, err)
+		return
+	}
+	if lesson.Lesson.Kind != domain.LessonTerminal {
+		writeError(w, http.StatusBadRequest, "Этот урок не является тренажёром терминала")
+		return
+	}
+
+	terminal, err := domain.ParseTerminal(lesson.Lesson.Content)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Некорректное содержимое урока")
+		return
+	}
+
+	var task *domain.TerminalTask
+	for i := range terminal.Tasks {
+		if terminal.Tasks[i].ID == body.TaskID {
+			task = &terminal.Tasks[i]
+			break
+		}
+	}
+	if task == nil {
+		writeError(w, http.StatusNotFound, "Задание не найдено")
+		return
+	}
+
+	solved := matchCommand(task, body.Command)
+	userID := middleware.UserID(r.Context())
+
+	if err := h.progress.MarkTask(r.Context(), userID, lessonID, task.ID, solved, body.UsedHint); err != nil {
+		writeError(w, http.StatusInternalServerError, "Не удалось сохранить попытку")
+		return
+	}
+
+	completed, err := h.progress.CompletedTaskIDs(r.Context(), userID, lessonID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Не удалось проверить прогресс")
+		return
+	}
+
+	allDone := len(terminal.Tasks) > 0
+	for _, t := range terminal.Tasks {
+		if !completed[t.ID] {
+			allDone = false
+			break
+		}
+	}
+
+	seconds := clampSeconds(body.Seconds)
+	if allDone {
+		score := 100.0
+		if err := h.progress.Complete(r.Context(), userID, lessonID, &score, seconds); err != nil {
+			writeError(w, http.StatusInternalServerError, "Не удалось сохранить прогресс")
+			return
+		}
+		_ = h.activity.Touch(r.Context(), userID, seconds)
+	}
+
+	message := task.Success
+	if solved && message == "" {
+		message = "Верно! Задание выполнено."
+	}
+	if !solved {
+		message = "Пока не то. Проверьте команду и попробуйте ещё раз."
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"solved":         solved,
+		"message":        message,
+		"hint":           task.Hint,
+		"completedTasks": keys(completed),
+		"lessonComplete": allDone,
+	})
+}
+
+// POST /api/lessons/{id}/code — проверка решения в редакторе кода.
+func (h *LessonHandler) checkCode(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Code    string `json:"code"`
+		Seconds int    `json:"seconds"`
+	}
+	if err := decodeJSON(w, r, &body); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	lessonID := chi.URLParam(r, "id")
+	lesson, err := h.access(r, lessonID)
+	if err != nil {
+		h.writeAccessError(w, err)
+		return
+	}
+	if lesson.Lesson.Kind != domain.LessonCode {
+		writeError(w, http.StatusBadRequest, "Этот урок не является практикой с кодом")
+		return
+	}
+
+	code, err := domain.ParseCode(lesson.Lesson.Content)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Некорректное содержимое урока")
+		return
+	}
+
+	type checkResult struct {
+		OK      bool   `json:"ok"`
+		Message string `json:"message"`
+	}
+
+	results := make([]checkResult, 0, len(code.Checks))
+	passedAll := true
+
+	for _, check := range code.Checks {
+		ok := runCodeCheck(check, body.Code)
+		if !ok {
+			passedAll = false
+		}
+		message := check.Message
+		if message == "" {
+			message = describeCheck(check)
+		}
+		results = append(results, checkResult{OK: ok, Message: message})
+	}
+
+	// Урок без проверок засчитывается по факту отправки решения.
+	if len(code.Checks) == 0 {
+		passedAll = strings.TrimSpace(body.Code) != ""
+	}
+
+	okCount := 0
+	for _, result := range results {
+		if result.OK {
+			okCount++
+		}
+	}
+
+	score := 0.0
+	if len(results) > 0 {
+		score = float64(okCount) / float64(len(results)) * 100
+	} else if passedAll {
+		score = 100
+	}
+
+	userID := middleware.UserID(r.Context())
+	seconds := clampSeconds(body.Seconds)
+
+	if _, err := h.progress.SaveAttempt(r.Context(), userID, lessonID, domain.LessonCode,
+		score, okCount, len(results), passedAll, seconds,
+		map[string]any{"checks": results}); err != nil {
+		writeError(w, http.StatusInternalServerError, "Не удалось сохранить попытку")
+		return
+	}
+
+	if passedAll {
+		err = h.progress.Complete(r.Context(), userID, lessonID, &score, seconds)
+	} else {
+		err = h.progress.TouchAttempt(r.Context(), userID, lessonID, &score, seconds)
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Не удалось сохранить прогресс")
+		return
+	}
+	_ = h.activity.Touch(r.Context(), userID, seconds)
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"passed": passedAll,
+		"score":  score,
+		"checks": results,
+		"hint":   code.Hint,
+	})
+}
+
+// matchCommand сверяет введённую команду со списком допустимых или с шаблоном.
+func matchCommand(task *domain.TerminalTask, command string) bool {
+	normalized := domain.NormalizeCommand(command)
+	if normalized == "" {
+		return false
+	}
+
+	for _, expected := range task.Expected {
+		if strings.EqualFold(domain.NormalizeCommand(expected), normalized) {
+			return true
+		}
+	}
+
+	if task.Pattern != "" {
+		if re, err := regexp.Compile(task.Pattern); err == nil && re.MatchString(normalized) {
+			return true
+		}
+	}
+	return false
+}
+
+func runCodeCheck(check domain.CodeCheck, code string) bool {
+	switch check.Type {
+	case "notContains":
+		return !strings.Contains(code, check.Value)
+	case "regex":
+		re, err := regexp.Compile(check.Value)
+		return err == nil && re.MatchString(code)
+	default: // contains
+		return strings.Contains(code, check.Value)
+	}
+}
+
+func describeCheck(check domain.CodeCheck) string {
+	switch check.Type {
+	case "notContains":
+		return "В решении не должно быть: " + check.Value
+	case "regex":
+		return "Решение должно соответствовать шаблону: " + check.Value
+	default:
+		return "Решение должно содержать: " + check.Value
+	}
+}
+
+func clampSeconds(seconds int) int {
+	if seconds < 0 {
+		return 0
+	}
+	if seconds > 3600 {
+		return 3600
+	}
+	return seconds
+}
+
+func keys(m map[string]bool) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	return out
+}

@@ -1,5 +1,13 @@
 import { baseApi } from "@/shared/api/baseApi";
-import type { Course, CourseLevel, CourseStatus, Lesson, LessonKind, Module } from "@/shared/types";
+import type {
+  Course,
+  CourseLevel,
+  CourseStatus,
+  Lesson,
+  LessonKind,
+  LessonProgress,
+  Module,
+} from "@/shared/types";
 
 export type CoursePayload = {
   slug: string;
@@ -31,7 +39,10 @@ export const coursesApi = baseApi.injectEndpoints({
       query: () => "/courses",
       providesTags: ["Courses"],
     }),
-    getStudentCourse: builder.query<{ course: Course; enrolled: boolean }, string>({
+    getStudentCourse: builder.query<
+      { course: Course; enrolled: boolean; progress: LessonProgress[] },
+      string
+    >({
       query: (slug) => `/courses/${slug}`,
       providesTags: (_r, _e, slug) => [{ type: "Course", id: slug }],
     }),

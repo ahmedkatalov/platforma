@@ -1,0 +1,190 @@
+package seed
+
+func moduleKubernetes() ModuleSeed {
+	return ModuleSeed{
+		Title:   "Kubernetes",
+		Summary: "Поды, деплойменты, сервисы и первая диагностика кластера",
+		Lessons: []LessonSeed{
+			{
+				Title:       "Объекты кластера",
+				Kind:        "text",
+				Summary:     "Pod, ReplicaSet, Deployment, Service и как они связаны",
+				DurationMin: 18,
+				Content: map[string]any{
+					"body": "## Зачем оркестратор\n\n" +
+						"Docker запускает контейнеры на одной машине. Kubernetes отвечает за то, " +
+						"чтобы нужное количество контейнеров работало на множестве машин: " +
+						"перезапускает упавшие, распределяет нагрузку, катит обновления без простоя.\n\n" +
+						"## Основные объекты\n\n" +
+						"- **Pod** — минимальная единица запуска: один или несколько контейнеров с общей сетью.\n" +
+						"- **ReplicaSet** — следит, чтобы подов было ровно столько, сколько заказано.\n" +
+						"- **Deployment** — описывает желаемое состояние и управляет обновлением ReplicaSet.\n" +
+						"- **Service** — стабильный адрес для группы подов; поды приходят и уходят, адрес остаётся.\n" +
+						"- **Ingress** — правила входящего HTTP-трафика: домены и пути.\n" +
+						"- **ConfigMap** и **Secret** — конфигурация и чувствительные данные отдельно от образа.\n\n" +
+						"## Декларативный подход\n\n" +
+						"Вы не говорите «запусти контейнер». Вы описываете желаемое состояние, " +
+						"а кластер сам приводит реальность к нему:\n\n" +
+						"```yaml\n" +
+						"apiVersion: apps/v1\n" +
+						"kind: Deployment\n" +
+						"metadata:\n" +
+						"  name: api\n" +
+						"spec:\n" +
+						"  replicas: 3\n" +
+						"  selector:\n" +
+						"    matchLabels:\n" +
+						"      app: api\n" +
+						"  template:\n" +
+						"    metadata:\n" +
+						"      labels:\n" +
+						"        app: api\n" +
+						"    spec:\n" +
+						"      containers:\n" +
+						"        - name: api\n" +
+						"          image: registry.example.com/api:1.4.2\n" +
+						"          ports:\n" +
+						"            - containerPort: 8080\n" +
+						"          resources:\n" +
+						"            requests:\n" +
+						"              cpu: 100m\n" +
+						"              memory: 128Mi\n" +
+						"            limits:\n" +
+						"              cpu: 500m\n" +
+						"              memory: 256Mi\n" +
+						"```\n\n" +
+						"## Проверки состояния\n\n" +
+						"- `readinessProbe` — готов ли под принимать трафик. Пока не готов, Service его не отдаёт.\n" +
+						"- `livenessProbe` — жив ли контейнер. Не отвечает — кластер его перезапустит.\n\n" +
+						"Без readiness-пробы обновление приведёт к ошибкам: трафик пойдёт в ещё не поднявшееся приложение.\n\n" +
+						"## Диагностика\n\n" +
+						"```bash\n" +
+						"kubectl get pods                 # список подов\n" +
+						"kubectl describe pod api-xxx     # события и причина проблемы\n" +
+						"kubectl logs -f api-xxx          # логи\n" +
+						"kubectl rollout status deploy/api\n" +
+						"kubectl rollout undo deploy/api  # откат\n" +
+						"```\n\n" +
+						"> Статус `CrashLoopBackOff` почти всегда означает: приложение падает при старте. " +
+						"Смотрите `kubectl logs` — причина там.",
+				},
+			},
+			{
+				Title:       "Тренажёр: kubectl",
+				Kind:        "terminal",
+				Summary:     "Диагностика приложения в кластере",
+				DurationMin: 20,
+				Content: map[string]any{
+					"intro": "В кластере развёрнут деплоймент api. Разберитесь с его состоянием.",
+					"shell": "student@devops",
+					"tasks": []map[string]any{
+						{
+							"id":       "k1",
+							"prompt":   "Выведите список подов",
+							"expected": []string{"kubectl get pods", "kubectl get pod", "kubectl get po"},
+							"hint":     "kubectl get и тип ресурса",
+							"success":  "Так проверяют, что запущено в текущем namespace.",
+						},
+						{
+							"id":       "k2",
+							"prompt":   "Посмотрите подробности и события пода api-7d9f (describe)",
+							"expected": []string{"kubectl describe pod api-7d9f", "kubectl describe po api-7d9f"},
+							"hint":     "kubectl describe pod имя",
+							"success":  "В разделе Events видно, почему под не стартует.",
+						},
+						{
+							"id":       "k3",
+							"prompt":   "Прочитайте логи пода api-7d9f в режиме слежения",
+							"expected": []string{"kubectl logs -f api-7d9f", "kubectl logs --follow api-7d9f"},
+							"hint":     "kubectl logs с флагом -f",
+							"success":  "Логи — первое место, куда смотрят при CrashLoopBackOff.",
+						},
+						{
+							"id":       "k4",
+							"prompt":   "Проверьте статус выката деплоймента api",
+							"expected": []string{"kubectl rollout status deploy/api", "kubectl rollout status deployment/api", "kubectl rollout status deployment api"},
+							"hint":     "kubectl rollout status deploy/имя",
+							"success":  "Команда ждёт завершения обновления и покажет, если оно застряло.",
+						},
+						{
+							"id":       "k5",
+							"prompt":   "Откатите деплоймент api к предыдущей версии",
+							"expected": []string{"kubectl rollout undo deploy/api", "kubectl rollout undo deployment/api"},
+							"hint":     "rollout undo",
+							"success":  "Быстрый откат — обязательная часть плана выката.",
+						},
+						{
+							"id":       "k6",
+							"prompt":   "Отмасштабируйте деплоймент api до 3 реплик",
+							"expected": []string{"kubectl scale deploy/api --replicas=3", "kubectl scale deployment/api --replicas=3", "kubectl scale deployment api --replicas=3"},
+							"hint":     "kubectl scale и флаг --replicas",
+							"success":  "Реплик стало три — нагрузка распределится между ними.",
+						},
+					},
+				},
+			},
+			{
+				Title:       "Проверка: Kubernetes",
+				Kind:        "quiz",
+				Summary:     "Объекты, пробы и диагностика",
+				DurationMin: 10,
+				Content: map[string]any{
+					"passScore": 70,
+					"questions": []map[string]any{
+						{
+							"id":   "q1",
+							"text": "Что такое Pod?",
+							"options": []map[string]any{
+								{"id": "a", "text": "Минимальная единица запуска: один или несколько контейнеров с общей сетью", "correct": true},
+								{"id": "b", "text": "Физический сервер кластера", "correct": false},
+								{"id": "c", "text": "Другое название образа", "correct": false},
+							},
+							"explanation": "Узел кластера — это Node, а Pod — единица запуска на нём.",
+						},
+						{
+							"id":   "q2",
+							"text": "Зачем нужен Service, если у пода уже есть IP-адрес?",
+							"options": []map[string]any{
+								{"id": "a", "text": "Поды пересоздаются и меняют адреса, Service даёт стабильную точку входа", "correct": true},
+								{"id": "b", "text": "Service ускоряет работу контейнера", "correct": false},
+								{"id": "c", "text": "Без Service под не запустится", "correct": false},
+							},
+							"explanation": "Service балансирует трафик между подами по меткам и не меняет адрес.",
+						},
+						{
+							"id":       "q3",
+							"text":     "Чем readinessProbe отличается от livenessProbe?",
+							"multiple": true,
+							"options": []map[string]any{
+								{"id": "a", "text": "readiness решает, слать ли поду трафик", "correct": true},
+								{"id": "b", "text": "liveness решает, надо ли перезапустить контейнер", "correct": true},
+								{"id": "c", "text": "Обе пробы делают одно и то же", "correct": false},
+							},
+							"explanation": "Readiness управляет трафиком, liveness — перезапуском.",
+						},
+						{
+							"id":   "q4",
+							"text": "Под в статусе CrashLoopBackOff. С чего начать?",
+							"options": []map[string]any{
+								{"id": "a", "text": "Посмотреть kubectl logs и события в describe", "correct": true},
+								{"id": "b", "text": "Сразу увеличить количество реплик", "correct": false},
+								{"id": "c", "text": "Перезагрузить кластер", "correct": false},
+							},
+							"explanation": "Приложение падает при старте — причина почти всегда в логах и событиях.",
+						},
+						{
+							"id":   "q5",
+							"text": "Зачем задавать requests и limits для контейнера?",
+							"options": []map[string]any{
+								{"id": "a", "text": "Чтобы планировщик знал, сколько ресурсов нужно, и один сервис не съел весь узел", "correct": true},
+								{"id": "b", "text": "Это обязательное поле, без него манифест невалиден", "correct": false},
+								{"id": "c", "text": "Чтобы ускорить скачивание образа", "correct": false},
+							},
+							"explanation": "requests участвуют в планировании, limits ограничивают потребление.",
+						},
+					},
+				},
+			},
+		},
+	}
+}

@@ -12,6 +12,7 @@ import CourseEditorPage from "@/features/admin/ui/CourseEditorPage";
 import AdminDashboardPage from "@/features/admin/ui/DashboardPage";
 import StudentDetailPage from "@/features/admin/ui/StudentDetailPage";
 import StudentsPage from "@/features/admin/ui/StudentsPage";
+import LessonPage from "@/features/learning/ui/LessonPage";
 import StudentCoursePage from "@/features/student/ui/CoursePage";
 import StudentCoursesPage from "@/features/student/ui/CoursesPage";
 import StudentDashboardPage from "@/features/student/ui/DashboardPage";
@@ -120,6 +121,7 @@ export default function App() {
         <Route index element={<StudentDashboardPage />} />
         <Route path="courses" element={<StudentCoursesPage />} />
         <Route path="courses/:slug" element={<StudentCoursePage />} />
+        <Route path="courses/:slug/lessons/:lessonId" element={<LessonPage />} />
         <Route path="stats" element={<StudentStatsPage />} />
         <Route path="profile" element={<ProfilePage />} />
       </Route>

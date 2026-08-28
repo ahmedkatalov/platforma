@@ -1,16 +1,32 @@
 import { Link } from "react-router-dom";
 
 import { useAppSelector } from "@/app/store";
-import { useGetStudentCoursesQuery } from "@/features/admin/api/coursesApi";
-import { useGetMeQuery, useGetMyStatsQuery } from "@/shared/api/meApi";
-import { Badge, Button, Card, EmptyState, PageHeader, Spinner, StatCard } from "@/shared/ui";
-import { IconBook, IconChart, IconClock, IconFlame } from "@/shared/ui/icons";
+import {
+  useGetStudentCourseQuery,
+  useGetStudentCoursesQuery,
+} from "@/features/admin/api/coursesApi";
+import { useGetMyStatsQuery } from "@/shared/api/meApi";
+import type { LessonKind, LessonProgress } from "@/shared/types";
+import { Badge, Card, EmptyState, PageHeader, Progress, Spinner, StatCard } from "@/shared/ui";
+import { IconBook, IconChart, IconClock, IconFlame, IconTerminal } from "@/shared/ui/icons";
+
+const KIND_LABEL: Record<LessonKind, string> = {
+  text: "Теория",
+  quiz: "Квиз",
+  terminal: "Тренажёр",
+  code: "Практика с кодом",
+};
 
 export default function DashboardPage() {
   const user = useAppSelector((state) => state.auth.user);
-  const { data: me } = useGetMeQuery();
   const { data: stats, isLoading } = useGetMyStatsQuery(30);
   const { data: catalog = [] } = useGetStudentCoursesQuery();
+
+  const myCourses = catalog.filter((item) => item.enrolled);
+  const activeSlug = myCourses[0]?.course.slug ?? "";
+
+  // Подтягиваем структуру первого курса, чтобы предложить следующий урок.
+  const { data: activeCourse } = useGetStudentCourseQuery(activeSlug, { skip: !activeSlug });
 
   if (isLoading || !stats) {
     return (
@@ -20,10 +36,16 @@ export default function DashboardPage() {
     );
   }
 
-  const enrollments = me?.enrollments ?? [];
-  const myCourses = catalog.filter((item) => item.enrolled);
+  const progressByLesson = new Map<string, LessonProgress>();
+  (activeCourse?.progress ?? []).forEach((item) => progressByLesson.set(item.lessonId, item));
 
-  const greeting = new Date().getHours() < 12 ? "Доброе утро" : new Date().getHours() < 18 ? "Добрый день" : "Добрый вечер";
+  const lessons = (activeCourse?.course.modules ?? []).flatMap((module) => module.lessons ?? []);
+  const nextLesson = lessons.find(
+    (lesson) => progressByLesson.get(lesson.id)?.status !== "completed",
+  );
+
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? "Доброе утро" : hour < 18 ? "Добрый день" : "Добрый вечер";
 
   return (
     <>
@@ -46,10 +68,10 @@ export default function DashboardPage() {
           icon={<IconChart size={20} />}
         />
         <StatCard
-          label="Курсов"
-          value={stats.summary.courses}
-          hint="Назначено вам"
-          icon={<IconBook size={20} />}
+          label="Средний балл"
+          value={stats.quiz.attempts > 0 ? `${Math.round(stats.quiz.averageScore)}%` : "—"}
+          hint={`${stats.quiz.attempts} попыток в квизах`}
+          icon={<IconCheckLike />}
         />
         <StatCard
           label="Дней подряд"
@@ -64,6 +86,28 @@ export default function DashboardPage() {
           icon={<IconClock size={20} />}
         />
       </div>
+
+      {nextLesson && activeCourse && (
+        <Card className="mt-[var(--gap)] flex flex-wrap items-center justify-between gap-4 p-[var(--pad)]">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-wide text-faint">
+              Продолжить обучение
+            </p>
+            <p className="mt-1 truncate text-base font-bold text-fg">{nextLesson.title}</p>
+            <p className="mt-0.5 text-sm text-muted">
+              {activeCourse.course.title} · {KIND_LABEL[nextLesson.kind]} ·{" "}
+              {nextLesson.durationMin} мин
+            </p>
+          </div>
+          <Link
+            to={`/learn/courses/${activeCourse.course.slug}/lessons/${nextLesson.id}`}
+            className="btn btn-primary"
+          >
+            <IconTerminal size={18} />
+            Открыть урок
+          </Link>
+        </Card>
+      )}
 
       <Card className="mt-[var(--gap)] p-[var(--pad)]">
         <div className="mb-4 flex items-center justify-between">
@@ -87,7 +131,12 @@ export default function DashboardPage() {
         ) : (
           <div className="grid gap-[var(--gap)] md:grid-cols-2">
             {myCourses.map(({ course }) => {
-              const enrollment = enrollments.find((e) => e.courseId === course.id);
+              const isActive = course.slug === activeSlug;
+              const done = isActive
+                ? lessons.filter((l) => progressByLesson.get(l.id)?.status === "completed").length
+                : 0;
+              const percent = isActive && lessons.length ? (done / lessons.length) * 100 : 0;
+
               return (
                 <Link
                   key={course.id}
@@ -96,39 +145,48 @@ export default function DashboardPage() {
                 >
                   <div className="mb-2 flex items-start justify-between gap-2">
                     <h3 className="text-sm font-bold text-fg">{course.title}</h3>
-                    {enrollment?.status === "completed" && <Badge tone="success">Пройден</Badge>}
+                    {isActive && percent === 100 && <Badge tone="success">Пройден</Badge>}
                   </div>
+
                   {course.subtitle && (
                     <p className="mb-3 line-clamp-2 text-xs text-muted">{course.subtitle}</p>
                   )}
-                  <div className="mb-3 flex flex-wrap gap-1.5">
+
+                  {isActive && lessons.length > 0 && (
+                    <div className="mb-3">
+                      <div className="mb-1 flex justify-between text-[11px] text-faint">
+                        <span>
+                          {done} из {lessons.length} уроков
+                        </span>
+                        <span className="font-bold text-accent">{Math.round(percent)}%</span>
+                      </div>
+                      <Progress value={percent} />
+                    </div>
+                  )}
+
+                  <div className="flex flex-wrap gap-1.5">
                     {course.tags.slice(0, 3).map((tag) => (
                       <Badge key={tag} tone="accent">
                         {tag}
                       </Badge>
                     ))}
                   </div>
-                  <p className="text-xs text-faint">
-                    {course.modulesCount} модулей · {course.lessonsCount} уроков
-                  </p>
                 </Link>
               );
             })}
           </div>
         )}
       </Card>
-
-      <Card className="mt-[var(--gap)] flex flex-wrap items-center justify-between gap-4 p-[var(--pad)]">
-        <div>
-          <h2 className="text-base font-bold text-fg">Практика в терминале</h2>
-          <p className="mt-1 text-sm text-muted">
-            Тренажёр команд и редактор кода откроются внутри уроков курса.
-          </p>
-        </div>
-        <Button variant="secondary" disabled>
-          Скоро
-        </Button>
-      </Card>
     </>
+  );
+}
+
+// Небольшая иконка «галочка в круге» для карточки со средним баллом.
+function IconCheckLike() {
+  return (
+    <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M8 12.5l2.5 2.5L16 9.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   );
 }

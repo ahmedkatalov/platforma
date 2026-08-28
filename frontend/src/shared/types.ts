@@ -140,3 +140,135 @@ export type CreatedStudent = {
   mailSent: boolean;
   mailError?: string;
 };
+
+// --- Прохождение уроков ---
+
+export type LessonProgress = {
+  lessonId: string;
+  status: "in_progress" | "completed";
+  score: number | null;
+  bestScore: number | null;
+  attempts: number;
+  secondsSpent: number;
+  completedAt: string | null;
+  updatedAt: string;
+};
+
+export type TaskState = {
+  taskId: string;
+  attempts: number;
+  hintsUsed: number;
+  completedAt: string | null;
+};
+
+export type LessonView = {
+  lesson: Lesson;
+  courseId: string;
+  courseSlug: string;
+  courseTitle: string;
+  moduleTitle: string;
+  prevLessonId: string | null;
+  nextLessonId: string | null;
+  progress: LessonProgress[];
+  tasks: TaskState[];
+};
+
+// Содержимое уроков (правильные ответы вырезаны на сервере).
+export type QuizOption = { id: string; text: string };
+
+export type QuizQuestion = {
+  id: string;
+  text: string;
+  hint?: string;
+  multiple?: boolean;
+  options: QuizOption[];
+};
+
+export type QuizContent = {
+  intro?: string;
+  passScore?: number;
+  timeLimitSec?: number;
+  shuffle?: boolean;
+  questions: QuizQuestion[];
+};
+
+export type TerminalTask = {
+  id: string;
+  prompt: string;
+  hint?: string;
+  success?: string;
+};
+
+export type TerminalContent = {
+  intro?: string;
+  shell?: string;
+  tasks: TerminalTask[];
+};
+
+export type CodeContent = {
+  language: string;
+  task: string;
+  starter: string;
+  hint?: string;
+};
+
+export type TextContent = { body?: string };
+
+export type QuestionResult = {
+  questionId: string;
+  correct: boolean;
+  correctOptionIds: string[];
+  chosenOptionIds: string[];
+  explanation?: string;
+};
+
+export type QuizResult = {
+  score: number;
+  passed: boolean;
+  correctCount: number;
+  totalCount: number;
+  passScore: number;
+  questions: QuestionResult[];
+};
+
+export type TerminalCheckResult = {
+  solved: boolean;
+  message: string;
+  hint?: string;
+  completedTasks: string[];
+  lessonComplete: boolean;
+};
+
+export type CodeCheckResult = {
+  passed: boolean;
+  score: number;
+  checks: { ok: boolean; message: string }[];
+  hint?: string;
+};
+
+export type Attempt = {
+  id: string;
+  lessonId: string;
+  lessonTitle: string;
+  courseTitle: string;
+  kind: "quiz" | "terminal" | "code";
+  score: number;
+  correctCount: number;
+  totalCount: number;
+  passed: boolean;
+  durationSeconds: number;
+  details: Record<string, unknown>;
+  createdAt: string;
+};
+
+export type QuizStats = {
+  attempts: number;
+  passed: number;
+  averageScore: number;
+  bestScore: number;
+  accuracy: number;
+  avgSecondsPerQuestion: number;
+  fastestSeconds: number;
+  answeredTotal: number;
+  answeredCorrect: number;
+};

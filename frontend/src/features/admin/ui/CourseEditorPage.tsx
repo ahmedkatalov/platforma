@@ -27,9 +27,10 @@ import {
   Spinner,
   Textarea,
 } from "@/shared/ui";
-import { IconBook, IconChevron, IconEdit, IconPlus, IconTerminal, IconTrash } from "@/shared/ui/icons";
+import { IconBook, IconChevron, IconEdit, IconPlus, IconTrash } from "@/shared/ui/icons";
 import { useToast } from "@/shared/ui/ToastProvider";
 
+import LessonContentEditor from "./LessonContentEditor";
 import { slugify } from "./CoursesPage";
 
 const KIND_LABEL: Record<LessonKind, string> = {
@@ -496,7 +497,9 @@ function LessonModal({
   const [summary, setSummary] = useState("");
   const [durationMin, setDurationMin] = useState(10);
   const [position, setPosition] = useState(0);
-  const [content, setContent] = useState("{}");
+  const [content, setContent] = useState<Record<string, unknown>>({});
+  const [raw, setRaw] = useState("{}");
+  const [rawError, setRawError] = useState("");
   const [error, setError] = useState("");
 
   const [createLesson, { isLoading: creating }] = useCreateLessonMutation();
@@ -510,19 +513,43 @@ function LessonModal({
     setSummary(lesson?.summary ?? "");
     setDurationMin(lesson?.durationMin ?? 10);
     setPosition(lesson?.position ?? 0);
-    setContent(JSON.stringify(lesson?.content ?? KIND_TEMPLATE.text, null, 2));
+
+    const initial = (lesson?.content ?? KIND_TEMPLATE[lesson?.kind ?? "text"]) as Record<
+      string,
+      unknown
+    >;
+    setContent(initial);
+    setRaw(JSON.stringify(initial, null, 2));
+    setRawError("");
     setError("");
   }, [lesson, open]);
+
+  // Содержимое хранится объектом; сырой JSON держим синхронно для режима «JSON».
+  const applyContent = (next: Record<string, unknown>) => {
+    setContent(next);
+    setRaw(JSON.stringify(next, null, 2));
+    setRawError("");
+  };
+
+  const applyRaw = (next: string) => {
+    setRaw(next);
+    try {
+      setContent(JSON.parse(next || "{}") as Record<string, unknown>);
+      setRawError("");
+    } catch {
+      setRawError("Некорректный JSON — исправьте, иначе изменения не сохранятся");
+    }
+  };
 
   // При смене типа подставляем шаблон, если урок ещё не наполнен.
   const changeKind = (next: LessonKind) => {
     setKind(next);
-    const current = content.trim();
+
     const isTemplate = Object.values(KIND_TEMPLATE).some(
-      (template) => JSON.stringify(template, null, 2) === current,
+      (template) => JSON.stringify(template) === JSON.stringify(content),
     );
-    if (!lesson || isTemplate || current === "{}" || current === "") {
-      setContent(JSON.stringify(KIND_TEMPLATE[next], null, 2));
+    if (!lesson || isTemplate || Object.keys(content).length === 0) {
+      applyContent(KIND_TEMPLATE[next] as Record<string, unknown>);
     }
   };
 
@@ -530,15 +557,12 @@ function LessonModal({
     event.preventDefault();
     setError("");
 
-    let parsed: Record<string, unknown>;
-    try {
-      parsed = JSON.parse(content || "{}") as Record<string, unknown>;
-    } catch {
-      setError("Содержимое урока должно быть корректным JSON");
+    if (rawError) {
+      setError("Исправьте JSON содержимого урока");
       return;
     }
 
-    const payload = { title, kind, summary, content: parsed, durationMin, position };
+    const payload = { title, kind, summary, content, durationMin, position };
 
     try {
       if (lesson) {
@@ -616,32 +640,14 @@ function LessonModal({
           />
         </Field>
 
-        <Field
-          label="Содержимое урока (JSON)"
-          hint={
-            kind === "quiz"
-              ? "questions[] с вариантами и флагом correct"
-              : kind === "terminal"
-                ? "tasks[] с ожидаемыми командами"
-                : kind === "code"
-                  ? "language, starter и текст задания"
-                  : "body в формате Markdown"
-          }
-        >
-          <Textarea
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            rows={12}
-            className="font-mono text-xs"
-            spellCheck={false}
-          />
-        </Field>
-
-        <p className="flex items-center gap-2 text-xs text-faint">
-          <IconTerminal size={14} />
-          Визуальные редакторы квизов и терминала появятся на следующем этапе — пока содержимое
-          задаётся структурой JSON.
-        </p>
+        <LessonContentEditor
+          kind={kind}
+          value={content}
+          onChange={applyContent}
+          raw={raw}
+          onRawChange={applyRaw}
+          rawError={rawError}
+        />
 
         {error && (
           <p className="rounded-[var(--radius-md)] bg-[var(--danger-soft)] px-3 py-2 text-sm text-danger">

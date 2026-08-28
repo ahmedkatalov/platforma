@@ -17,6 +17,7 @@ type MeHandler struct {
 	activity *repository.ActivityRepo
 	stats    *repository.StatsRepo
 	theme    *repository.ThemeRepo
+	progress *repository.ProgressRepo
 	auth     *AuthHandler
 }
 
@@ -26,10 +27,11 @@ func NewMeHandler(
 	activity *repository.ActivityRepo,
 	stats *repository.StatsRepo,
 	theme *repository.ThemeRepo,
+	progress *repository.ProgressRepo,
 	auth *AuthHandler,
 ) *MeHandler {
 	return &MeHandler{users: users, courses: courses, activity: activity,
-		stats: stats, theme: theme, auth: auth}
+		stats: stats, theme: theme, progress: progress, auth: auth}
 }
 
 func (h *MeHandler) Routes() http.Handler {
@@ -38,6 +40,7 @@ func (h *MeHandler) Routes() http.Handler {
 	r.Patch("/", h.updateProfile)
 	r.Post("/change-password", h.auth.ChangePassword)
 	r.Get("/stats", h.myStats)
+	r.Get("/attempts", h.myAttempts)
 	r.Post("/activity", h.trackActivity)
 	r.Get("/preferences", h.getPreferences)
 	r.Put("/preferences", h.putPreferences)
@@ -98,12 +101,29 @@ func (h *MeHandler) myStats(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "Не удалось посчитать серию дней")
 		return
 	}
+	quiz, err := h.progress.QuizStats(r.Context(), userID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Не удалось собрать статистику квизов")
+		return
+	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"summary":  summary,
 		"activity": activity,
 		"streak":   streak,
+		"quiz":     quiz,
 	})
+}
+
+// myAttempts — история попыток по квизам, терминалу и коду.
+func (h *MeHandler) myAttempts(w http.ResponseWriter, r *http.Request) {
+	attempts, err := h.progress.Attempts(r.Context(), middleware.UserID(r.Context()),
+		queryInt(r, "limit", 50, 1, 200))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Не удалось загрузить историю")
+		return
+	}
+	writeJSON(w, http.StatusOK, attempts)
 }
 
 // trackActivity — фронтенд периодически шлёт проведённое время.

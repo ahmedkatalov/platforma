@@ -1,8 +1,20 @@
 import { baseApi } from "@/shared/api/baseApi";
-import type { ActivityDay, Enrollment, StudentSummary, User } from "@/shared/types";
+import type {
+  ActivityDay,
+  Attempt,
+  Enrollment,
+  QuizStats,
+  StudentSummary,
+  User,
+} from "@/shared/types";
 
 export type MeResponse = { user: User; enrollments: Enrollment[] };
-export type MyStats = { summary: StudentSummary; activity: ActivityDay[]; streak: number };
+export type MyStats = {
+  summary: StudentSummary;
+  activity: ActivityDay[];
+  streak: number;
+  quiz: QuizStats;
+};
 
 export const meApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
@@ -13,6 +25,10 @@ export const meApi = baseApi.injectEndpoints({
     getMyStats: builder.query<MyStats, number | void>({
       query: (days) => `/me/stats?days=${days ?? 30}`,
       providesTags: ["Progress"],
+    }),
+    getMyAttempts: builder.query<Attempt[], number | void>({
+      query: (limit) => `/me/attempts?limit=${limit ?? 20}`,
+      providesTags: ["Attempts"],
     }),
     trackActivity: builder.mutation<{ message: string }, { seconds: number }>({
       query: (body) => ({ url: "/me/activity", method: "POST", body }),
@@ -36,6 +52,7 @@ export const meApi = baseApi.injectEndpoints({
 export const {
   useGetMeQuery,
   useGetMyStatsQuery,
+  useGetMyAttemptsQuery,
   useTrackActivityMutation,
   useGetPreferencesQuery,
   useSavePreferencesMutation,

@@ -22,6 +22,7 @@ type Deps struct {
 	Me      *handler.MeHandler
 	Admin   *handler.AdminHandler
 	Courses *handler.CourseHandler
+	Lessons *handler.LessonHandler
 	Theme   *handler.ThemeHandler
 }
 
@@ -57,6 +58,7 @@ func New(d Deps) http.Handler {
 
 			r.Mount("/me", d.Me.Routes())
 			r.Mount("/courses", d.Courses.StudentRoutes())
+			r.Mount("/lessons", d.Lessons.Routes())
 
 			// Только администратор.
 			r.Group(func(r chi.Router) {

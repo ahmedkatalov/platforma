@@ -18,12 +18,17 @@ var slugRe = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
 // CourseHandler отдаёт курсы студентам (только опубликованные и доступные)
 // и обслуживает редактор курсов у администратора.
 type CourseHandler struct {
-	courses *repository.CourseRepo
-	audit   *repository.AuditRepo
+	courses  *repository.CourseRepo
+	audit    *repository.AuditRepo
+	progress *repository.ProgressRepo
 }
 
-func NewCourseHandler(courses *repository.CourseRepo, audit *repository.AuditRepo) *CourseHandler {
-	return &CourseHandler{courses: courses, audit: audit}
+func NewCourseHandler(
+	courses *repository.CourseRepo,
+	audit *repository.AuditRepo,
+	progress *repository.ProgressRepo,
+) *CourseHandler {
+	return &CourseHandler{courses: courses, audit: audit, progress: progress}
 }
 
 // StudentRoutes — /api/courses для любого авторизованного пользователя.
@@ -109,15 +114,31 @@ func (h *CourseHandler) getForStudent(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusInternalServerError, "Не удалось загрузить курс")
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"course": course, "enrolled": false})
+		writeJSON(w, http.StatusOK, map[string]any{
+			"course":   course,
+			"enrolled": false,
+			"progress": []any{},
+		})
 		return
 	}
 
-	if err := h.courses.WithContent(r.Context(), course, true); err != nil {
+	// Тела уроков сюда не отдаём — они приходят по одному через /api/lessons/{id}.
+	if err := h.courses.WithContent(r.Context(), course, false); err != nil {
 		writeError(w, http.StatusInternalServerError, "Не удалось загрузить курс")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"course": course, "enrolled": true})
+
+	progress, err := h.progress.ForCourse(r.Context(), userID, course.ID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Не удалось загрузить прогресс")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"course":   course,
+		"enrolled": true,
+		"progress": progress,
+	})
 }
 
 // --- Администратор ---

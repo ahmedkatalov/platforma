@@ -8,6 +8,19 @@ export default defineConfig({
   resolve: {
     alias: { "@": path.resolve(__dirname, "./src") },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        // Тяжёлые библиотеки — отдельными чанками, чтобы они кэшировались отдельно от кода приложения.
+        manualChunks: {
+          react: ["react", "react-dom", "react-router-dom"],
+          redux: ["@reduxjs/toolkit", "react-redux"],
+          charts: ["recharts"],
+          markdown: ["react-markdown", "remark-gfm"],
+        },
+      },
+    },
+  },
   server: {
     port: 5173,
     proxy: {

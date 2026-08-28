@@ -11,15 +11,29 @@ import {
   YAxis,
 } from "recharts";
 
-import { useGetMyStatsQuery } from "@/shared/api/meApi";
-import { Card, EmptyState, PageHeader, Progress, Select, Spinner, StatCard } from "@/shared/ui";
-import { IconChart, IconClock, IconFlame } from "@/shared/ui/icons";
+import { useGetMyAttemptsQuery, useGetMyStatsQuery } from "@/shared/api/meApi";
+import type { Attempt } from "@/shared/types";
+import { Badge, Card, EmptyState, PageHeader, Progress, Select, Spinner, StatCard } from "@/shared/ui";
+import { IconChart, IconCheck, IconClock, IconFlame, IconTerminal } from "@/shared/ui/icons";
 
 const dayFmt = new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "short" });
+const stampFmt = new Intl.DateTimeFormat("ru-RU", {
+  day: "2-digit",
+  month: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+
+const KIND_LABEL: Record<Attempt["kind"], string> = {
+  quiz: "Квиз",
+  terminal: "Терминал",
+  code: "Код",
+};
 
 export default function StatsPage() {
   const [days, setDays] = useState(30);
   const { data: stats, isLoading } = useGetMyStatsQuery(days);
+  const { data: attempts = [] } = useGetMyAttemptsQuery(20);
 
   if (isLoading || !stats) {
     return (
@@ -200,13 +214,112 @@ export default function StatsPage() {
               </p>
             </div>
 
-            <p className="text-xs text-faint">
-              Статистика по квизам — скорость ответа, доля правильных — появится вместе с
-              прохождением уроков.
-            </p>
+            <div className="card-flat p-3 text-sm text-muted">
+              <p>
+                Точность в квизах:{" "}
+                <span className="font-bold text-fg">{Math.round(stats.quiz.accuracy)}%</span>{" "}
+                ({stats.quiz.answeredCorrect} из {stats.quiz.answeredTotal} ответов)
+              </p>
+              <p className="mt-1">
+                Средняя скорость ответа:{" "}
+                <span className="font-bold text-fg">
+                  {stats.quiz.avgSecondsPerQuestion.toFixed(1)} c
+                </span>
+                {stats.quiz.fastestSeconds > 0 && ` · лучший ${stats.quiz.fastestSeconds} c`}
+              </p>
+            </div>
           </div>
         </Card>
       </div>
+
+      <div className="mt-[var(--gap)] grid gap-[var(--gap)] sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          label="Попыток в квизах"
+          value={stats.quiz.attempts}
+          hint={`${stats.quiz.passed} успешных`}
+          icon={<IconCheck size={20} />}
+        />
+        <StatCard
+          label="Средний балл"
+          value={`${Math.round(stats.quiz.averageScore)}%`}
+          hint={`лучший результат ${Math.round(stats.quiz.bestScore)}%`}
+          icon={<IconChart size={20} />}
+        />
+        <StatCard
+          label="Точность ответов"
+          value={`${Math.round(stats.quiz.accuracy)}%`}
+          hint={`${stats.quiz.answeredCorrect} из ${stats.quiz.answeredTotal}`}
+          icon={<IconCheck size={20} />}
+        />
+        <StatCard
+          label="Скорость ответа"
+          value={`${stats.quiz.avgSecondsPerQuestion.toFixed(1)} c`}
+          hint="в среднем на вопрос"
+          icon={<IconClock size={20} />}
+        />
+      </div>
+
+      <Card className="mt-[var(--gap)] overflow-hidden">
+        <div className="border-b border-line px-[var(--pad)] py-3">
+          <h2 className="text-base font-bold text-fg">История попыток</h2>
+        </div>
+
+        {attempts.length === 0 ? (
+          <EmptyState
+            title="Попыток пока нет"
+            description="Пройдите квиз или тренажёр — результаты появятся здесь"
+            icon={<IconTerminal size={32} />}
+          />
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[40rem] text-sm">
+              <thead>
+                <tr className="border-b border-line text-left text-xs uppercase tracking-wide text-faint">
+                  <th className="px-4 py-3 font-semibold">Когда</th>
+                  <th className="px-4 py-3 font-semibold">Урок</th>
+                  <th className="px-4 py-3 font-semibold">Тип</th>
+                  <th className="px-4 py-3 font-semibold">Результат</th>
+                  <th className="px-4 py-3 font-semibold">Время</th>
+                </tr>
+              </thead>
+              <tbody>
+                {attempts.map((attempt) => (
+                  <tr key={attempt.id} className="border-b border-line/60 last:border-0">
+                    <td className="whitespace-nowrap px-4 py-3 text-muted">
+                      {stampFmt.format(new Date(attempt.createdAt))}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="block font-medium text-fg">{attempt.lessonTitle}</span>
+                      <span className="block text-xs text-faint">{attempt.courseTitle}</span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <Badge tone={attempt.kind === "quiz" ? "accent" : "default"}>
+                        {KIND_LABEL[attempt.kind]}
+                      </Badge>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span
+                        className={`font-bold ${attempt.passed ? "text-success" : "text-warning"}`}
+                      >
+                        {Math.round(attempt.score)}%
+                      </span>
+                      {attempt.totalCount > 0 && (
+                        <span className="ml-1.5 text-xs text-faint">
+                          {attempt.correctCount}/{attempt.totalCount}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-muted">
+                      {Math.floor(attempt.durationSeconds / 60)}:
+                      {String(attempt.durationSeconds % 60).padStart(2, "0")}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
     </>
   );
 }

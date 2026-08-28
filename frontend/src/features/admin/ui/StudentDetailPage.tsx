@@ -11,7 +11,7 @@ import {
 } from "@/features/admin/api/adminApi";
 import { useGetAdminCoursesQuery } from "@/features/admin/api/coursesApi";
 import { apiErrorMessage } from "@/shared/api/baseApi";
-import type { CreatedStudent, UserStatus } from "@/shared/types";
+import type { Attempt, CreatedStudent, UserStatus } from "@/shared/types";
 import {
   Badge,
   Button,
@@ -35,6 +35,18 @@ const STATUS_LABEL: Record<UserStatus, string> = {
 };
 
 const dayFmt = new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "short" });
+const stampFmt = new Intl.DateTimeFormat("ru-RU", {
+  day: "2-digit",
+  month: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+
+const ATTEMPT_LABEL: Record<Attempt["kind"], string> = {
+  quiz: "Квиз",
+  terminal: "Терминал",
+  code: "Код",
+};
 
 export default function StudentDetailPage() {
   const { id = "" } = useParams();
@@ -58,7 +70,7 @@ export default function StudentDetailPage() {
     );
   }
 
-  const { user, summary, enrollments, activity } = data;
+  const { user, summary, enrollments, activity, attempts, quiz } = data;
   const enrolledIds = new Set(enrollments.map((e) => e.courseId));
   const available = courses.filter((course) => !enrolledIds.has(course.id));
 
@@ -271,6 +283,94 @@ export default function StudentDetailPage() {
             <p className="mb-1.5 text-xs font-semibold text-faint">Общий прогресс</p>
             <Progress value={summary.progress} />
           </div>
+        </Card>
+      </div>
+
+      <div className="mt-[var(--gap)] grid gap-[var(--gap)] lg:grid-cols-5">
+        <Card className="p-[var(--pad)] lg:col-span-2">
+          <h2 className="mb-4 text-base font-bold text-fg">Квизы</h2>
+
+          {quiz.attempts === 0 ? (
+            <p className="py-4 text-center text-sm text-muted">Студент ещё не проходил квизы</p>
+          ) : (
+            <div className="space-y-3 text-sm">
+              <div className="card-flat p-3">
+                <div className="mb-1 flex items-center justify-between">
+                  <span className="text-muted">Средний балл</span>
+                  <span className="font-bold text-accent">{Math.round(quiz.averageScore)}%</span>
+                </div>
+                <Progress value={quiz.averageScore} />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div className="card-flat p-3 text-center">
+                  <p className="text-lg font-bold text-fg">
+                    {quiz.passed}/{quiz.attempts}
+                  </p>
+                  <p className="text-[11px] text-faint">успешных попыток</p>
+                </div>
+                <div className="card-flat p-3 text-center">
+                  <p className="text-lg font-bold text-fg">{Math.round(quiz.accuracy)}%</p>
+                  <p className="text-[11px] text-faint">верных ответов</p>
+                </div>
+                <div className="card-flat p-3 text-center">
+                  <p className="text-lg font-bold text-fg">
+                    {quiz.avgSecondsPerQuestion.toFixed(1)} c
+                  </p>
+                  <p className="text-[11px] text-faint">на вопрос</p>
+                </div>
+                <div className="card-flat p-3 text-center">
+                  <p className="text-lg font-bold text-fg">{Math.round(quiz.bestScore)}%</p>
+                  <p className="text-[11px] text-faint">лучший результат</p>
+                </div>
+              </div>
+            </div>
+          )}
+        </Card>
+
+        <Card className="overflow-hidden lg:col-span-3">
+          <div className="border-b border-line px-[var(--pad)] py-3">
+            <h2 className="text-base font-bold text-fg">Последние попытки</h2>
+          </div>
+
+          {attempts.length === 0 ? (
+            <EmptyState title="Попыток пока нет" icon={<IconChart size={32} />} />
+          ) : (
+            <div className="max-h-80 overflow-y-auto">
+              <table className="w-full text-sm">
+                <thead className="sticky top-0 bg-surface-solid">
+                  <tr className="border-b border-line text-left text-xs uppercase tracking-wide text-faint">
+                    <th className="px-4 py-2.5 font-semibold">Когда</th>
+                    <th className="px-4 py-2.5 font-semibold">Урок</th>
+                    <th className="px-4 py-2.5 font-semibold">Тип</th>
+                    <th className="px-4 py-2.5 font-semibold">Балл</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {attempts.map((attempt) => (
+                    <tr key={attempt.id} className="border-b border-line/60 last:border-0">
+                      <td className="whitespace-nowrap px-4 py-2.5 text-muted">
+                        {stampFmt.format(new Date(attempt.createdAt))}
+                      </td>
+                      <td className="px-4 py-2.5 text-fg">{attempt.lessonTitle}</td>
+                      <td className="px-4 py-2.5">
+                        <Badge tone={attempt.kind === "quiz" ? "accent" : "default"}>
+                          {ATTEMPT_LABEL[attempt.kind]}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <span
+                          className={`font-bold ${attempt.passed ? "text-success" : "text-warning"}`}
+                        >
+                          {Math.round(attempt.score)}%
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </Card>
       </div>
 

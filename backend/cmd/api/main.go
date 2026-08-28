@@ -48,6 +48,7 @@ func main() {
 	auditRepo := repository.NewAuditRepo(pool)
 	statsRepo := repository.NewStatsRepo(pool)
 	themeRepo := repository.NewThemeRepo(pool)
+	progressRepo := repository.NewProgressRepo(pool)
 
 	// Сервисы.
 	tokens := auth.NewTokenManager(cfg.JWTSecret, cfg.AccessTTL, cfg.RefreshTTL)
@@ -61,9 +62,12 @@ func main() {
 
 	// Хендлеры.
 	authHandler := handler.NewAuthHandler(authSvc)
-	meHandler := handler.NewMeHandler(userRepo, courseRepo, activityRepo, statsRepo, themeRepo, authHandler)
-	adminHandler := handler.NewAdminHandler(userRepo, courseRepo, statsRepo, activityRepo, auditRepo, themeRepo, userSvc)
-	courseHandler := handler.NewCourseHandler(courseRepo, auditRepo)
+	meHandler := handler.NewMeHandler(userRepo, courseRepo, activityRepo, statsRepo, themeRepo,
+		progressRepo, authHandler)
+	adminHandler := handler.NewAdminHandler(userRepo, courseRepo, statsRepo, activityRepo, auditRepo,
+		themeRepo, progressRepo, userSvc)
+	courseHandler := handler.NewCourseHandler(courseRepo, auditRepo, progressRepo)
+	lessonHandler := handler.NewLessonHandler(progressRepo, courseRepo, activityRepo)
 	themeHandler := handler.NewThemeHandler(themeRepo)
 
 	go cleanupLoop(ctx, tokenRepo, codeRepo)
@@ -77,6 +81,7 @@ func main() {
 			Me:      meHandler,
 			Admin:   adminHandler,
 			Courses: courseHandler,
+			Lessons: lessonHandler,
 			Theme:   themeHandler,
 		}),
 		ReadHeaderTimeout: 10 * time.Second,

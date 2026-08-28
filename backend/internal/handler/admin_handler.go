@@ -22,6 +22,7 @@ type AdminHandler struct {
 	activity *repository.ActivityRepo
 	audit    *repository.AuditRepo
 	theme    *repository.ThemeRepo
+	progress *repository.ProgressRepo
 	userSvc  *service.UserService
 }
 
@@ -32,10 +33,11 @@ func NewAdminHandler(
 	activity *repository.ActivityRepo,
 	audit *repository.AuditRepo,
 	theme *repository.ThemeRepo,
+	progress *repository.ProgressRepo,
 	userSvc *service.UserService,
 ) *AdminHandler {
 	return &AdminHandler{users: users, courses: courses, stats: stats,
-		activity: activity, audit: audit, theme: theme, userSvc: userSvc}
+		activity: activity, audit: audit, theme: theme, progress: progress, userSvc: userSvc}
 }
 
 // Routes собирает /api/admin. Редактор курсов монтируется сюда же, чтобы не
@@ -154,11 +156,24 @@ func (h *AdminHandler) getUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	attempts, err := h.progress.Attempts(r.Context(), id, 30)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Не удалось загрузить попытки")
+		return
+	}
+	quiz, err := h.progress.QuizStats(r.Context(), id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Не удалось собрать статистику квизов")
+		return
+	}
+
 	writeJSON(w, http.StatusOK, map[string]any{
 		"user":        user,
 		"enrollments": enrollments,
 		"summary":     summary,
 		"activity":    activity,
+		"attempts":    attempts,
+		"quiz":        quiz,
 	})
 }
 

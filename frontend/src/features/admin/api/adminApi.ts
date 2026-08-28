@@ -2,10 +2,12 @@ import { baseApi } from "@/shared/api/baseApi";
 import type {
   ActivityDay,
   AdminOverview,
+  Attempt,
   AuditEntry,
   CreatedStudent,
   Enrollment,
   Paginated,
+  QuizStats,
   Role,
   StudentSummary,
   User,
@@ -25,6 +27,8 @@ export type UserDetails = {
   enrollments: Enrollment[];
   summary: StudentSummary;
   activity: ActivityDay[];
+  attempts: Attempt[];
+  quiz: QuizStats;
 };
 
 export type CreateUserPayload = {
