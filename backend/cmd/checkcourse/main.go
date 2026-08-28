@@ -1,6 +1,5 @@
-// Команда checkcourse проверяет, что курс в базе пригоден для прохождения:
-// у каждого вопроса есть верный ответ и пояснение, у каждого задания терминала —
-// эталонная команда, а эталонное решение практики проходит все проверки.
+// Команда checkcourse проверяет качество курса перед публикацией:
+// решаемость заданий, корректность вопросов, наличие материалов и читаемость текста.
 //
 //	go run ./cmd/checkcourse
 //	go run ./cmd/checkcourse -slug devops-engineer
@@ -13,7 +12,10 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"regexp"
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	"platforma/backend/internal/config"
 	"platforma/backend/internal/db"
@@ -22,10 +24,13 @@ import (
 	"platforma/backend/internal/repository"
 )
 
-const minBodyLength = 400
+// maxSentence — предел длины предложения в символах.
+// Всё, что длиннее, новичку читать тяжело.
+const maxSentence = 160
 
 func main() {
-	slug := flag.String("slug", "devops-engineer", "адрес курса (slug)")
+	slug := flag.String("slug", "devops-engineer", "адрес курса для проверки")
+	verbose := flag.Bool("v", false, "показать разбор по каждому уроку")
 	flag.Parse()
 
 	dotenv.Load(".env")
@@ -47,12 +52,12 @@ func main() {
 		log.Fatalf("курс %q не найден: %v", *slug, err)
 	}
 	if err := courses.WithContent(ctx, course, true); err != nil {
-		log.Fatalf("загрузка структуры курса: %v", err)
+		log.Fatalf("загрузка содержимого: %v", err)
 	}
 
 	var problems []string
-	counts := map[string]int{}
-	minutes := 0
+	kinds := map[string]int{}
+	var minutes, links, sentences, sentenceLen int
 
 	for _, module := range course.Modules {
 		if len(module.Lessons) == 0 {
@@ -60,33 +65,82 @@ func main() {
 		}
 
 		for _, lesson := range module.Lessons {
-			counts[lesson.Kind]++
+			kinds[lesson.Kind]++
 			minutes += lesson.DurationMin
-			problems = append(problems, checkLesson(lesson)...)
+
+			report := checkLesson(lesson)
+			problems = append(problems, report.problems...)
+			links += report.links
+			sentences += report.sentences
+			sentenceLen += report.sentenceLen
+
+			if *verbose {
+				status := "ok"
+				if len(report.problems) > 0 {
+					status = fmt.Sprintf("%d замечаний", len(report.problems))
+				}
+				fmt.Printf("  %-46s %-9s %s\n", trim(lesson.Title, 45), lesson.Kind, status)
+			}
 		}
 	}
 
-	fmt.Printf("Курс «%s»: %d модулей, %d уроков, ~%d ч %d мин\n",
-		course.Title, len(course.Modules), course.LessonsCount, minutes/60, minutes%60)
-	fmt.Printf("  теория: %d · квизы: %d · терминал: %d · практика: %d\n\n",
-		counts[domain.LessonText], counts[domain.LessonQuiz],
-		counts[domain.LessonTerminal], counts[domain.LessonCode])
+	avg := 0
+	if sentences > 0 {
+		avg = sentenceLen / sentences
+	}
+
+	fmt.Printf("\nКурс: %s\n", course.Title)
+	fmt.Printf("Модулей: %d · уроков: %d (теория %d, квизы %d, тренажёры %d, практики %d)\n",
+		len(course.Modules), kinds["text"]+kinds["quiz"]+kinds["terminal"]+kinds["code"],
+		kinds["text"], kinds["quiz"], kinds["terminal"], kinds["code"])
+	fmt.Printf("Объём: ~%d ч %d мин · ссылок на материалы: %d · средняя длина предложения: %d знаков\n",
+		minutes/60, minutes%60, links, avg)
 
 	if len(problems) == 0 {
-		fmt.Println("Замечаний нет: курс готов к прохождению.")
+		fmt.Println("\n✓ Замечаний нет: задания решаемы, вопросы корректны, материалы на месте.")
 		return
 	}
 
-	fmt.Printf("Найдено замечаний: %d\n", len(problems))
-	for _, problem := range problems {
-		fmt.Println(" -", problem)
+	fmt.Printf("\n✗ Замечаний: %d\n", len(problems))
+	for _, p := range problems {
+		fmt.Println("  -", p)
 	}
 	os.Exit(1)
 }
 
-func checkLesson(lesson domain.Lesson) []string {
-	var problems []string
-	label := fmt.Sprintf("«%s»", lesson.Title)
+type lessonReport struct {
+	problems    []string
+	links       int
+	sentences   int
+	sentenceLen int
+}
+
+func checkLesson(lesson domain.Lesson) lessonReport {
+	var out lessonReport
+	add := func(format string, args ...any) {
+		out.problems = append(out.problems, fmt.Sprintf("%s: %s", lesson.Title, fmt.Sprintf(format, args...)))
+	}
+
+	// Материалы по теме нужны в каждом уроке.
+	var meta struct {
+		Resources []struct {
+			Title string `json:"title"`
+			URL   string `json:"url"`
+		} `json:"resources"`
+	}
+	_ = json.Unmarshal(lesson.Content, &meta)
+	out.links = len(meta.Resources)
+	if out.links == 0 {
+		add("нет блока «Материалы по теме»")
+	}
+	for _, item := range meta.Resources {
+		if !strings.HasPrefix(item.URL, "https://") {
+			add("ссылка не по https — %s", item.URL)
+		}
+		if strings.TrimSpace(item.Title) == "" {
+			add("у ссылки нет названия")
+		}
+	}
 
 	switch lesson.Kind {
 	case domain.LessonText:
@@ -94,20 +148,33 @@ func checkLesson(lesson domain.Lesson) []string {
 			Body string `json:"body"`
 		}
 		if err := json.Unmarshal(lesson.Content, &content); err != nil {
-			return append(problems, label+": содержимое не разбирается")
+			add("не удалось разобрать содержимое")
+			return out
 		}
-		if len([]rune(content.Body)) < minBodyLength {
-			problems = append(problems, fmt.Sprintf("%s: слишком короткая теория (%d символов)",
-				label, len([]rune(content.Body))))
+		if utf8.RuneCountInString(content.Body) < 900 {
+			add("слишком короткая теория (%d символов)", utf8.RuneCountInString(content.Body))
+		}
+		if !strings.Contains(content.Body, "## Зачем это нужно") {
+			add("нет блока «Зачем это нужно»")
+		}
+		if !strings.Contains(content.Body, "## Запомнить") {
+			add("нет блока «Запомнить»")
+		}
+
+		count, total, long := analyzeText(content.Body)
+		out.sentences, out.sentenceLen = count, total
+		for _, sentence := range long {
+			add("длинное предложение (%d знаков): %s…", utf8.RuneCountInString(sentence), trim(sentence, 60))
 		}
 
 	case domain.LessonQuiz:
 		quiz, err := domain.ParseQuiz(lesson.Content)
 		if err != nil {
-			return append(problems, label+": квиз не разбирается")
+			add("не удалось разобрать квиз")
+			return out
 		}
-		if len(quiz.Questions) < 3 {
-			problems = append(problems, fmt.Sprintf("%s: меньше трёх вопросов", label))
+		if len(quiz.Questions) < 4 {
+			add("мало вопросов (%d)", len(quiz.Questions))
 		}
 		for _, question := range quiz.Questions {
 			correct := 0
@@ -118,68 +185,127 @@ func checkLesson(lesson domain.Lesson) []string {
 			}
 			switch {
 			case correct == 0:
-				problems = append(problems, fmt.Sprintf("%s / %s: нет правильного ответа", label, question.ID))
+				add("вопрос %s без правильного ответа", question.ID)
 			case correct > 1 && !question.Multiple:
-				problems = append(problems, fmt.Sprintf("%s / %s: несколько верных вариантов без multiple", label, question.ID))
+				add("вопрос %s: несколько верных вариантов без multiple", question.ID)
 			}
-			if len(question.Options) < 2 {
-				problems = append(problems, fmt.Sprintf("%s / %s: меньше двух вариантов", label, question.ID))
+			if len(question.Options) < 3 {
+				add("вопрос %s: меньше трёх вариантов", question.ID)
 			}
-			if question.Explanation == "" {
-				problems = append(problems, fmt.Sprintf("%s / %s: нет пояснения", label, question.ID))
+			if strings.TrimSpace(question.Explanation) == "" {
+				add("вопрос %s без пояснения", question.ID)
 			}
+		}
+
+		// Эталонные ответы обязаны проходить порог.
+		answers := make([]domain.QuizAnswer, 0, len(quiz.Questions))
+		for _, question := range quiz.Questions {
+			ids := make([]string, 0, 2)
+			for _, option := range question.Options {
+				if option.Correct {
+					ids = append(ids, option.ID)
+				}
+			}
+			answers = append(answers, domain.QuizAnswer{QuestionID: question.ID, OptionIDs: ids})
+		}
+		if result := domain.GradeQuiz(quiz, answers); !result.Passed {
+			add("эталонные ответы не проходят порог (%.0f%%)", result.Score)
 		}
 
 	case domain.LessonTerminal:
 		terminal, err := domain.ParseTerminal(lesson.Content)
 		if err != nil {
-			return append(problems, label+": задания не разбираются")
+			add("не удалось разобрать задания")
+			return out
 		}
 		if len(terminal.Tasks) == 0 {
-			problems = append(problems, label+": нет заданий")
+			add("нет заданий")
 		}
 		for _, task := range terminal.Tasks {
 			if len(task.Expected) == 0 && task.Pattern == "" {
-				problems = append(problems, fmt.Sprintf("%s / %s: не задана эталонная команда", label, task.ID))
+				add("задание %s без эталонной команды", task.ID)
+				continue
 			}
-			if task.Prompt == "" {
-				problems = append(problems, fmt.Sprintf("%s / %s: пустая формулировка", label, task.ID))
+			if strings.TrimSpace(task.Hint) == "" {
+				add("задание %s без подсказки", task.ID)
 			}
-			if task.Hint == "" {
-				problems = append(problems, fmt.Sprintf("%s / %s: нет подсказки", label, task.ID))
+			for _, expected := range task.Expected {
+				if !domain.MatchTerminalCommand(&task, expected) {
+					add("задание %s: команда «%s» не проходит собственную проверку", task.ID, expected)
+				}
 			}
 		}
 
 	case domain.LessonCode:
 		code, err := domain.ParseCode(lesson.Content)
 		if err != nil {
-			return append(problems, label+": практика не разбирается")
+			add("не удалось разобрать практику")
+			return out
 		}
-		if code.Task == "" {
-			problems = append(problems, label+": нет текста задания")
+		if strings.TrimSpace(code.Task) == "" {
+			add("нет текста задания")
 		}
-		if len(code.Checks) == 0 {
-			problems = append(problems, label+": нет проверок решения")
+		if strings.TrimSpace(code.Solution) == "" {
+			add("нет эталонного решения")
+			return out
 		}
-		if code.Solution == "" {
-			problems = append(problems, label+": нет эталонного решения")
-			break
-		}
-		// Главная проверка: эталон обязан проходить все условия задания.
 		for _, check := range code.Checks {
 			if !domain.RunCodeCheck(check, code.Solution) {
-				problems = append(problems, fmt.Sprintf("%s: эталон не проходит проверку «%s»",
-					label, checkLabel(check)))
+				message := check.Message
+				if message == "" {
+					message = domain.DescribeCodeCheck(check)
+				}
+				add("эталонное решение не проходит проверку «%s»", message)
 			}
 		}
 	}
 
-	return problems
+	return out
 }
 
-func checkLabel(check domain.CodeCheck) string {
-	if check.Message != "" {
-		return check.Message
+var (
+	codeBlock = regexp.MustCompile("(?s)```.*?```")
+	tableRow  = regexp.MustCompile(`(?m)^\|.*\|$`)
+	listItem  = regexp.MustCompile(`(?m)^\s*([-*]|\d+\.)\s`)
+	heading   = regexp.MustCompile(`(?m)^#{1,6}\s`)
+	markup    = regexp.MustCompile("[#>*`]")
+)
+
+// analyzeText считает предложения обычного текста: блоки кода, таблицы,
+// списки и заголовки не участвуют — их длина ничего не говорит о читаемости.
+func analyzeText(body string) (count, total int, long []string) {
+	text := codeBlock.ReplaceAllString(body, "")
+	text = tableRow.ReplaceAllString(text, "")
+
+	for _, paragraph := range strings.Split(text, "\n") {
+		line := strings.TrimSpace(paragraph)
+		if line == "" || heading.MatchString(line) || listItem.MatchString(line) {
+			continue
+		}
+		line = markup.ReplaceAllString(line, "")
+
+		for _, sentence := range strings.FieldsFunc(line, func(r rune) bool {
+			return r == '.' || r == '!' || r == '?'
+		}) {
+			sentence = strings.TrimSpace(sentence)
+			if utf8.RuneCountInString(sentence) < 15 {
+				continue
+			}
+			length := utf8.RuneCountInString(sentence)
+			count++
+			total += length
+			if length > maxSentence {
+				long = append(long, sentence)
+			}
+		}
 	}
-	return check.Type + " " + check.Value
+	return count, total, long
+}
+
+func trim(s string, limit int) string {
+	runes := []rune(s)
+	if len(runes) <= limit {
+		return s
+	}
+	return string(runes[:limit])
 }

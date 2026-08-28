@@ -282,6 +282,39 @@ func RunCodeCheck(check CodeCheck, code string) bool {
 	}
 }
 
+// MatchTerminalCommand проверяет, подходит ли введённая команда под задание.
+func MatchTerminalCommand(task *TerminalTask, command string) bool {
+	normalized := NormalizeCommand(command)
+	if normalized == "" {
+		return false
+	}
+
+	for _, expected := range task.Expected {
+		if strings.EqualFold(NormalizeCommand(expected), normalized) {
+			return true
+		}
+	}
+
+	if task.Pattern != "" {
+		if re, err := regexp.Compile(task.Pattern); err == nil && re.MatchString(normalized) {
+			return true
+		}
+	}
+	return false
+}
+
+// DescribeCodeCheck — текст проверки, если автор урока не задал свой.
+func DescribeCodeCheck(check CodeCheck) string {
+	switch check.Type {
+	case "notContains":
+		return "В решении не должно быть: " + check.Value
+	case "regex":
+		return "Решение должно соответствовать шаблону: " + check.Value
+	default:
+		return "Решение должно содержать: " + check.Value
+	}
+}
+
 // NormalizeCommand приводит команду к виду, пригодному для сравнения:
 // схлопывает пробелы и убирает хвостовые разделители.
 func NormalizeCommand(cmd string) string {

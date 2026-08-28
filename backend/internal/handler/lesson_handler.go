@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"regexp"
 	"strings"
 	"time"
 
@@ -350,7 +349,7 @@ func (h *LessonHandler) checkTerminal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	solved := matchCommand(task, body.Command)
+	solved := domain.MatchTerminalCommand(task, body.Command)
 	userID := middleware.UserID(r.Context())
 
 	if err := h.progress.MarkTask(r.Context(), userID, lessonID, task.ID, solved, body.UsedHint); err != nil {
@@ -445,7 +444,7 @@ func (h *LessonHandler) checkCode(w http.ResponseWriter, r *http.Request) {
 		}
 		message := check.Message
 		if message == "" {
-			message = describeCheck(check)
+			message = domain.DescribeCodeCheck(check)
 		}
 		results = append(results, checkResult{OK: ok, Message: message})
 	}
@@ -498,38 +497,6 @@ func (h *LessonHandler) checkCode(w http.ResponseWriter, r *http.Request) {
 		"hint":        code.Hint,
 		"certificate": cert,
 	})
-}
-
-// matchCommand сверяет введённую команду со списком допустимых или с шаблоном.
-func matchCommand(task *domain.TerminalTask, command string) bool {
-	normalized := domain.NormalizeCommand(command)
-	if normalized == "" {
-		return false
-	}
-
-	for _, expected := range task.Expected {
-		if strings.EqualFold(domain.NormalizeCommand(expected), normalized) {
-			return true
-		}
-	}
-
-	if task.Pattern != "" {
-		if re, err := regexp.Compile(task.Pattern); err == nil && re.MatchString(normalized) {
-			return true
-		}
-	}
-	return false
-}
-
-func describeCheck(check domain.CodeCheck) string {
-	switch check.Type {
-	case "notContains":
-		return "В решении не должно быть: " + check.Value
-	case "regex":
-		return "Решение должно соответствовать шаблону: " + check.Value
-	default:
-		return "Решение должно содержать: " + check.Value
-	}
 }
 
 func clampSeconds(seconds int) int {
