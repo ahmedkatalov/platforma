@@ -60,7 +60,29 @@ func moduleIaC() ModuleSeed {
 						"- Никаких ручных правок ресурсов, созданных через IaC: следующий `apply` их вернёт.\n" +
 						"- Версии провайдеров и ролей фиксируются, иначе сборка перестанет быть повторяемой.\n" +
 						"- Секреты не хранятся в `.tf` и плейбуках — только переменные окружения или Vault.\n" +
-						"- Один модуль — одна ответственность: сеть, база, приложение описываются отдельно.",
+						"- Один модуль — одна ответственность: сеть, база, приложение описываются отдельно." +
+						"\n\n## Terraform и OpenTofu\n\n" +
+						"В 2023 году HashiCorp сменила лицензию Terraform на BSL, и сообщество создало " +
+						"открытый форк — **OpenTofu** под фондом Linux Foundation. Язык и структура " +
+						"конфигураций совместимы: `tofu plan` работает там же, где `terraform plan`. " +
+						"Многие компании перешли на OpenTofu из-за лицензии, поэтому в вакансиях " +
+						"встречаются оба названия.\n\n" +
+						"## Что ещё стало нормой\n\n" +
+						"- Проверка конфигураций в пайплайне: `tflint`, `checkov` и `trivy config` " +
+						"ловят открытые наружу порты и незашифрованные диски до применения.\n" +
+						"- Модули берут из реестра с закреплением версии, а не копируют между проектами.\n" +
+						"- План сохраняют в файл и применяют именно его: `terraform plan -out=tfplan` " +
+						"и затем `terraform apply tfplan` — иначе между просмотром и применением " +
+						"мир может измениться.\n" +
+						"- Доступ к облаку пайплайн получает через OIDC, а не через статические ключи.\n\n" +
+						"> Отдельные окружения описывают отдельными состояниями. Общий стейт для dev и prod — " +
+						"верный способ однажды снести прод при экспериментах в dev.",
+					"resources": []map[string]any{
+						{"title": "Terraform: документация", "url": "https://developer.hashicorp.com/terraform/docs", "note": "Язык, провайдеры, состояние и модули"},
+						{"title": "OpenTofu", "url": "https://opentofu.org/docs/", "note": "Открытый форк Terraform под лицензией MPL — часто выбирают вместо него"},
+						{"title": "Ansible: документация", "url": "https://docs.ansible.com/ansible/latest/", "note": "Модули, роли, инвентарь и переменные"},
+						{"title": "Как хранить состояние в S3", "url": "https://developer.hashicorp.com/terraform/language/backend/s3", "note": "Общий бэкенд с блокировкой — обязателен для команды"},
+					},
 				},
 			},
 			{
@@ -69,6 +91,18 @@ func moduleIaC() ModuleSeed {
 				Summary:     "Проведите изменение инфраструктуры от плана до применения",
 				DurationMin: 20,
 				Content: map[string]any{
+					"resources": []map[string]any{
+						{
+							"title": "Terraform CLI — справочник команд",
+							"url":   "https://developer.hashicorp.com/terraform/cli",
+							"note":  "init, plan, apply, state и работа с рабочими пространствами",
+						},
+						{
+							"title": "OpenTofu — документация",
+							"url":   "https://opentofu.org/docs/",
+							"note":  "открытый форк Terraform под лицензией MPL, команды совместимы",
+						},
+					},
 					"intro": "В каталоге ~/infra лежит описание сервера, в ~/ansible — плейбук. Проведите изменение по всем шагам.",
 					"shell": "student@devops",
 					"tasks": []map[string]any{
@@ -127,6 +161,18 @@ func moduleIaC() ModuleSeed {
 				Summary:     "Опишите ресурс с переменными и выводом",
 				DurationMin: 22,
 				Content: map[string]any{
+					"resources": []map[string]any{
+						{
+							"title": "Язык конфигурации Terraform",
+							"url":   "https://developer.hashicorp.com/terraform/language",
+							"note":  "переменные, выражения, модули, зависимости между ресурсами",
+						},
+						{
+							"title": "Terraform Style Guide",
+							"url":   "https://developer.hashicorp.com/terraform/language/style",
+							"note":  "официальные соглашения об именовании и структуре файлов",
+						},
+					},
 					"language": "hcl",
 					"task": "Допишите конфигурацию Terraform так, чтобы:\n\n" +
 						"1. тип машины задавался переменной `var.instance_type`, а не строкой;\n" +
@@ -185,6 +231,18 @@ func moduleIaC() ModuleSeed {
 				Summary:     "Состояние, план, идемпотентность",
 				DurationMin: 10,
 				Content: map[string]any{
+					"resources": []map[string]any{
+						{
+							"title": "Ansible — документация",
+							"url":   "https://docs.ansible.com/ansible/latest/",
+							"note":  "модули, роли, инвентарь и переменные",
+						},
+						{
+							"title": "Хранение состояния Terraform в удалённом бэкенде",
+							"url":   "https://developer.hashicorp.com/terraform/language/backend",
+							"note":  "блокировки и совместная работа над инфраструктурой",
+						},
+					},
 					"passScore": 70,
 					"questions": []map[string]any{
 						{

@@ -58,7 +58,102 @@ func moduleObservability() ModuleSeed {
 						"как только исчерпан — занимается надёжностью.\n\n" +
 						"## Логи\n\n" +
 						"Структурированные логи (JSON) удобнее искать и агрегировать. В каждой записи полезно иметь " +
-						"уровень, время, идентификатор запроса и сервис. Пароли и токены в логи не пишут никогда.",
+						"уровень, время, идентификатор запроса и сервис. Пароли и токены в логи не пишут никогда." +
+						"\n\n## Стек, который встречается чаще всего\n\n" +
+						"- **Prometheus 3.x** для метрик, **Loki** для логов, **Tempo** или Jaeger для трассировок, " +
+						"**Grafana** как единый интерфейс поверх всего.\n" +
+						"- Инструментирование сервисов — через OpenTelemetry, а не через клиенты конкретных систем.\n" +
+						"- Долгое хранение метрик выносят в Thanos, Mimir или VictoriaMetrics.\n" +
+						"- Сетевую видимость без правок кода дают инструменты на eBPF (Cilium Hubble, Pixie).\n" +
+						"- Дашборды и правила алертов хранят в репозитории и катят как код, а не правят руками в интерфейсе.",
+					"resources": []map[string]any{
+						{"title": "Prometheus: документация", "url": "https://prometheus.io/docs/", "note": "Сбор метрик, PromQL, правила и алерты"},
+						{"title": "OpenTelemetry", "url": "https://opentelemetry.io/docs/", "note": "Общий стандарт метрик, логов и трассировок — норма для новых сервисов"},
+						{"title": "Grafana: панели и дашборды", "url": "https://grafana.com/docs/grafana/latest/", "note": "Визуализация и переменные в дашбордах"},
+						{"title": "SRE Workbook: SLO на практике", "url": "https://sre.google/workbook/implementing-slos/", "note": "Как выбрать SLI и договориться об SLO"},
+						{"title": "Alerting на симптомы", "url": "https://docs.google.com/document/d/199PqyG3UsyXlwieHaqbGiWVa8eMWi8zzAn0YfcApr8Q/preview", "note": "Классическая заметка Rob Ewaschuk о том, какие алерты полезны"},
+					},
+				},
+			},
+			{
+				Title:       "OpenTelemetry: единый стандарт наблюдаемости",
+				Kind:        "text",
+				Summary:     "Как инструментировать сервис один раз и не привязываться к вендору",
+				DurationMin: 16,
+				Content: map[string]any{
+					"body": "## Проблема, которую решает OpenTelemetry\n\n" +
+						"Раньше каждый инструмент требовал своей библиотеки: клиент Prometheus для метрик, " +
+						"агент Jaeger для трассировок, свой формат логов. Смена системы мониторинга означала " +
+						"переписывание кода во всех сервисах.\n\n" +
+						"OpenTelemetry (OTel) — общий стандарт и набор библиотек для метрик, трассировок и логов. " +
+						"Сервис инструментируется один раз, а куда отправлять данные — вопрос конфигурации.\n\n" +
+						"## Из чего состоит\n\n" +
+						"| Часть | Назначение |\n" +
+						"|---|---|\n" +
+						"| SDK | библиотека в приложении: создаёт спаны и метрики |\n" +
+						"| Автоинструментирование | перехватывает HTTP, gRPC и запросы к базе без правок кода |\n" +
+						"| Collector | отдельный процесс: принимает, обрабатывает и рассылает данные |\n" +
+						"| OTLP | протокол передачи между ними |\n\n" +
+						"Коллектор — ключевая деталь: приложения всегда шлют в него, а он уже раскладывает " +
+						"метрики в Prometheus, трассировки в Tempo или Jaeger, логи в Loki. " +
+						"Замена системы хранения не трогает код сервисов.\n\n" +
+						"## Трассировка на пальцах\n\n" +
+						"Запрос получает **trace_id**, который передаётся во все вызываемые сервисы через заголовок " +
+						"`traceparent`. Каждый шаг — **span** с длительностью и атрибутами.\n\n" +
+						"```\n" +
+						"trace_id=4bf92f… ─ span: HTTP POST /api/orders        180 ms\n" +
+						"                  ├ span: SELECT orders               12 ms\n" +
+						"                  └ span: POST payments.internal     158 ms  ← вот где время\n" +
+						"```\n\n" +
+						"Именно так находят «медленно, но непонятно где» в системе из десятка сервисов.\n\n" +
+						"## Связывание с логами\n\n" +
+						"Если писать `trace_id` в каждую строку лога, из графика задержки можно провалиться " +
+						"в конкретный запрос, а из него — в его логи. Это дешёвая практика, которая " +
+						"экономит часы при разборе инцидентов.\n\n" +
+						"```json\n" +
+						"{\"level\":\"error\",\"msg\":\"payment timeout\",\"trace_id\":\"4bf92f3577b34da6\",\"service\":\"api\"}\n" +
+						"```\n\n" +
+						"## Пример конфигурации коллектора\n\n" +
+						"```yaml\n" +
+						"receivers:\n" +
+						"  otlp:\n" +
+						"    protocols:\n" +
+						"      grpc:\n" +
+						"      http:\n" +
+						"\n" +
+						"processors:\n" +
+						"  batch:\n" +
+						"  memory_limiter:\n" +
+						"    limit_mib: 512\n" +
+						"\n" +
+						"exporters:\n" +
+						"  prometheus:\n" +
+						"    endpoint: 0.0.0.0:8889\n" +
+						"  otlphttp/tempo:\n" +
+						"    endpoint: http://tempo:4318\n" +
+						"\n" +
+						"service:\n" +
+						"  pipelines:\n" +
+						"    metrics:\n" +
+						"      receivers: [otlp]\n" +
+						"      processors: [memory_limiter, batch]\n" +
+						"      exporters: [prometheus]\n" +
+						"    traces:\n" +
+						"      receivers: [otlp]\n" +
+						"      processors: [batch]\n" +
+						"      exporters: [otlphttp/tempo]\n" +
+						"```\n\n" +
+						"## Сэмплирование\n\n" +
+						"Хранить все трассировки дорого. Обычно берут процент запросов, но всегда сохраняют " +
+						"ошибочные и медленные — это называется хвостовым сэмплированием и настраивается в коллекторе.\n\n" +
+						"> Практическое правило: начинайте с автоинструментирования и коллектора. " +
+						"Ручные спаны добавляйте точечно — там, где стандартные библиотеки не видят вашей логики.",
+					"resources": []map[string]any{
+						{"title": "OpenTelemetry: документация", "url": "https://opentelemetry.io/docs/", "note": "SDK для языков, коллектор и протокол OTLP"},
+						{"title": "Семантические соглашения", "url": "https://opentelemetry.io/docs/specs/semconv/", "note": "Как называть атрибуты, чтобы дашборды работали из коробки"},
+						{"title": "Конфигурация коллектора", "url": "https://opentelemetry.io/docs/collector/configuration/", "note": "Приёмники, процессоры и экспортёры"},
+						{"title": "Grafana Tempo", "url": "https://grafana.com/docs/tempo/latest/", "note": "Хранилище трассировок, часто ставят в паре с Loki и Prometheus"},
+					},
 				},
 			},
 			{
@@ -67,6 +162,18 @@ func moduleObservability() ModuleSeed {
 				Summary:     "Найдите причину ошибок по метрикам и логам",
 				DurationMin: 22,
 				Content: map[string]any{
+					"resources": []map[string]any{
+						{
+							"title": "Основы PromQL",
+							"url":   "https://prometheus.io/docs/prometheus/latest/querying/basics/",
+							"note":  "селекторы, rate, агрегации — минимум для чтения дашбордов",
+						},
+						{
+							"title": "Grafana Loki — работа с логами",
+							"url":   "https://grafana.com/docs/loki/latest/",
+							"note":  "LogQL и связка логов с метриками",
+						},
+					},
 					"intro": "Алерт сообщил о росте ошибок. Разберитесь, что происходит с сервисом.",
 					"shell": "student@devops",
 					"tasks": []map[string]any{
@@ -132,6 +239,18 @@ func moduleObservability() ModuleSeed {
 				Summary:     "Опишите алерт на рост задержки",
 				DurationMin: 20,
 				Content: map[string]any{
+					"resources": []map[string]any{
+						{
+							"title": "Правила алертов Prometheus",
+							"url":   "https://prometheus.io/docs/prometheus/latest/configuration/alerting_rules/",
+							"note":  "синтаксис expr, for, labels и annotations",
+						},
+						{
+							"title": "SRE Workbook — алерты на основе SLO",
+							"url":   "https://sre.google/workbook/alerting-on-slos/",
+							"note":  "как строить алерты по бюджету ошибок, а не по порогам наугад",
+						},
+					},
 					"language": "yaml",
 					"task": "Допишите правило так, чтобы:\n\n" +
 						"1. алерт назывался `HighLatency`;\n" +
@@ -184,6 +303,18 @@ func moduleObservability() ModuleSeed {
 				Summary:     "Сигналы, алерты и SLO",
 				DurationMin: 12,
 				Content: map[string]any{
+					"resources": []map[string]any{
+						{
+							"title": "SRE Workbook — как внедрять SLO",
+							"url":   "https://sre.google/workbook/implementing-slos/",
+							"note":  "выбор SLI, целей и работа с бюджетом ошибок",
+						},
+						{
+							"title": "OpenTelemetry — документация",
+							"url":   "https://opentelemetry.io/docs/",
+							"note":  "единый стандарт сбора метрик, логов и трасс",
+						},
+					},
 					"passScore": 70,
 					"questions": []map[string]any{
 						{

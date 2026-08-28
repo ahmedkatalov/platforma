@@ -9,6 +9,7 @@ import { IconCheck, IconClose } from "@/shared/ui/icons";
 import { useToast } from "@/shared/ui/ToastProvider";
 
 import CodeEditor from "./CodeEditor";
+import LessonResources from "./LessonResources";
 import Markdown from "./Markdown";
 
 // Практика с кодом: студент правит конфигурацию, сервер прогоняет проверки.
@@ -161,6 +162,8 @@ export default function CodeLesson({
             </p>
           ) : null}
         </Card>
+
+        <LessonResources items={content.resources} />
       </div>
     </div>
   );

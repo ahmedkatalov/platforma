@@ -492,6 +492,82 @@ function CodeContentEditor({
   );
 }
 
+// --- Ссылки на материалы ---
+
+type EditorResource = { title: string; url: string; note?: string };
+
+function ResourcesEditor({
+  value,
+  onChange,
+}: {
+  value: AnyRecord;
+  onChange: (next: AnyRecord) => void;
+}) {
+  const resources = (value.resources as EditorResource[] | undefined) ?? [];
+
+  const patch = (index: number, next: Partial<EditorResource>) =>
+    onChange({
+      ...value,
+      resources: resources.map((item, i) => (i === index ? { ...item, ...next } : item)),
+    });
+
+  return (
+    <Section
+      title="Материалы по теме"
+      action={
+        <Button
+          variant="ghost"
+          icon={<IconPlus size={14} />}
+          onClick={() => onChange({ ...value, resources: [...resources, { title: "", url: "" }] })}
+        >
+          Ссылка
+        </Button>
+      }
+    >
+      {resources.length === 0 ? (
+        <p className="text-xs text-faint">
+          Добавьте официальную документацию или спецификацию — блок появится под уроком.
+        </p>
+      ) : (
+        <ul className="space-y-2">
+          {resources.map((item, index) => (
+            <li key={index} className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
+              <Input
+                value={item.title}
+                onChange={(e) => patch(index, { title: e.target.value })}
+                placeholder="Название материала"
+              />
+              <Input
+                value={item.url}
+                onChange={(e) => patch(index, { url: e.target.value })}
+                placeholder="https://…"
+                className="font-mono text-xs"
+              />
+              <Button
+                variant="ghost"
+                className="h-[var(--row-h)] !px-2 text-danger"
+                onClick={() =>
+                  onChange({ ...value, resources: resources.filter((_, i) => i !== index) })
+                }
+                title="Удалить ссылку"
+              >
+                <IconTrash size={16} />
+              </Button>
+
+              <Input
+                value={item.note ?? ""}
+                onChange={(e) => patch(index, { note: e.target.value })}
+                placeholder="Чем полезно — короткая заметка"
+                className="sm:col-span-3"
+              />
+            </li>
+          ))}
+        </ul>
+      )}
+    </Section>
+  );
+}
+
 // --- Переключатель «визуально / JSON» ---
 
 export default function LessonContentEditor({
@@ -556,6 +632,12 @@ export default function LessonContentEditor({
         <CodeContentEditor value={value} onChange={onChange} />
       ) : (
         <TextEditor value={value} onChange={onChange} />
+      )}
+
+      {mode === "visual" && (
+        <div className="mt-4">
+          <ResourcesEditor value={value} onChange={onChange} />
+        </div>
       )}
 
       {mode === "visual" && kind === "quiz" && (

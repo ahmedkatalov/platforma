@@ -53,7 +53,28 @@ func moduleDocker() ModuleSeed {
 						"или `npm ci` будет переиспользоваться из кэша.\n" +
 						"2. Фиксируйте версии базовых образов: `nginx:1.27`, а не `nginx:latest`.\n" +
 						"3. Не кладите секреты в образ — передавайте их переменными окружения.\n" +
-						"4. Данные храните в томах (`volumes`), а не внутри контейнера.",
+						"4. Данные храните в томах (`volumes`), а не внутри контейнера." +
+						"\n\n## Что важно знать сегодня\n\n" +
+						"- Compose давно живёт как плагин: команда пишется `docker compose`, без дефиса, " +
+						"а строка `version:` в начале файла больше не нужна.\n" +
+						"- Сборкой занимается BuildKit: он кэширует слои параллельно и умеет монтировать кэш " +
+						"зависимостей — `RUN --mount=type=cache`.\n" +
+						"- В Kubernetes образы запускает containerd, а не Docker: собранный образ от этого " +
+						"не меняется, ведь формат описан стандартом OCI.\n" +
+						"- Для минимального финального образа берут `alpine` или distroless-образы: " +
+						"меньше пакетов — меньше поверхность атаки и короче отчёт сканера.\n" +
+						"- Multi-stage сборка — норма: компилятор и исходники остаются на этапе сборки, " +
+						"в финальный образ едет только бинарник.\n\n" +
+						"```dockerfile\n" +
+						"# кэш зависимостей переживает пересборку\n" +
+						"RUN --mount=type=cache,target=/go/pkg/mod go mod download\n" +
+						"```",
+					"resources": []map[string]any{
+						{"title": "Документация Docker", "url": "https://docs.docker.com/", "note": "Основной справочник по CLI, сборке и Compose"},
+						{"title": "Как писать Dockerfile", "url": "https://docs.docker.com/build/building/best-practices/", "note": "Официальные рекомендации: слои, кэш, размер образа"},
+						{"title": "Спецификации OCI", "url": "https://opencontainers.org/", "note": "Стандарты образа и среды выполнения — на них держится совместимость"},
+						{"title": "Docker Compose: описание файла", "url": "https://docs.docker.com/reference/compose-file/", "note": "Актуальный формат Compose без версии сверху файла"},
+					},
 				},
 			},
 			{
@@ -62,6 +83,13 @@ func moduleDocker() ModuleSeed {
 				Summary:     "Запуск, логи, вход внутрь контейнера",
 				DurationMin: 20,
 				Content: map[string]any{
+					"resources": []map[string]any{
+						{
+							"title": "Справочник команд Docker CLI",
+							"url":   "https://docs.docker.com/reference/cli/docker/",
+							"note":  "все подкоманды с флагами и примерами",
+						},
+					},
 					"intro": "Учебный хост с установленным Docker. Выполните задания по очереди.",
 					"shell": "student@devops",
 					"tasks": []map[string]any{
@@ -123,6 +151,18 @@ func moduleDocker() ModuleSeed {
 				Summary:     "Опишите приложение и базу данных одним файлом",
 				DurationMin: 25,
 				Content: map[string]any{
+					"resources": []map[string]any{
+						{
+							"title": "Compose file reference",
+							"url":   "https://docs.docker.com/reference/compose-file/",
+							"note":  "актуальная спецификация формата: services, volumes, healthcheck, depends_on",
+						},
+						{
+							"title": "Compose в разработке: тома и hot reload",
+							"url":   "https://docs.docker.com/compose/how-tos/file-watch/",
+							"note":  "как не пересобирать образ на каждое изменение кода",
+						},
+					},
 					"language": "yaml",
 					"task": "Допишите docker-compose.yml так, чтобы:\n\n" +
 						"1. сервис `app` пробрасывал порт `8080:8080`;\n" +
@@ -177,6 +217,18 @@ func moduleDocker() ModuleSeed {
 				Summary:     "Образы, слои, тома и сеть",
 				DurationMin: 10,
 				Content: map[string]any{
+					"resources": []map[string]any{
+						{
+							"title": "Рекомендации по написанию Dockerfile",
+							"url":   "https://docs.docker.com/build/building/best-practices/",
+							"note":  "слои, кэш, многоэтапная сборка, размер образа",
+						},
+						{
+							"title": "Open Container Initiative — спецификации",
+							"url":   "https://opencontainers.org/",
+							"note":  "стандарт образов и рантайма: почему образ Docker запускается в Kubernetes",
+						},
+					},
 					"passScore": 70,
 					"questions": []map[string]any{
 						{

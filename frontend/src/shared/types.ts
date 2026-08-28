@@ -187,6 +187,7 @@ export type QuizQuestion = {
 
 export type QuizContent = {
   intro?: string;
+  resources?: LessonResource[];
   passScore?: number;
   timeLimitSec?: number;
   shuffle?: boolean;
@@ -204,6 +205,7 @@ export type TerminalContent = {
   intro?: string;
   shell?: string;
   tasks: TerminalTask[];
+  resources?: LessonResource[];
 };
 
 export type CodeContent = {
@@ -211,9 +213,12 @@ export type CodeContent = {
   task: string;
   starter: string;
   hint?: string;
+  resources?: LessonResource[];
 };
 
-export type TextContent = { body?: string };
+export type LessonResource = { title: string; url: string; note?: string };
+
+export type TextContent = { body?: string; resources?: LessonResource[] };
 
 export type QuestionResult = {
   questionId: string;

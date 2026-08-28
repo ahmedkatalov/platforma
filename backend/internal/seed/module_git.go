@@ -54,6 +54,12 @@ func moduleGit() ModuleSeed {
 						"| Отложить правки | `git stash`, вернуть — `git stash pop` |\n\n" +
 						"> `git revert` создаёт новый коммит-отмену и безопасен для общей ветки. " +
 						"`git reset --hard` переписывает историю — в общей ветке так делать нельзя.",
+					"resources": []map[string]any{
+						{"title": "Pro Git — книга на русском", "url": "https://git-scm.com/book/ru/v2", "note": "Главы 2–3 закрывают почти всю ежедневную работу"},
+						{"title": "Справочник команд Git", "url": "https://git-scm.com/docs", "note": "Официальное описание каждой команды и её флагов"},
+						{"title": "Conventional Commits", "url": "https://www.conventionalcommits.org/ru/v1.0.0/", "note": "Соглашение о сообщениях коммитов, на нём строят автоверсионирование"},
+						{"title": "Trunk Based Development", "url": "https://trunkbaseddevelopment.com/", "note": "Модель ветвления, которая совместима с ежедневными релизами"},
+					},
 				},
 			},
 			{
@@ -62,6 +68,18 @@ func moduleGit() ModuleSeed {
 				Summary:     "Пройдите путь от правки до отправки ветки",
 				DurationMin: 18,
 				Content: map[string]any{
+					"resources": []map[string]any{
+						{
+							"title": "Справочник команд Git",
+							"url":   "https://git-scm.com/docs",
+							"note":  "git switch, restore и другие современные команды вместо перегруженного checkout",
+						},
+						{
+							"title": "Oh Shit, Git!?! — как выбраться из типичных ситуаций",
+							"url":   "https://ohshitgit.com/ru",
+							"note":  "короткие рецепты: отменить коммит, вернуть удалённую ветку, разобрать конфликт",
+						},
+					},
 					"intro": "Вы в репозитории проекта. Проведите изменение через все стадии — от ветки до push.",
 					"shell": "student@devops",
 					"tasks": []map[string]any{
@@ -123,6 +141,18 @@ func moduleGit() ModuleSeed {
 				Summary:     "Состояния файлов, ветки и отмена изменений",
 				DurationMin: 10,
 				Content: map[string]any{
+					"resources": []map[string]any{
+						{
+							"title": "Conventional Commits",
+							"url":   "https://www.conventionalcommits.org/ru/v1.0.0/",
+							"note":  "соглашение о сообщениях, из которого автоматически собирается changelog",
+						},
+						{
+							"title": "GitHub Flow",
+							"url":   "https://docs.github.com/en/get-started/using-github/github-flow",
+							"note":  "минимальный рабочий процесс: ветка, pull request, проверки, слияние",
+						},
+					},
 					"passScore": 70,
 					"questions": []map[string]any{
 						{

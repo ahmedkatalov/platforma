@@ -66,7 +66,42 @@ func moduleKubernetes() ModuleSeed {
 						"kubectl rollout undo deploy/api  # откат\n" +
 						"```\n\n" +
 						"> Статус `CrashLoopBackOff` почти всегда означает: приложение падает при старте. " +
-						"Смотрите `kubectl logs` — причина там.",
+						"Смотрите `kubectl logs` — причина там." +
+						"\n\n## Что изменилось к 2026 году\n\n" +
+						"- **Gateway API** заменил Ingress как рекомендуемый способ описывать входящий трафик. " +
+						"Он разделяет роли: администратор описывает `Gateway`, команда сервиса — свой `HTTPRoute`.\n" +
+						"- **Pod Security Admission** пришёл на смену PodSecurityPolicy: уровни `privileged`, " +
+						"`baseline` и `restricted` включаются меткой на пространстве имён.\n" +
+						"- Автомасштабирование по нагрузке настраивают через `HorizontalPodAutoscaler`, " +
+						"а по внешним метрикам — через KEDA.\n" +
+						"- Секреты подтягивают из внешних хранилищ через External Secrets Operator, " +
+						"а не хранят в манифестах.\n\n" +
+						"```yaml\n" +
+						"apiVersion: gateway.networking.k8s.io/v1\n" +
+						"kind: HTTPRoute\n" +
+						"metadata:\n" +
+						"  name: api\n" +
+						"spec:\n" +
+						"  parentRefs:\n" +
+						"    - name: public-gateway\n" +
+						"  hostnames: [\"app.example.com\"]\n" +
+						"  rules:\n" +
+						"    - matches:\n" +
+						"        - path:\n" +
+						"            type: PathPrefix\n" +
+						"            value: /api\n" +
+						"      backendRefs:\n" +
+						"        - name: api\n" +
+						"          port: 8080\n" +
+						"```\n\n" +
+						"Ingress продолжает работать, и вы встретите его в существующих кластерах — " +
+						"но новые маршруты уже описывают через Gateway API.",
+					"resources": []map[string]any{
+						{"title": "Документация Kubernetes", "url": "https://kubernetes.io/ru/docs/home/", "note": "Концепции и справочник объектов, частично на русском"},
+						{"title": "Шпаргалка по kubectl", "url": "https://kubernetes.io/docs/reference/kubectl/quick-reference/", "note": "Команды, которые нужны каждый день"},
+						{"title": "Gateway API", "url": "https://gateway-api.sigs.k8s.io/", "note": "Преемник Ingress: маршрутизация с ролевым разделением"},
+						{"title": "Helm", "url": "https://helm.sh/docs/", "note": "Пакеты и шаблоны манифестов"},
+					},
 				},
 			},
 			{
@@ -75,6 +110,18 @@ func moduleKubernetes() ModuleSeed {
 				Summary:     "Диагностика приложения в кластере",
 				DurationMin: 20,
 				Content: map[string]any{
+					"resources": []map[string]any{
+						{
+							"title": "kubectl — шпаргалка",
+							"url":   "https://kubernetes.io/docs/reference/kubectl/quick-reference/",
+							"note":  "самые частые команды одним листом",
+						},
+						{
+							"title": "Диагностика приложений в кластере",
+							"url":   "https://kubernetes.io/docs/tasks/debug/debug-application/",
+							"note":  "официальный порядок разбора: под не стартует, падает, недоступен",
+						},
+					},
 					"intro": "В кластере развёрнут деплоймент api. Разберитесь с его состоянием.",
 					"shell": "student@devops",
 					"tasks": []map[string]any{
@@ -129,6 +176,18 @@ func moduleKubernetes() ModuleSeed {
 				Summary:     "Вынесите настройки из образа в ConfigMap и Secret",
 				DurationMin: 22,
 				Content: map[string]any{
+					"resources": []map[string]any{
+						{
+							"title": "ConfigMap и Secret",
+							"url":   "https://kubernetes.io/docs/concepts/configuration/secret/",
+							"note":  "как подключать настройки переменными и файлами",
+						},
+						{
+							"title": "Управление ресурсами контейнеров",
+							"url":   "https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/",
+							"note":  "requests, limits и что происходит при их превышении",
+						},
+					},
 					"language": "yaml",
 					"task": "Допишите манифест так, чтобы:\n\n" +
 						"1. переменная `LOG_LEVEL` приходила из ConfigMap через `configMapKeyRef`;\n" +
@@ -209,6 +268,23 @@ func moduleKubernetes() ModuleSeed {
 				Summary:     "Объекты, пробы и диагностика",
 				DurationMin: 10,
 				Content: map[string]any{
+					"resources": []map[string]any{
+						{
+							"title": "Пробы: liveness, readiness, startup",
+							"url":   "https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/",
+							"note":  "разбор с примерами и типичными ошибками настройки",
+						},
+						{
+							"title": "Gateway API",
+							"url":   "https://gateway-api.sigs.k8s.io/",
+							"note":  "преемник Ingress: маршрутизация, разделение ролей, поддержка не только HTTP",
+						},
+						{
+							"title": "Production best practices (learnk8s)",
+							"url":   "https://learnk8s.io/production-best-practices",
+							"note":  "чек-лист перед выкатом в прод",
+						},
+					},
 					"passScore": 70,
 					"questions": []map[string]any{
 						{

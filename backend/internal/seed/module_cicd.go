@@ -38,7 +38,87 @@ func moduleCICD() ModuleSeed {
 						"(GitHub Secrets, GitLab CI Variables) или в отдельном хранилище вроде Vault, " +
 						"а в конвейер отдают переменными окружения.\n\n" +
 						"> Хороший конвейер обязательно умеет откатываться. Если нет плана отката — " +
-						"это не доставка, а лотерея.",
+						"это не доставка, а лотерея." +
+						"\n\n## Практики, которые ждут от инженера сегодня\n\n" +
+						"- Доступ к облаку и реестру — через OIDC, статические ключи в секретах считаются устаревшими.\n" +
+						"- Образы и артефакты подписывают, рядом кладут SBOM: без этого выкат в зрелых компаниях не пройдёт.\n" +
+						"- Пайплайн кэширует зависимости и слои образа — сборка в десять минут убивает скорость команды.\n" +
+						"- Внешние действия закрепляют по хешу коммита: тег можно переписать, хеш — нет.\n" +
+						"- Выкат в прод отделяют окружением с ручным подтверждением или переносят в GitOps-репозиторий.\n" +
+						"- Тесты гоняют параллельно матрицей версий, а нестабильные тесты чинят, а не перезапускают.",
+					"resources": []map[string]any{
+						{"title": "GitHub Actions: документация", "url": "https://docs.github.com/actions", "note": "Синтаксис workflow, матрицы, кэш и окружения"},
+						{"title": "GitLab CI/CD", "url": "https://docs.gitlab.com/ee/ci/", "note": "Альтернативный синтаксис, часто встречается в компаниях"},
+						{"title": "OIDC вместо долгих секретов", "url": "https://docs.github.com/actions/deployment/security-hardening-your-deployments/about-security-hardening-with-openid-connect", "note": "Как выдавать облачный доступ пайплайну без хранения ключей"},
+						{"title": "Continuous Delivery: практики", "url": "https://continuousdelivery.com/", "note": "Первоисточник подхода от Джеза Хамбла"},
+					},
+				},
+			},
+			{
+				Title:       "GitOps: репозиторий как источник правды",
+				Kind:        "text",
+				Summary:     "Pull-модель доставки, ArgoCD и Flux, отличия от push-выката",
+				DurationMin: 16,
+				Content: map[string]any{
+					"body": "## Push и pull\n\n" +
+						"Обычный пайплайн **push-модель**: CI сам ходит в кластер и применяет манифесты. " +
+						"Для этого пайплайну нужны права на прод, а фактическое состояние кластера " +
+						"никто не сверяет с репозиторием.\n\n" +
+						"**GitOps** переворачивает схему: в кластере живёт агент (ArgoCD или Flux), " +
+						"который сам следит за репозиторием и приводит кластер к описанному состоянию.\n\n" +
+						"```\n" +
+						"push:  CI ──kubectl apply──► кластер\n" +
+						"pull:  CI ──коммит манифеста──► Git ◄──следит── агент в кластере\n" +
+						"```\n\n" +
+						"## Что это даёт\n\n" +
+						"- У CI больше нет доступа к кластеру — только право коммита. Утечка токена CI перестаёт быть катастрофой.\n" +
+						"- Состояние кластера всегда сверяется с Git: ручные правки видны как **drift** и откатываются.\n" +
+						"- Откат — это `git revert`, а не отдельная процедура.\n" +
+						"- История выкатов совпадает с историей репозитория: видно, кто и что выкатил.\n\n" +
+						"## Два репозитория\n\n" +
+						"Обычно разделяют код приложения и описание развёртывания:\n\n" +
+						"| Репозиторий | Что внутри | Кто меняет |\n" +
+						"|---|---|---|\n" +
+						"| `api` | исходники, тесты, Dockerfile | разработчики |\n" +
+						"| `api-deploy` | манифесты, values, версии образов | CI и дежурные |\n\n" +
+						"CI собирает образ, проставляет тег и коммитит новую версию в репозиторий развёртывания — " +
+						"дальше агент выкатывает сам.\n\n" +
+						"## Пример описания приложения в ArgoCD\n\n" +
+						"```yaml\n" +
+						"apiVersion: argoproj.io/v1alpha1\n" +
+						"kind: Application\n" +
+						"metadata:\n" +
+						"  name: api\n" +
+						"  namespace: argocd\n" +
+						"spec:\n" +
+						"  project: default\n" +
+						"  source:\n" +
+						"    repoURL: https://github.com/team/api-deploy.git\n" +
+						"    targetRevision: main\n" +
+						"    path: overlays/production\n" +
+						"  destination:\n" +
+						"    server: https://kubernetes.default.svc\n" +
+						"    namespace: production\n" +
+						"  syncPolicy:\n" +
+						"    automated:\n" +
+						"      prune: true      # удалять то, чего больше нет в Git\n" +
+						"      selfHeal: true   # возвращать ручные правки к состоянию из Git\n" +
+						"```\n\n" +
+						"> `selfHeal: true` означает, что правка через `kubectl edit` проживёт до следующей синхронизации. " +
+						"Это и есть цель: единственный способ изменить прод — коммит.\n\n" +
+						"## Где GitOps не нужен\n\n" +
+						"Для одного сервера с docker compose агент только усложнит жизнь. " +
+						"Подход окупается, когда окружений несколько, людей больше пяти, а выкаты идут ежедневно.\n\n" +
+						"## Прогрессивная доставка\n\n" +
+						"Поверх GitOps ставят контроллеры вроде Argo Rollouts или Flagger: они катят новую версию " +
+						"постепенно, смотрят на метрики ошибок и задержки и сами откатывают выкат, " +
+						"если показатели ухудшились. Так canary-выкат становится автоматическим, без дежурного у графиков.",
+					"resources": []map[string]any{
+						{"title": "Принципы OpenGitOps", "url": "https://opengitops.dev/", "note": "Четыре принципа подхода в одной странице"},
+						{"title": "Argo CD: документация", "url": "https://argo-cd.readthedocs.io/en/stable/", "note": "Application, проекты, синхронизация и права"},
+						{"title": "Flux", "url": "https://fluxcd.io/flux/", "note": "Альтернатива Argo CD, ближе к Kubernetes-нативному стилю"},
+						{"title": "Argo Rollouts", "url": "https://argo-rollouts.readthedocs.io/en/stable/", "note": "Canary и blue/green с автоматическим откатом по метрикам"},
+					},
 				},
 			},
 			{
@@ -47,6 +127,18 @@ func moduleCICD() ModuleSeed {
 				Summary:     "Соберите рабочий workflow для сборки и тестов",
 				DurationMin: 25,
 				Content: map[string]any{
+					"resources": []map[string]any{
+						{
+							"title": "Синтаксис workflow GitHub Actions",
+							"url":   "https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions",
+							"note":  "полный справочник по ключам on, jobs, steps, matrix",
+						},
+						{
+							"title": "Доступ к облаку без секретов: OIDC",
+							"url":   "https://docs.github.com/en/actions/security-for-github-actions/security-hardening-your-deployments/about-security-hardening-with-openid-connect",
+							"note":  "как выдать пайплайну короткоживущий токен вместо вечного ключа",
+						},
+					},
 					"language": "yaml",
 					"task": "Допишите workflow так, чтобы он:\n\n" +
 						"1. запускался при push в ветку `main`;\n" +
@@ -110,6 +202,18 @@ func moduleCICD() ModuleSeed {
 				Summary:     "Проверьте, что собирается и выкатывается на самом деле",
 				DurationMin: 18,
 				Content: map[string]any{
+					"resources": []map[string]any{
+						{
+							"title": "GitLab CI/CD — документация",
+							"url":   "https://docs.gitlab.com/ci/",
+							"note":  "второй по распространённости CI: те же принципы, другой синтаксис",
+						},
+						{
+							"title": "Кэширование зависимостей в Actions",
+							"url":   "https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/caching-dependencies-to-speed-up-workflows",
+							"note":  "первое, что ускоряет медленный пайплайн",
+						},
+					},
 					"intro": "Пайплайн упал на выкате. Проверьте, что происходит на сервере сборки.",
 					"shell": "student@devops",
 					"tasks": []map[string]any{
@@ -167,6 +271,18 @@ func moduleCICD() ModuleSeed {
 				Summary:     "Этапы конвейера, окружения и выкаты",
 				DurationMin: 8,
 				Content: map[string]any{
+					"resources": []map[string]any{
+						{
+							"title": "SLSA — уровни зрелости цепочки поставки",
+							"url":   "https://slsa.dev/",
+							"note":  "что такое provenance и зачем подписывать сборку",
+						},
+						{
+							"title": "Argo CD — документация",
+							"url":   "https://argo-cd.readthedocs.io/",
+							"note":  "если дальше идёте в GitOps: установка, приложения, синхронизация",
+						},
+					},
 					"passScore": 70,
 					"questions": []map[string]any{
 						{

@@ -8,6 +8,7 @@ import { Button, Card } from "@/shared/ui";
 import { IconCheck } from "@/shared/ui/icons";
 import { useToast } from "@/shared/ui/ToastProvider";
 
+import LessonResources from "./LessonResources";
 import Markdown from "./Markdown";
 
 // Урок-теория: markdown плюс кнопка «Прочитал».
@@ -49,6 +50,8 @@ export default function TextLesson({
       <Card className="p-[var(--pad)] sm:p-8">
         <Markdown>{content.body ?? "_Материал урока пока не заполнен._"}</Markdown>
       </Card>
+
+      <LessonResources items={content.resources} />
 
       <Card className="mt-[var(--gap)] flex flex-wrap items-center justify-between gap-3 p-[var(--pad)]">
         <p className="text-sm text-muted">

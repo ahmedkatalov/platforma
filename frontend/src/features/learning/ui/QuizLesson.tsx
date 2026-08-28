@@ -8,6 +8,7 @@ import { Badge, Button, Card, Progress } from "@/shared/ui";
 import { IconCheck, IconClose, IconClock } from "@/shared/ui/icons";
 import { useToast } from "@/shared/ui/ToastProvider";
 
+import LessonResources from "./LessonResources";
 import Markdown from "./Markdown";
 
 type Answers = Record<string, string[]>;
@@ -163,6 +164,8 @@ export default function QuizLesson({
             )}
           </div>
         </Card>
+
+        <LessonResources items={content.resources} />
 
         <div className="mt-[var(--gap)] space-y-[var(--gap)]">
           {questions.map((q, i) => {

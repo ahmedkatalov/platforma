@@ -11,6 +11,18 @@ func moduleExam() ModuleSeed {
 				Summary:     "Что нужно знать и уметь к финалу курса",
 				DurationMin: 6,
 				Content: map[string]any{
+					"resources": []map[string]any{
+						{
+							"title": "Программа сертификации CKA (CNCF)",
+							"url":   "https://github.com/cncf/curriculum",
+							"note":  "официальный список тем CKA/CKAD — ориентир, куда двигаться после курса",
+						},
+						{
+							"title": "roadmap.sh — DevOps Roadmap",
+							"url":   "https://roadmap.sh/devops",
+							"note":  "что изучать дальше и в каком порядке",
+						},
+					},
 					"body": "## Что впереди\n\n" +
 						"Аттестация состоит из трёх частей:\n\n" +
 						"1. **Экзамен** — двенадцать вопросов по всем темам курса. Порог — 80%.\n" +
@@ -39,6 +51,13 @@ func moduleExam() ModuleSeed {
 				Summary:     "Двенадцать вопросов по всем модулям, порог 80%",
 				DurationMin: 25,
 				Content: map[string]any{
+					"resources": []map[string]any{
+						{
+							"title": "Google SRE Book и SRE Workbook",
+							"url":   "https://sre.google/books/",
+							"note":  "две книги целиком онлайн — следующий уровень после курса",
+						},
+					},
 					"passScore": 80,
 					"intro":     "Отвечайте вдумчиво: порог прохождения выше обычного — 80%.",
 					"questions": []map[string]any{
@@ -174,6 +193,13 @@ func moduleExam() ModuleSeed {
 				Summary:     "Пройдите путь от жалобы пользователя до причины сбоя",
 				DurationMin: 25,
 				Content: map[string]any{
+					"resources": []map[string]any{
+						{
+							"title": "Диагностика приложений в Kubernetes",
+							"url":   "https://kubernetes.io/docs/tasks/debug/debug-application/",
+							"note":  "официальный порядок разбора проблем с подами и сервисами",
+						},
+					},
 					"intro": "Поступила жалоба: часть запросов к API завершается ошибкой. Проведите разбор целиком — от внешней проверки до логов и кластера.",
 					"shell": "student@devops",
 					"tasks": []map[string]any{
@@ -235,6 +261,18 @@ func moduleExam() ModuleSeed {
 				Summary:     "Соберите Deployment, готовый к продакшену",
 				DurationMin: 30,
 				Content: map[string]any{
+					"resources": []map[string]any{
+						{
+							"title": "Kubernetes production best practices",
+							"url":   "https://learnk8s.io/production-best-practices",
+							"note":  "чек-лист: пробы, ресурсы, безопасность, отказоустойчивость",
+						},
+						{
+							"title": "Конфигурация подов: securityContext",
+							"url":   "https://kubernetes.io/docs/tasks/configure-pod-container/security-context/",
+							"note":  "runAsNonRoot, readOnlyRootFilesystem и другие ограничения",
+						},
+					},
 					"language": "yaml",
 					"task": "Доведите манифест до продакшен-качества. В нём должно быть:\n\n" +
 						"1. не меньше двух реплик;\n" +

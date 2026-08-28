@@ -51,6 +51,89 @@ func moduleSecurity() ModuleSeed {
 						"| Ротация ключей | долгую жизнь утёкшего ключа |\n" +
 						"| Аудит и логи доступа | незаметное присутствие злоумышленника |\n\n" +
 						"Безопасность — не отдельный этап в конце, а требование к каждому шагу конвейера.",
+					"resources": []map[string]any{
+						{"title": "OWASP Top 10", "url": "https://owasp.org/www-project-top-ten/", "note": "Самые частые классы уязвимостей веб-приложений"},
+						{"title": "Trivy: сканер уязвимостей", "url": "https://trivy.dev/latest/docs/", "note": "Проверка образов, файлов IaC и зависимостей в пайплайне"},
+						{"title": "Sigstore и cosign", "url": "https://docs.sigstore.dev/", "note": "Подпись артефактов без хранения приватных ключей"},
+						{"title": "SLSA: уровни защиты сборки", "url": "https://slsa.dev/", "note": "Требования к цепочке поставки от сборки до выката"},
+						{"title": "HashiCorp Vault", "url": "https://developer.hashicorp.com/vault/docs", "note": "Хранение секретов, динамические доступы и ротация"},
+					},
+				},
+			},
+			{
+				Title:       "Цепочка поставки: SBOM, подписи и доступ без секретов",
+				Kind:        "text",
+				Summary:     "Как убедиться, что в проде работает именно то, что собрал ваш пайплайн",
+				DurationMin: 18,
+				Content: map[string]any{
+					"body": "## Что такое цепочка поставки\n\n" +
+						"Между коммитом и запуском в проде стоит длинная цепочка: зависимости, базовый образ, " +
+						"сборщик, реестр, кластер. Атака на любое звено даёт злоумышленнику прод, " +
+						"не трогая ваш исходный код. Отсюда три вопроса, на которые нужен ответ:\n\n" +
+						"1. **Что внутри?** — состав артефакта.\n" +
+						"2. **Кто собрал?** — подпись и происхождение.\n" +
+						"3. **Из чего собрал?** — какой коммит и какой пайплайн.\n\n" +
+						"## SBOM: состав артефакта\n\n" +
+						"SBOM — список всех компонентов образа с версиями (форматы SPDX и CycloneDX). " +
+						"Он нужен, чтобы за минуты ответить на вопрос «есть ли у нас уязвимая библиотека X».\n\n" +
+						"```bash\n" +
+						"syft registry.example.com/api:1.4.2 -o spdx-json > sbom.json\n" +
+						"grype sbom:sbom.json           # проверить состав на известные уязвимости\n" +
+						"trivy image registry.example.com/api:1.4.2\n" +
+						"```\n\n" +
+						"SBOM генерируется в пайплайне и хранится рядом с образом — тогда он всегда соответствует " +
+						"тому, что реально собрано.\n\n" +
+						"## Подпись и происхождение\n\n" +
+						"Подпись отвечает на вопрос «этот образ действительно собрал наш пайплайн». " +
+						"Sigstore и cosign делают это без хранения приватных ключей: подпись выпускается " +
+						"на короткоживущий сертификат, привязанный к личности пайплайна.\n\n" +
+						"```bash\n" +
+						"cosign sign --yes registry.example.com/api:1.4.2\n" +
+						"cosign verify registry.example.com/api:1.4.2 \\\n" +
+						"  --certificate-identity-regexp 'https://github.com/team/api/.*' \\\n" +
+						"  --certificate-oidc-issuer https://token.actions.githubusercontent.com\n" +
+						"```\n\n" +
+						"Кластер можно настроить так, чтобы он запускал только подписанные образы " +
+						"(политики Kyverno или Gatekeeper). Тогда подсунуть свой образ в реестр недостаточно.\n\n" +
+						"## SLSA: уровни зрелости\n\n" +
+						"SLSA описывает, насколько сборке можно доверять: от «просто собрали где-то» " +
+						"до «сборка воспроизводима, изолирована и подтверждена происхождением (provenance)». " +
+						"Практический минимум для команды — собирать только в CI, подписывать артефакты " +
+						"и хранить provenance вместе с образом.\n\n" +
+						"## Доступ без долгоживущих секретов\n\n" +
+						"Токен реестра или облака в секретах CI — актив, который живёт годами и утекает вместе " +
+						"с любым логом. Современный способ — федерация через OIDC: пайплайн предъявляет облаку " +
+						"короткоживущий токен своей личности и получает временные права.\n\n" +
+						"```yaml\n" +
+						"permissions:\n" +
+						"  id-token: write     # разрешить пайплайну получить OIDC-токен\n" +
+						"  contents: read\n" +
+						"\n" +
+						"steps:\n" +
+						"  - uses: aws-actions/configure-aws-credentials@v4\n" +
+						"    with:\n" +
+						"      role-to-assume: arn:aws:iam::123456789012:role/ci-deploy\n" +
+						"      aws-region: eu-central-1\n" +
+						"```\n\n" +
+						"Ключей в секретах нет вообще: доступ выдаётся на время одного запуска и только той ветке, " +
+						"которая указана в доверенной политике роли.\n\n" +
+						"## Зависимости\n\n" +
+						"- Локфайлы (`go.sum`, `package-lock.json`) обязательны: без них сборка тянет разные версии.\n" +
+						"- Обновления зависимостей автоматизируют (Renovate, Dependabot) — иначе их не делают вовсе.\n" +
+						"- Публичные действия CI закрепляют по хешу коммита, а не по тегу: тег можно переписать.\n\n" +
+						"```yaml\n" +
+						"- uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2\n" +
+						"```\n\n" +
+						"> Минимальный набор на 2026 год: сканирование образа и зависимостей в пайплайне, " +
+						"SBOM рядом с артефактом, подпись через cosign, доступ по OIDC вместо статических ключей.",
+					"resources": []map[string]any{
+						{"title": "SLSA: уровни защиты сборки", "url": "https://slsa.dev/spec/v1.0/levels", "note": "Что конкретно требуется на каждом уровне"},
+						{"title": "Sigstore: подпись без ключей", "url": "https://docs.sigstore.dev/cosign/signing/overview/", "note": "cosign, прозрачный журнал и проверка личности"},
+						{"title": "CycloneDX", "url": "https://cyclonedx.org/", "note": "Формат SBOM, поддерживается большинством сканеров"},
+						{"title": "Syft и Grype", "url": "https://github.com/anchore/syft", "note": "Генерация SBOM и проверка состава на уязвимости"},
+						{"title": "OIDC в GitHub Actions", "url": "https://docs.github.com/actions/deployment/security-hardening-your-deployments/about-security-hardening-with-openid-connect", "note": "Как убрать статические облачные ключи из CI"},
+						{"title": "NIST SSDF", "url": "https://csrc.nist.gov/Projects/ssdf", "note": "Свод практик безопасной разработки, на него ссылаются регуляторы"},
+					},
 				},
 			},
 			{
@@ -59,6 +142,18 @@ func moduleSecurity() ModuleSeed {
 				Summary:     "Наведите порядок в правах и проверьте, что открыто наружу",
 				DurationMin: 18,
 				Content: map[string]any{
+					"resources": []map[string]any{
+						{
+							"title": "OpenSSH — руководства",
+							"url":   "https://www.openssh.com/manual.html",
+							"note":  "ключи, агент, конфигурация клиента и сервера",
+						},
+						{
+							"title": "Trivy — сканер уязвимостей",
+							"url":   "https://trivy.dev/latest/docs/",
+							"note":  "проверка образов, файловой системы и IaC-конфигураций",
+						},
+					},
 					"intro": "Перед выкатом проверьте базовую гигиену сервера.",
 					"shell": "student@devops",
 					"tasks": []map[string]any{
@@ -121,6 +216,18 @@ func moduleSecurity() ModuleSeed {
 				Summary:     "Приведите сборку образа в порядок",
 				DurationMin: 22,
 				Content: map[string]any{
+					"resources": []map[string]any{
+						{
+							"title": "Безопасность Docker",
+							"url":   "https://docs.docker.com/engine/security/",
+							"note":  "изоляция, возможности ядра, rootless-режим",
+						},
+						{
+							"title": "Distroless — образы без лишнего",
+							"url":   "https://github.com/GoogleContainerTools/distroless",
+							"note":  "минимальная поверхность атаки: ни шелла, ни пакетного менеджера",
+						},
+					},
 					"language": "dockerfile",
 					"task": "Исправьте Dockerfile так, чтобы:\n\n" +
 						"1. базовый образ был с зафиксированной версией, без `latest`;\n" +
@@ -162,6 +269,23 @@ func moduleSecurity() ModuleSeed {
 				Summary:     "Секреты, права и образы",
 				DurationMin: 10,
 				Content: map[string]any{
+					"resources": []map[string]any{
+						{
+							"title": "OWASP Top 10",
+							"url":   "https://owasp.org/www-project-top-ten/",
+							"note":  "базовый список рисков, который спрашивают на собеседованиях",
+						},
+						{
+							"title": "Sigstore / Cosign — подпись артефактов",
+							"url":   "https://docs.sigstore.dev/",
+							"note":  "подпись образов без управления ключами вручную",
+						},
+						{
+							"title": "HashiCorp Vault — документация",
+							"url":   "https://developer.hashicorp.com/vault/docs",
+							"note":  "хранение и ротация секретов, динамические учётные данные",
+						},
+					},
 					"passScore": 70,
 					"questions": []map[string]any{
 						{

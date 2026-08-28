@@ -54,6 +54,11 @@ func moduleLinux() ModuleSeed {
 						"```\n\n" +
 						"> Совет: конвейер `|` передаёт вывод одной команды на вход другой. " +
 						"Именно из таких цепочек состоит ежедневная работа в терминале.",
+					"resources": []map[string]any{
+						{"title": "Linux man-pages", "url": "https://man7.org/linux/man-pages/", "note": "Первоисточник по любой команде и системному вызову"},
+						{"title": "Bash Reference Manual", "url": "https://www.gnu.org/software/bash/manual/bash.html", "note": "Как на самом деле работают перенаправления, подстановки и кавычки"},
+						{"title": "The Linux Command Line", "url": "https://linuxcommand.org/tlcl.php", "note": "Бесплатная книга для systematic-изучения командной строки"},
+					},
 				},
 			},
 			{
@@ -105,6 +110,10 @@ func moduleLinux() ModuleSeed {
 						"3. Есть ли место и память? — `df -h`, `free -h`.\n" +
 						"4. Кто занимает ресурсы? — `ps aux`.\n\n" +
 						"Эта последовательность закрывает большинство инцидентов на одиночном сервере.",
+					"resources": []map[string]any{
+						{"title": "systemd: справочник", "url": "https://www.freedesktop.org/software/systemd/man/latest/", "note": "Юниты, зависимости, таймеры и журнал"},
+						{"title": "journalctl: примеры", "url": "https://www.freedesktop.org/software/systemd/man/latest/journalctl.html", "note": "Фильтры по службе, времени и приоритету"},
+					},
 				},
 			},
 			{
@@ -113,6 +122,13 @@ func moduleLinux() ModuleSeed {
 				Summary:     "Выполните задания в эмуляторе терминала",
 				DurationMin: 20,
 				Content: map[string]any{
+					"resources": []map[string]any{
+						{
+							"title": "Шпаргалка по правам доступа",
+							"url":   "https://man7.org/linux/man-pages/man1/chmod.1.html",
+							"note":  "числовые и символьные режимы, setuid и sticky bit",
+						},
+					},
 					"intro": "Перед вами учебный сервер. Выполняйте задания по очереди — " +
 						"команды проверяются на сервере платформы.",
 					"shell": "student@devops",
@@ -176,6 +192,13 @@ func moduleLinux() ModuleSeed {
 				Summary:     "Каталоги, права и процессы",
 				DurationMin: 8,
 				Content: map[string]any{
+					"resources": []map[string]any{
+						{
+							"title": "Linux Journey — интерактивный курс по основам",
+							"url":   "https://linuxjourney.com/",
+							"note":  "если хочется закрепить тему отдельными упражнениями",
+						},
+					},
 					"passScore": 70,
 					"questions": []map[string]any{
 						{

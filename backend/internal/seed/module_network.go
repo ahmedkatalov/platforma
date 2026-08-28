@@ -58,7 +58,28 @@ func moduleNetwork() ModuleSeed {
 						"nginx -t           # проверить конфигурацию перед перезагрузкой\n" +
 						"```\n\n" +
 						"Правило: **сначала `nginx -t`, потом `nginx -s reload`**. Перезагрузка со сломанным " +
-						"конфигом уронит сайт.",
+						"конфигом уронит сайт." +
+						"\n\n## Актуальное состояние протоколов\n\n" +
+						"- **TLS 1.3** — практический стандарт: рукопожатие за один обход, старые наборы шифров отключены. " +
+						"TLS 1.0 и 1.1 в проде уже недопустимы.\n" +
+						"- **HTTP/2** повсеместен, **HTTP/3** (поверх QUIC, UDP) включают для мобильных клиентов: " +
+						"он переживает смену сети без разрыва соединения.\n" +
+						"- Сертификаты выпускают автоматически по ACME (Let's Encrypt, ZeroSSL); " +
+						"срок жизни сертификатов сокращается, поэтому ручное продление больше не вариант.\n" +
+						"- В кластерах ту же роль играют Ingress-контроллеры и Gateway API, " +
+						"но правила остаются теми же: терминация TLS, заголовки клиента, тайм-ауты.\n\n" +
+						"```nginx\n" +
+						"listen 443 ssl;\n" +
+						"listen 443 quic reuseport;   # HTTP/3\n" +
+						"ssl_protocols TLSv1.2 TLSv1.3;\n" +
+						"add_header Alt-Svc 'h3=\":443\"; ma=86400';\n" +
+						"```",
+					"resources": []map[string]any{
+						{"title": "MDN: протокол HTTP", "url": "https://developer.mozilla.org/ru/docs/Web/HTTP", "note": "Методы, коды, заголовки и кэширование — на русском"},
+						{"title": "Документация nginx", "url": "https://nginx.org/ru/docs/", "note": "Директивы, контексты и примеры конфигураций"},
+						{"title": "Let's Encrypt: как это работает", "url": "https://letsencrypt.org/how-it-works/", "note": "Бесплатные сертификаты и автоматическое продление"},
+						{"title": "Cloudflare Learning Center", "url": "https://www.cloudflare.com/learning/", "note": "Понятные разборы DNS, TLS, CDN и типов атак"},
+					},
 				},
 			},
 			{
@@ -67,6 +88,18 @@ func moduleNetwork() ModuleSeed {
 				Summary:     "Найдите, почему сайт отвечает ошибкой",
 				DurationMin: 20,
 				Content: map[string]any{
+					"resources": []map[string]any{
+						{
+							"title": "curl — руководство с примерами",
+							"url":   "https://curl.se/docs/manual.html",
+							"note":  "-I, -v, --resolve и другие флаги для диагностики",
+						},
+						{
+							"title": "Отладка nginx: логи и трассировка",
+							"url":   "https://nginx.org/en/docs/debugging_log.html",
+							"note":  "как включить подробный лог, когда причина неочевидна",
+						},
+					},
 					"intro": "Пользователи жалуются на ошибки. Пройдите путь запроса и найдите причину.",
 					"shell": "student@devops",
 					"tasks": []map[string]any{
@@ -121,6 +154,18 @@ func moduleNetwork() ModuleSeed {
 				Summary:     "Соберите обратный прокси с TLS и проверкой здоровья",
 				DurationMin: 22,
 				Content: map[string]any{
+					"resources": []map[string]any{
+						{
+							"title": "nginx — руководство для начинающих",
+							"url":   "https://nginx.org/ru/docs/beginners_guide.html",
+							"note":  "структура конфигурации на русском",
+						},
+						{
+							"title": "Mozilla SSL Configuration Generator",
+							"url":   "https://ssl-config.mozilla.org/",
+							"note":  "готовая TLS-конфигурация под нужную версию nginx — не выдумывайте шифры сами",
+						},
+					},
 					"language": "nginx",
 					"task": "Допишите конфигурацию так, чтобы:\n\n" +
 						"1. сервер слушал порт `443` с `ssl`;\n" +
@@ -186,6 +231,18 @@ func moduleNetwork() ModuleSeed {
 				Summary:     "Коды ответа, прокси и диагностика",
 				DurationMin: 10,
 				Content: map[string]any{
+					"resources": []map[string]any{
+						{
+							"title": "MDN — коды ответа HTTP",
+							"url":   "https://developer.mozilla.org/ru/docs/Web/HTTP/Status",
+							"note":  "полный список с объяснением, когда какой уместен",
+						},
+						{
+							"title": "High Performance Browser Networking",
+							"url":   "https://hpbn.co/",
+							"note":  "книга целиком онлайн: TCP, TLS, HTTP/2 и HTTP/3 без упрощений",
+						},
+					},
 					"passScore": 70,
 					"questions": []map[string]any{
 						{

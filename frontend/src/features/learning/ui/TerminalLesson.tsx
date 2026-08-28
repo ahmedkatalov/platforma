@@ -14,6 +14,7 @@ import { Badge, Button, Card, Progress } from "@/shared/ui";
 import { IconCheck, IconTerminal } from "@/shared/ui/icons";
 import { useToast } from "@/shared/ui/ToastProvider";
 
+import LessonResources from "./LessonResources";
 import Markdown from "./Markdown";
 
 type Line = { kind: "input" | "output" | "note"; text: string };
@@ -309,6 +310,8 @@ export default function TerminalLesson({
           </div>
         </Card>
       </div>
+
+      <LessonResources items={content.resources} />
     </>
   );
 }
