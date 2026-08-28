@@ -3,7 +3,9 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 
+	"platforma/backend/internal/domain"
 	"platforma/backend/internal/middleware"
 	"platforma/backend/internal/repository"
 
@@ -19,6 +21,7 @@ type MeHandler struct {
 	theme    *repository.ThemeRepo
 	progress *repository.ProgressRepo
 	certs    *repository.CertificateRepo
+	notes    *repository.NoteRepo
 	auth     *AuthHandler
 }
 
@@ -30,10 +33,11 @@ func NewMeHandler(
 	theme *repository.ThemeRepo,
 	progress *repository.ProgressRepo,
 	certs *repository.CertificateRepo,
+	notes *repository.NoteRepo,
 	auth *AuthHandler,
 ) *MeHandler {
 	return &MeHandler{users: users, courses: courses, activity: activity,
-		stats: stats, theme: theme, progress: progress, certs: certs, auth: auth}
+		stats: stats, theme: theme, progress: progress, certs: certs, notes: notes, auth: auth}
 }
 
 func (h *MeHandler) Routes() http.Handler {
@@ -44,6 +48,12 @@ func (h *MeHandler) Routes() http.Handler {
 	r.Get("/stats", h.myStats)
 	r.Get("/attempts", h.myAttempts)
 	r.Get("/quizzes", h.myQuizzes)
+	r.Route("/notes", func(r chi.Router) {
+		r.Get("/", h.listNotes)
+		r.Post("/", h.createNote)
+		r.Patch("/{id}", h.updateNote)
+		r.Delete("/{id}", h.deleteNote)
+	})
 	r.Get("/certificates", h.myCertificates)
 	r.Post("/activity", h.trackActivity)
 	r.Get("/preferences", h.getPreferences)
@@ -117,6 +127,84 @@ func (h *MeHandler) myStats(w http.ResponseWriter, r *http.Request) {
 		"streak":   streak,
 		"quiz":     quiz,
 	})
+}
+
+// listNotes — заметки студента со ссылками на уроки.
+func (h *MeHandler) listNotes(w http.ResponseWriter, r *http.Request) {
+	notes, err := h.notes.ForUser(r.Context(), middleware.UserID(r.Context()))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Не удалось загрузить заметки")
+		return
+	}
+	writeJSON(w, http.StatusOK, notes)
+}
+
+// createNote сохраняет выделенную цитату из урока.
+func (h *MeHandler) createNote(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		LessonID string `json:"lessonId"`
+		Quote    string `json:"quote"`
+		Body     string `json:"body"`
+	}
+	if err := decodeJSON(w, r, &body); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if strings.TrimSpace(body.Quote) == "" {
+		writeError(w, http.StatusBadRequest, "Выделите текст, который хотите сохранить")
+		return
+	}
+
+	userID := middleware.UserID(r.Context())
+
+	// Заметку можно сделать только в уроке курса, который студенту открыт.
+	lesson, err := h.progress.LessonWithCourse(r.Context(), strings.TrimSpace(body.LessonID))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "Урок не найден")
+		return
+	}
+	if middleware.Role(r.Context()) != domain.RoleAdmin {
+		enrolled, err := h.courses.IsEnrolled(r.Context(), userID, lesson.CourseID)
+		if err != nil || !enrolled {
+			writeError(w, http.StatusForbidden, "Курс вам ещё не открыт")
+			return
+		}
+	}
+
+	note, err := h.notes.Create(r.Context(), userID, lesson.Lesson.ID, body.Quote, body.Body)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "Не удалось сохранить заметку")
+		return
+	}
+	writeJSON(w, http.StatusCreated, note)
+}
+
+// updateNote — сменить комментарий к заметке.
+func (h *MeHandler) updateNote(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Body string `json:"body"`
+	}
+	if err := decodeJSON(w, r, &body); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	note, err := h.notes.UpdateBody(r.Context(), middleware.UserID(r.Context()),
+		chi.URLParam(r, "id"), body.Body)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "Заметка не найдена")
+		return
+	}
+	writeJSON(w, http.StatusOK, note)
+}
+
+func (h *MeHandler) deleteNote(w http.ResponseWriter, r *http.Request) {
+	if err := h.notes.Delete(r.Context(), middleware.UserID(r.Context()),
+		chi.URLParam(r, "id")); err != nil {
+		writeError(w, http.StatusNotFound, "Заметка не найдена")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"message": "Заметка удалена"})
 }
 
 // myQuizzes — все квизы доступных курсов с результатами студента.

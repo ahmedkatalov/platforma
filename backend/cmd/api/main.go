@@ -50,6 +50,7 @@ func main() {
 	statsRepo := repository.NewStatsRepo(pool)
 	themeRepo := repository.NewThemeRepo(pool)
 	progressRepo := repository.NewProgressRepo(pool)
+	noteRepo := repository.NewNoteRepo(pool)
 	certRepo := repository.NewCertificateRepo(pool)
 	assetRepo := repository.NewAssetRepo(pool)
 	reminderRepo := repository.NewReminderRepo(pool)
@@ -67,7 +68,7 @@ func main() {
 	// Хендлеры.
 	authHandler := handler.NewAuthHandler(authSvc)
 	meHandler := handler.NewMeHandler(userRepo, courseRepo, activityRepo, statsRepo, themeRepo,
-		progressRepo, certRepo, authHandler)
+		progressRepo, certRepo, noteRepo, authHandler)
 	adminHandler := handler.NewAdminHandler(userRepo, courseRepo, statsRepo, activityRepo, auditRepo,
 		themeRepo, progressRepo, userSvc)
 	courseHandler := handler.NewCourseHandler(courseRepo, auditRepo, progressRepo)

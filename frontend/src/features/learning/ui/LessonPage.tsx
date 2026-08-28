@@ -25,6 +25,7 @@ import {
 } from "@/shared/ui/icons";
 
 import CodeLesson from "./CodeLesson";
+import NoteSelection from "./NoteSelection";
 import QuizLesson from "./QuizLesson";
 import TerminalLesson from "./TerminalLesson";
 import TextLesson from "./TextLesson";
@@ -300,7 +301,7 @@ export default function LessonPage() {
         </h1>
         {lesson.summary && <p className="mb-6 text-sm text-muted">{lesson.summary}</p>}
 
-        {body}
+        <NoteSelection lessonId={lesson.id}>{body}</NoteSelection>
 
         <div className="mt-[var(--gap)] flex items-center justify-between gap-3">
           {data.prevLessonId ? (

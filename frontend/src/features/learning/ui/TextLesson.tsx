@@ -9,7 +9,7 @@ import { IconCheck } from "@/shared/ui/icons";
 import { useToast } from "@/shared/ui/ToastProvider";
 
 import LessonResources from "./LessonResources";
-import Markdown from "./Markdown";
+import Markdown, { headingId } from "./Markdown";
 
 // Урок-теория: markdown плюс кнопка «Прочитал».
 export default function TextLesson({
@@ -45,10 +45,41 @@ export default function TextLesson({
     }
   };
 
+  const body = content.body ?? "_Материал урока пока не заполнен._";
+
+  // Оглавление по заголовкам второго уровня — для быстрого перехода к разделу.
+  const headings = body
+    .split("\n")
+    .filter((line) => line.startsWith("## "))
+    .map((line) => line.slice(3).trim());
+
   return (
     <>
       <Card className="p-[var(--pad)] sm:p-8">
-        <Markdown>{content.body ?? "_Материал урока пока не заполнен._"}</Markdown>
+        <div className="mx-auto max-w-[46rem]">
+          {headings.length >= 4 && (
+            <nav className="mb-6 rounded-[var(--radius-md)] border border-line bg-surface-2 p-4">
+              <p className="mb-2 text-xs font-bold uppercase tracking-wide text-faint">
+                В этом уроке
+              </p>
+              <ol className="space-y-1 text-sm">
+                {headings.map((title, index) => (
+                  <li key={title}>
+                    <a
+                      href={`#${headingId(title)}`}
+                      className="text-muted transition-colors hover:text-accent"
+                    >
+                      <span className="mr-1.5 font-bold text-faint">{index + 1}.</span>
+                      {title}
+                    </a>
+                  </li>
+                ))}
+              </ol>
+            </nav>
+          )}
+
+          <Markdown>{body}</Markdown>
+        </div>
       </Card>
 
       <LessonResources items={content.resources} />

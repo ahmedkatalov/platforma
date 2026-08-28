@@ -14,6 +14,7 @@ import {
   IconCheck,
   IconClose,
   IconDashboard,
+  IconEdit,
   IconLogout,
   IconMoon,
   IconPalette,
@@ -39,6 +40,7 @@ const STUDENT_NAV: NavItem[] = [
   { to: "/learn", label: "Главная", icon: <IconDashboard size={18} />, end: true },
   { to: "/learn/courses", label: "Мои курсы", icon: <IconBook size={18} /> },
   { to: "/learn/quizzes", label: "Квизы", icon: <IconCheck size={18} /> },
+  { to: "/learn/notes", label: "Заметки", icon: <IconEdit size={18} /> },
   { to: "/learn/stats", label: "Статистика", icon: <IconChart size={18} /> },
 ];
 

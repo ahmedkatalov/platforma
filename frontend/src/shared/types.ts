@@ -333,3 +333,17 @@ export type QuizCard = {
   attempts: number;
   lastTriedAt: string | null;
 };
+
+export type Note = {
+  id: string;
+  lessonId: string;
+  lessonTitle: string;
+  lessonKind: LessonKind;
+  moduleTitle: string;
+  courseSlug: string;
+  courseTitle: string;
+  quote: string;
+  body: string;
+  createdAt: string;
+  updatedAt: string;
+};

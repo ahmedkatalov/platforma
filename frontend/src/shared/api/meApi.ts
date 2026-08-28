@@ -3,6 +3,7 @@ import type {
   ActivityDay,
   Attempt,
   Enrollment,
+  Note,
   QuizCard,
   QuizStats,
   StudentSummary,
@@ -31,6 +32,22 @@ export const meApi = baseApi.injectEndpoints({
       query: (limit) => `/me/attempts?limit=${limit ?? 20}`,
       providesTags: ["Attempts"],
     }),
+    getMyNotes: builder.query<Note[], void>({
+      query: () => "/me/notes",
+      providesTags: ["Notes"],
+    }),
+    createNote: builder.mutation<Note, { lessonId: string; quote: string; body?: string }>({
+      query: (body) => ({ url: "/me/notes", method: "POST", body }),
+      invalidatesTags: ["Notes"],
+    }),
+    updateNote: builder.mutation<Note, { id: string; body: string }>({
+      query: ({ id, body }) => ({ url: `/me/notes/${id}`, method: "PATCH", body: { body } }),
+      invalidatesTags: ["Notes"],
+    }),
+    deleteNote: builder.mutation<{ message: string }, string>({
+      query: (id) => ({ url: `/me/notes/${id}`, method: "DELETE" }),
+      invalidatesTags: ["Notes"],
+    }),
     getMyQuizzes: builder.query<QuizCard[], void>({
       query: () => "/me/quizzes",
       providesTags: ["Progress"],
@@ -58,6 +75,10 @@ export const {
   useGetMeQuery,
   useGetMyStatsQuery,
   useGetMyAttemptsQuery,
+  useGetMyNotesQuery,
+  useCreateNoteMutation,
+  useUpdateNoteMutation,
+  useDeleteNoteMutation,
   useGetMyQuizzesQuery,
   useTrackActivityMutation,
   useGetPreferencesQuery,
