@@ -1,0 +1,49 @@
+# Боевой запуск платформы: docker compose -f docker-compose.prod.yml up -d --build
+#
+# Порты наружу (только localhost — снаружи их прикрывает хостовый nginx):
+#   8090 — API, 8091 — фронтенд.
+# Порты 8080–8082 заняты cmf — не пересекаемся.
+
+services:
+  db:
+    image: postgres:16
+    container_name: platforma_db
+    environment:
+      POSTGRES_USER: platforma
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?задайте POSTGRES_PASSWORD в .env рядом с этим файлом}
+      POSTGRES_DB: platforma
+    volumes:
+      - platforma_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U platforma -d platforma"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+  backend:
+    build: ./backend
+    container_name: platforma_backend
+    env_file:
+      - ./backend/.env.production
+    environment:
+      DATABASE_URL: postgres://platforma:${POSTGRES_PASSWORD}@db:5432/platforma?sslmode=disable
+      APP_ENV: production
+    ports:
+      - "127.0.0.1:8090:8090"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    container_name: platforma_frontend
+    ports:
+      - "127.0.0.1:8091:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  platforma_pgdata:
