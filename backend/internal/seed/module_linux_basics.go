@@ -140,6 +140,85 @@ func moduleLinux() ModuleSeed {
 				},
 			},
 			{
+				Title:       "Квиз: навигация и файлы",
+				Kind:        "quiz",
+				Summary:     "Проверим команды из первой темы",
+				DurationMin: 6,
+				Content: map[string]any{
+					"passScore": 70,
+					"questions": []map[string]any{
+						{
+							"id":   "n1",
+							"text": "Какая команда показывает, в какой папке вы находитесь?",
+							"options": []map[string]any{
+								{"id": "a", "text": "pwd", "correct": true},
+								{"id": "b", "text": "ls", "correct": false},
+								{"id": "c", "text": "cat", "correct": false},
+							},
+							"explanation": "ls показывает содержимое папки, cat — содержимое файла.",
+						},
+						{
+							"id":   "n2",
+							"text": "Что делает команда cd .. ?",
+							"options": []map[string]any{
+								{"id": "a", "text": "Поднимает на одну папку вверх", "correct": true},
+								{"id": "b", "text": "Возвращает в домашнюю папку", "correct": false},
+								{"id": "c", "text": "Показывает скрытые файлы", "correct": false},
+							},
+							"explanation": "Домой возвращает cd без аргументов или cd ~.",
+						},
+						{
+							"id":   "n3",
+							"text": "Где по традиции лежат логи?",
+							"options": []map[string]any{
+								{"id": "a", "text": "/var/log", "correct": true},
+								{"id": "b", "text": "/etc", "correct": false},
+								{"id": "c", "text": "/tmp", "correct": false},
+							},
+							"explanation": "В /etc лежат настройки, в /tmp — временные файлы.",
+						},
+						{
+							"id":   "n4",
+							"text": "Файл лога занимает 200 тысяч строк. Чем его открыть, чтобы посмотреть свежие записи?",
+							"options": []map[string]any{
+								{"id": "a", "text": "tail — покажет конец файла", "correct": true},
+								{"id": "b", "text": "cat — выведет весь файл", "correct": false},
+								{"id": "c", "text": "head — покажет начало", "correct": false},
+							},
+							"explanation": "Свежие записи всегда в конце, поэтому логи читают с хвоста.",
+						},
+						{
+							"id":       "n5",
+							"text":     "Что показывают флаги в команде ls -la?",
+							"multiple": true,
+							"options": []map[string]any{
+								{"id": "a", "text": "-l выводит подробности: права, владельца, размер", "correct": true},
+								{"id": "b", "text": "-a показывает скрытые файлы", "correct": true},
+								{"id": "c", "text": "-l сортирует файлы по размеру", "correct": false},
+							},
+							"explanation": "Скрытые файлы начинаются с точки: .env, .gitignore.",
+						},
+						{
+							"id":   "n6",
+							"text": "app.log и App.log — это один файл или разные?",
+							"options": []map[string]any{
+								{"id": "a", "text": "Разные: Linux различает большие и маленькие буквы", "correct": true},
+								{"id": "b", "text": "Один и тот же файл", "correct": false},
+								{"id": "c", "text": "Зависит от настроек терминала", "correct": false},
+							},
+							"explanation": "Частая причина ошибки «файл не найден» — регистр букв.",
+						},
+					},
+					"resources": []map[string]any{
+						{
+							"title": "ExplainShell — разбор команды по частям",
+							"url":   "https://explainshell.com/",
+							"note":  "вставьте команду и увидите, что делает каждый флаг",
+						},
+					},
+				},
+			},
+			{
 				Title:       "Права доступа: кто что может",
 				Kind:        "text",
 				Summary:     "Как читать rwx и почему 777 — плохая идея",
@@ -209,6 +288,85 @@ func moduleLinux() ModuleSeed {
 							"title": "chmod — официальное описание",
 							"url":   "https://man7.org/linux/man-pages/man1/chmod.1.html",
 							"note":  "числовые и буквенные режимы, если понадобятся тонкости",
+						},
+					},
+				},
+			},
+			{
+				Title:       "Квиз: права доступа",
+				Kind:        "quiz",
+				Summary:     "Числа, буквы и типичные режимы",
+				DurationMin: 7,
+				Content: map[string]any{
+					"passScore": 70,
+					"questions": []map[string]any{
+						{
+							"id":   "r1",
+							"text": "Что означает буква w в строке прав?",
+							"options": []map[string]any{
+								{"id": "a", "text": "Право изменять файл", "correct": true},
+								{"id": "b", "text": "Право читать файл", "correct": false},
+								{"id": "c", "text": "Право запускать файл", "correct": false},
+							},
+							"explanation": "r — читать, w — писать, x — запускать.",
+						},
+						{
+							"id":   "r2",
+							"text": "Сколько будет 4 + 2 в правах и что это значит?",
+							"options": []map[string]any{
+								{"id": "a", "text": "6 — читать и писать", "correct": true},
+								{"id": "b", "text": "6 — читать и запускать", "correct": false},
+								{"id": "c", "text": "42 — полный доступ", "correct": false},
+							},
+							"explanation": "Читать 4, писать 2, запускать 1. Числа складываются.",
+						},
+						{
+							"id":   "r3",
+							"text": "Какой режим поставить приватному ключу ssh?",
+							"options": []map[string]any{
+								{"id": "a", "text": "600 — только владелец читает и пишет", "correct": true},
+								{"id": "b", "text": "644 — остальные тоже читают", "correct": false},
+								{"id": "c", "text": "777 — чтобы точно работало", "correct": false},
+							},
+							"explanation": "При более широких правах ssh откажется использовать ключ.",
+						},
+						{
+							"id":   "r4",
+							"text": "Скрипт не запускается: «permission denied». Что скорее всего не так?",
+							"options": []map[string]any{
+								{"id": "a", "text": "У файла нет права на запуск — нужен chmod +x или 755", "correct": true},
+								{"id": "b", "text": "Файл слишком большой", "correct": false},
+								{"id": "c", "text": "Неправильное имя файла", "correct": false},
+							},
+							"explanation": "Право x у скриптов обязательно.",
+						},
+						{
+							"id":   "r5",
+							"text": "Почему chmod 777 — плохое решение?",
+							"options": []map[string]any{
+								{"id": "a", "text": "Файл сможет изменить любая программа на сервере, включая взломанную", "correct": true},
+								{"id": "b", "text": "Файл станет недоступен владельцу", "correct": false},
+								{"id": "c", "text": "Такой режим не существует", "correct": false},
+							},
+							"explanation": "Чаще всего нужно поменять владельца через chown, а не раздавать права всем.",
+						},
+						{
+							"id":     "r6",
+							"review": true,
+							"text":   "Повторение: какой командой посмотреть права на файлы в текущей папке?",
+							"options": []map[string]any{
+								{"id": "a", "text": "ls -l", "correct": true},
+								{"id": "b", "text": "pwd", "correct": false},
+								{"id": "c", "text": "cat", "correct": false},
+							},
+							"explanation": "Флаг -l выводит подробности, включая права.",
+						},
+					},
+					"resources": []map[string]any{
+						{
+							"title": "chmod — официальное описание",
+							"url":   "https://man7.org/linux/man-pages/man1/chmod.1.html",
+							"note":  "числовые и буквенные режимы",
 						},
 					},
 				},
@@ -441,6 +599,17 @@ func moduleLinux() ModuleSeed {
 								{"id": "c", "text": "Список пользователей", "correct": false},
 							},
 							"explanation": "Заполненный диск ломает запись логов и временных файлов — очень частая причина.",
+						},
+						{
+							"id":     "q8",
+							"review": true,
+							"text":   "Повторение: что означает режим 600?",
+							"options": []map[string]any{
+								{"id": "a", "text": "Читать и писать может только владелец", "correct": true},
+								{"id": "b", "text": "Все могут читать", "correct": false},
+								{"id": "c", "text": "Файл можно запускать", "correct": false},
+							},
+							"explanation": "Так защищают ключи и файлы с паролями.",
 						},
 					},
 					"resources": []map[string]any{

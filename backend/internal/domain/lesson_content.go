@@ -18,12 +18,14 @@ type QuizOption struct {
 }
 
 type QuizQuestion struct {
-	ID          string       `json:"id"`
-	Text        string       `json:"text"`
-	Hint        string       `json:"hint,omitempty"`
-	Explanation string       `json:"explanation,omitempty"`
-	Multiple    bool         `json:"multiple,omitempty"`
-	Options     []QuizOption `json:"options"`
+	ID          string `json:"id"`
+	Text        string `json:"text"`
+	Hint        string `json:"hint,omitempty"`
+	Explanation string `json:"explanation,omitempty"`
+	Multiple    bool   `json:"multiple,omitempty"`
+	// Review отмечает вопрос на повторение ранее пройденной темы.
+	Review  bool         `json:"review,omitempty"`
+	Options []QuizOption `json:"options"`
 }
 
 type Quiz struct {

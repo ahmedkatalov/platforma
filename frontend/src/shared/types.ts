@@ -182,6 +182,8 @@ export type QuizQuestion = {
   text: string;
   hint?: string;
   multiple?: boolean;
+  /** Вопрос на повторение ранее пройденной темы. */
+  review?: boolean;
   options: QuizOption[];
 };
 

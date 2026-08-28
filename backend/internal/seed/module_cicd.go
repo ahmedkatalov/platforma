@@ -93,6 +93,85 @@ func moduleCICD() ModuleSeed {
 				},
 			},
 			{
+				Title:       "Квиз: конвейер",
+				Kind:        "quiz",
+				Summary:     "Этапы, окружения и секреты",
+				DurationMin: 6,
+				Content: map[string]any{
+					"passScore": 70,
+					"questions": []map[string]any{
+						{
+							"id":   "p1",
+							"text": "Чем CI отличается от CD?",
+							"options": []map[string]any{
+								{"id": "a", "text": "CI проверяет код, CD доставляет его на серверы", "correct": true},
+								{"id": "b", "text": "CI для тестов, CD для документации", "correct": false},
+								{"id": "c", "text": "Это два названия одного и того же", "correct": false},
+							},
+							"explanation": "Сначала проверка, потом доставка.",
+						},
+						{
+							"id":   "p2",
+							"text": "Почему проверку стиля ставят раньше сборки образа?",
+							"options": []map[string]any{
+								{"id": "a", "text": "Она быстрая: незачем тратить минуты сборки на код с опечаткой", "correct": true},
+								{"id": "b", "text": "Линтер не умеет работать после сборки", "correct": false},
+								{"id": "c", "text": "Так требует Docker", "correct": false},
+							},
+							"explanation": "Правило: дешёвые проверки идут первыми.",
+						},
+						{
+							"id":   "p3",
+							"text": "Зачем нужен stage, если есть прод?",
+							"options": []map[string]any{
+								{"id": "a", "text": "Чтобы проверить изменения на копии прода, где нет пользователей", "correct": true},
+								{"id": "b", "text": "Чтобы хранить резервные копии", "correct": false},
+								{"id": "c", "text": "Чтобы ускорить сборку", "correct": false},
+							},
+							"explanation": "На проде ошибку увидят все пользователи сразу.",
+						},
+						{
+							"id":   "p4",
+							"text": "Где хранить пароль от реестра образов?",
+							"options": []map[string]any{
+								{"id": "a", "text": "В секретах CI-системы", "correct": true},
+								{"id": "b", "text": "Прямо в файле конвейера", "correct": false},
+								{"id": "c", "text": "В README проекта", "correct": false},
+							},
+							"explanation": "Всё, что попало в репозиторий, считается скомпрометированным.",
+						},
+						{
+							"id":   "p5",
+							"text": "Что такое canary-выкат?",
+							"options": []map[string]any{
+								{"id": "a", "text": "Новую версию сначала показывают небольшой части пользователей", "correct": true},
+								{"id": "b", "text": "Выкат сразу на все серверы одновременно", "correct": false},
+								{"id": "c", "text": "Откат к прошлой версии", "correct": false},
+							},
+							"explanation": "Если что-то не так, проблему увидят 5% пользователей, а не все.",
+						},
+						{
+							"id":     "p6",
+							"review": true,
+							"text":   "Повторение: что нужно сделать перед тем, как влить свою ветку в main?",
+							"options": []map[string]any{
+								{"id": "a", "text": "Открыть pull request и дождаться проверок и ревью", "correct": true},
+								{"id": "b", "text": "Удалить ветку", "correct": false},
+								{"id": "c", "text": "Сделать git reset --hard", "correct": false},
+							},
+							"explanation": "В main попадает только проверенный код.",
+						},
+					},
+					"resources": []map[string]any{
+						{
+							"title": "GitHub Actions — документация на русском",
+							"url":   "https://docs.github.com/ru/actions",
+							"note":  "как написать свой первый конвейер",
+						},
+					},
+				},
+			},
+			{
 				Title:       "GitOps: репозиторий вместо ручных команд",
 				Kind:        "text",
 				Summary:     "Почему выкат делают через Git, а не через kubectl",
@@ -147,6 +226,77 @@ func moduleCICD() ModuleSeed {
 							"title": "Argo CD — документация",
 							"url":   "https://argo-cd.readthedocs.io/",
 							"note":  "самый распространённый агент: установка и первое приложение",
+						},
+					},
+				},
+			},
+			{
+				Title:       "Квиз: GitOps",
+				Kind:        "quiz",
+				Summary:     "Репозиторий как источник правды",
+				DurationMin: 6,
+				Content: map[string]any{
+					"passScore": 70,
+					"questions": []map[string]any{
+						{
+							"id":   "g1",
+							"text": "Как выкатывают новую версию при GitOps?",
+							"options": []map[string]any{
+								{"id": "a", "text": "Меняют версию в файле и делают коммит, дальше агент применяет сам", "correct": true},
+								{"id": "b", "text": "Заходят на сервер и выполняют команду вручную", "correct": false},
+								{"id": "c", "text": "Пересобирают кластер с нуля", "correct": false},
+							},
+							"explanation": "Выкат = коммит. Ручные команды не нужны.",
+						},
+						{
+							"id":   "g2",
+							"text": "Как откатить неудачный выкат?",
+							"options": []map[string]any{
+								{"id": "a", "text": "Сделать git revert — агент вернёт прошлое состояние", "correct": true},
+								{"id": "b", "text": "Восстановить кластер из резервной копии", "correct": false},
+								{"id": "c", "text": "Никак, придётся выкатывать заново вручную", "correct": false},
+							},
+							"explanation": "История изменений прода лежит в Git.",
+						},
+						{
+							"id":   "g3",
+							"text": "Инженер поправил настройку в кластере руками. Что произойдёт?",
+							"options": []map[string]any{
+								{"id": "a", "text": "Агент вернёт как описано в репозитории", "correct": true},
+								{"id": "b", "text": "Изменение попадёт в репозиторий автоматически", "correct": false},
+								{"id": "c", "text": "Ничего, правка останется навсегда", "correct": false},
+							},
+							"explanation": "Это защита: никто не меняет прод втихую.",
+						},
+						{
+							"id":       "g4",
+							"text":     "Что даёт GitOps по сравнению с ручным выкатом?",
+							"multiple": true,
+							"options": []map[string]any{
+								{"id": "a", "text": "Видно, кто и когда менял прод", "correct": true},
+								{"id": "b", "text": "Изменения проходят ревью, как обычный код", "correct": true},
+								{"id": "c", "text": "Откат становится обычным revert", "correct": true},
+								{"id": "d", "text": "Приложение начинает работать быстрее", "correct": false},
+							},
+							"explanation": "Это про порядок и предсказуемость, а не про скорость работы приложения.",
+						},
+						{
+							"id":     "g5",
+							"review": true,
+							"text":   "Повторение: почему в образе фиксируют версию вместо latest?",
+							"options": []map[string]any{
+								{"id": "a", "text": "Чтобы сборка была воспроизводимой и понятно, что именно работает", "correct": true},
+								{"id": "b", "text": "Чтобы образ занимал меньше места", "correct": false},
+								{"id": "c", "text": "Чтобы ускорить скачивание", "correct": false},
+							},
+							"explanation": "С latest сегодня и завтра разворачиваются разные образы.",
+						},
+					},
+					"resources": []map[string]any{
+						{
+							"title": "OpenGitOps — принципы подхода",
+							"url":   "https://opengitops.dev/",
+							"note":  "четыре принципа простым языком",
 						},
 					},
 				},
@@ -356,6 +506,17 @@ func moduleCICD() ModuleSeed {
 								{"id": "d", "text": "В открытом виде в workflow", "correct": false},
 							},
 							"explanation": "Всё, что попало в git, считается скомпрометированным.",
+						},
+						{
+							"id":     "q5",
+							"review": true,
+							"text":   "Повторение: зачем в Dockerfile создают отдельного пользователя и пишут USER?",
+							"options": []map[string]any{
+								{"id": "a", "text": "Чтобы процесс не работал от root и взлом не дал сразу полных прав", "correct": true},
+								{"id": "b", "text": "Чтобы образ занимал меньше места", "correct": false},
+								{"id": "c", "text": "Без этого контейнер не запустится", "correct": false},
+							},
+							"explanation": "Наименьшие привилегии ограничивают ущерб.",
 						},
 					},
 				},

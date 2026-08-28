@@ -208,6 +208,26 @@ func moduleExam() ModuleSeed {
 							},
 							"explanation": "Бюджет ошибок — это договорённость между скоростью и стабильностью.",
 						},
+						{
+							"id":   "e13",
+							"text": "Что показывает команда ss -tulpn?",
+							"options": []map[string]any{
+								{"id": "a", "text": "Какие порты слушает сервер и какие процессы их держат", "correct": true},
+								{"id": "b", "text": "Свободное место на дисках", "correct": false},
+								{"id": "c", "text": "Список запущенных контейнеров", "correct": false},
+							},
+							"explanation": "Место показывает df -h, контейнеры — docker ps.",
+						},
+						{
+							"id":   "e14",
+							"text": "Приложение в кластере не поднимается: ImagePullBackOff. В чём причина?",
+							"options": []map[string]any{
+								{"id": "a", "text": "Кластер не может скачать образ: опечатка в имени, нет тега или нет доступа к реестру", "correct": true},
+								{"id": "b", "text": "Приложение падает при старте", "correct": false},
+								{"id": "c", "text": "Не хватает памяти на узле", "correct": false},
+							},
+							"explanation": "Падение при старте — это CrashLoopBackOff.",
+						},
 					},
 				},
 			},

@@ -87,6 +87,87 @@ func moduleObservability() ModuleSeed {
 				},
 			},
 			{
+				Title:       "Квиз: метрики и логи",
+				Kind:        "quiz",
+				Summary:     "Что смотреть при разборе проблемы",
+				DurationMin: 6,
+				Content: map[string]any{
+					"passScore": 70,
+					"questions": []map[string]any{
+						{
+							"id":   "m1",
+							"text": "Метрика показала рост ошибок. Где узнать, что именно сломалось?",
+							"options": []map[string]any{
+								{"id": "a", "text": "В логах — там подробности события", "correct": true},
+								{"id": "b", "text": "В графике загрузки процессора", "correct": false},
+								{"id": "c", "text": "В списке установленных пакетов", "correct": false},
+							},
+							"explanation": "Метрика говорит «сломалось», лог — «что именно».",
+						},
+						{
+							"id":   "m2",
+							"text": "Почему не стоит смотреть только на среднее время ответа?",
+							"options": []map[string]any{
+								{"id": "a", "text": "Оно прячет медленные запросы, от которых страдает часть пользователей", "correct": true},
+								{"id": "b", "text": "Его сложно посчитать", "correct": false},
+								{"id": "c", "text": "Оно занимает много места в базе", "correct": false},
+							},
+							"explanation": "Смотрите 95-й и 99-й процентили — там прячется хвост.",
+						},
+						{
+							"id":   "m3",
+							"text": "Зачем в правиле алерта строка for: 10m?",
+							"options": []map[string]any{
+								{"id": "a", "text": "Чтобы сообщение приходило только при устойчивой проблеме, а не на секундный скачок", "correct": true},
+								{"id": "b", "text": "Чтобы алерт сам отключился через 10 минут", "correct": false},
+								{"id": "c", "text": "Чтобы задать частоту сбора метрик", "correct": false},
+							},
+							"explanation": "Без выдержки дежурного будят из-за случайных всплесков.",
+						},
+						{
+							"id":       "m4",
+							"text":     "За чем следить в первую очередь?",
+							"multiple": true,
+							"options": []map[string]any{
+								{"id": "a", "text": "Доля ошибок", "correct": true},
+								{"id": "b", "text": "Время ответа", "correct": true},
+								{"id": "c", "text": "Свободные ресурсы: память и диск", "correct": true},
+								{"id": "d", "text": "Количество строк кода в проекте", "correct": false},
+							},
+							"explanation": "Четвёртый показатель — сколько запросов приходит.",
+						},
+						{
+							"id":   "m5",
+							"text": "Что нельзя писать в логи?",
+							"options": []map[string]any{
+								{"id": "a", "text": "Пароли, токены и номера карт", "correct": true},
+								{"id": "b", "text": "Идентификатор запроса", "correct": false},
+								{"id": "c", "text": "Уровень записи: INFO или ERROR", "correct": false},
+							},
+							"explanation": "Логи хранятся долго и доступны многим.",
+						},
+						{
+							"id":     "m6",
+							"review": true,
+							"text":   "Повторение: какой командой посмотреть логи пода в Kubernetes?",
+							"options": []map[string]any{
+								{"id": "a", "text": "kubectl logs имя-пода", "correct": true},
+								{"id": "b", "text": "kubectl get pods", "correct": false},
+								{"id": "c", "text": "kubectl scale", "correct": false},
+							},
+							"explanation": "get pods показывает список, logs — записи приложения.",
+						},
+					},
+					"resources": []map[string]any{
+						{
+							"title": "Prometheus — первые шаги",
+							"url":   "https://prometheus.io/docs/introduction/first_steps/",
+							"note":  "как собрать первые метрики",
+						},
+					},
+				},
+			},
+			{
 				Title:       "OpenTelemetry: один стандарт вместо десяти",
 				Kind:        "text",
 				Summary:     "Как собирать метрики, логи и трассировки одинаково",
@@ -369,6 +450,17 @@ func moduleObservability() ModuleSeed {
 								{"id": "c", "text": "Название сервиса и уровень записи", "correct": false},
 							},
 							"explanation": "Логи хранятся долго и доступны многим — секретам там не место.",
+						},
+						{
+							"id":     "q7",
+							"review": true,
+							"text":   "Повторение: сервис ведёт себя странно, ошибка непонятная. Что проверить одним из первых?",
+							"options": []map[string]any{
+								{"id": "a", "text": "Свободное место на диске: df -h", "correct": true},
+								{"id": "b", "text": "Версию ядра", "correct": false},
+								{"id": "c", "text": "Количество веток в репозитории", "correct": false},
+							},
+							"explanation": "Забитый диск ломает запись логов и временных файлов.",
 						},
 					},
 				},

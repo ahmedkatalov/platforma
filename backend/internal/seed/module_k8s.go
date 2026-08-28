@@ -120,6 +120,85 @@ func moduleKubernetes() ModuleSeed {
 				},
 			},
 			{
+				Title:       "Квиз: объекты кластера",
+				Kind:        "quiz",
+				Summary:     "Поды, деплойменты, сервисы и пробы",
+				DurationMin: 7,
+				Content: map[string]any{
+					"passScore": 70,
+					"questions": []map[string]any{
+						{
+							"id":   "k1",
+							"text": "Что такое под?",
+							"options": []map[string]any{
+								{"id": "a", "text": "Самая маленькая единица запуска, обычно с одним контейнером внутри", "correct": true},
+								{"id": "b", "text": "Физический сервер кластера", "correct": false},
+								{"id": "c", "text": "Другое название образа", "correct": false},
+							},
+							"explanation": "Сервер кластера называется узлом (node).",
+						},
+						{
+							"id":   "k2",
+							"text": "Зачем нужен Service, если у пода есть свой адрес?",
+							"options": []map[string]any{
+								{"id": "a", "text": "Поды пересоздаются и меняют адреса, а Service даёт постоянный", "correct": true},
+								{"id": "b", "text": "Service ускоряет работу приложения", "correct": false},
+								{"id": "c", "text": "Без Service под не запустится", "correct": false},
+							},
+							"explanation": "Service находит поды по меткам и распределяет между ними запросы.",
+						},
+						{
+							"id":   "k3",
+							"text": "Что описывает Deployment?",
+							"options": []map[string]any{
+								{"id": "a", "text": "Какое приложение, какой версии и сколько копий должно работать", "correct": true},
+								{"id": "b", "text": "Правила доступа в кластер", "correct": false},
+								{"id": "c", "text": "Настройки сети между узлами", "correct": false},
+							},
+							"explanation": "Кластер сам поддерживает описанное состояние.",
+						},
+						{
+							"id":   "k4",
+							"text": "Под в состоянии CrashLoopBackOff. Что это значит?",
+							"options": []map[string]any{
+								{"id": "a", "text": "Приложение падает при старте, кластер пробует запустить снова", "correct": true},
+								{"id": "b", "text": "Не хватает места в кластере", "correct": false},
+								{"id": "c", "text": "Образ не скачивается", "correct": false},
+							},
+							"explanation": "Проблемы со скачиванием образа — это ImagePullBackOff.",
+						},
+						{
+							"id":   "k5",
+							"text": "Зачем нужна readinessProbe?",
+							"options": []map[string]any{
+								{"id": "a", "text": "Чтобы запросы не шли в под, который ещё не готов их принимать", "correct": true},
+								{"id": "b", "text": "Чтобы перезапускать зависшие контейнеры", "correct": false},
+								{"id": "c", "text": "Чтобы ограничить память", "correct": false},
+							},
+							"explanation": "Перезапуском занимается livenessProbe.",
+						},
+						{
+							"id":     "k6",
+							"review": true,
+							"text":   "Повторение: что произойдёт с данными приложения при пересоздании контейнера, если не использовать том?",
+							"options": []map[string]any{
+								{"id": "a", "text": "Они пропадут", "correct": true},
+								{"id": "b", "text": "Сохранятся в образе", "correct": false},
+								{"id": "c", "text": "Переедут на другой сервер", "correct": false},
+							},
+							"explanation": "Данные хранят в томах — это правило работает и в Kubernetes.",
+						},
+					},
+					"resources": []map[string]any{
+						{
+							"title": "Основы Kubernetes — интерактивный курс",
+							"url":   "https://kubernetes.io/ru/docs/tutorials/kubernetes-basics/",
+							"note":  "официальный, есть на русском",
+						},
+					},
+				},
+			},
+			{
 				Title:       "Тренажёр: kubectl",
 				Kind:        "terminal",
 				Summary:     "Диагностика приложения в кластере",
@@ -352,6 +431,17 @@ func moduleKubernetes() ModuleSeed {
 								{"id": "c", "text": "Чтобы ускорить скачивание образа", "correct": false},
 							},
 							"explanation": "requests участвуют в планировании, limits ограничивают потребление.",
+						},
+						{
+							"id":     "q6",
+							"review": true,
+							"text":   "Повторение: как в GitOps выкатывают новую версию?",
+							"options": []map[string]any{
+								{"id": "a", "text": "Меняют версию в репозитории, агент применяет изменение сам", "correct": true},
+								{"id": "b", "text": "Заходят на сервер и выполняют команду вручную", "correct": false},
+								{"id": "c", "text": "Пересоздают кластер", "correct": false},
+							},
+							"explanation": "Выкат = коммит, откат = revert.",
 						},
 					},
 				},

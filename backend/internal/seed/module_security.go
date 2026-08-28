@@ -77,6 +77,87 @@ func moduleSecurity() ModuleSeed {
 				},
 			},
 			{
+				Title:       "Квиз: секреты и доступы",
+				Kind:        "quiz",
+				Summary:     "Где хранить пароли и как выдавать права",
+				DurationMin: 6,
+				Content: map[string]any{
+					"passScore": 70,
+					"questions": []map[string]any{
+						{
+							"id":   "s1",
+							"text": "Пароль случайно попал в коммит и уехал на GitHub. Что делать?",
+							"options": []map[string]any{
+								{"id": "a", "text": "Отозвать пароль и выпустить новый", "correct": true},
+								{"id": "b", "text": "Удалить коммит — этого достаточно", "correct": false},
+								{"id": "c", "text": "Сделать репозиторий приватным", "correct": false},
+							},
+							"explanation": "Секрет мог быть скопирован за минуты: боты сканируют публичные репозитории.",
+						},
+						{
+							"id":   "s2",
+							"text": "Зачем нужен файл .gitignore?",
+							"options": []map[string]any{
+								{"id": "a", "text": "Чтобы Git не отслеживал перечисленные файлы, например .env с паролями", "correct": true},
+								{"id": "b", "text": "Чтобы удалять файлы с сервера", "correct": false},
+								{"id": "c", "text": "Чтобы ускорить работу репозитория", "correct": false},
+							},
+							"explanation": "Рядом кладут .env.example с пустыми значениями — как образец.",
+						},
+						{
+							"id":   "s3",
+							"text": "Что такое принцип наименьших прав?",
+							"options": []map[string]any{
+								{"id": "a", "text": "Давать ровно те права, которые нужны для работы, и не больше", "correct": true},
+								{"id": "b", "text": "Давать всем доступ только на чтение", "correct": false},
+								{"id": "c", "text": "Запрещать доступ по ssh", "correct": false},
+							},
+							"explanation": "Так ущерб от взлома остаётся ограниченным.",
+						},
+						{
+							"id":       "s4",
+							"text":     "Где можно хранить пароль от базы для приложения?",
+							"multiple": true,
+							"options": []map[string]any{
+								{"id": "a", "text": "В секретах CI", "correct": true},
+								{"id": "b", "text": "В Secret Kubernetes", "correct": true},
+								{"id": "c", "text": "В хранилище вроде Vault", "correct": true},
+								{"id": "d", "text": "В коде приложения", "correct": false},
+							},
+							"explanation": "В приложение секрет попадает переменной окружения или файлом.",
+						},
+						{
+							"id":   "s5",
+							"text": "Какие порты обычно открыты в интернет?",
+							"options": []map[string]any{
+								{"id": "a", "text": "80 и 443, остальное — во внутренней сети", "correct": true},
+								{"id": "b", "text": "Все, чтобы ничего не сломалось", "correct": false},
+								{"id": "c", "text": "Только 22 для ssh", "correct": false},
+							},
+							"explanation": "База и панели мониторинга наружу смотреть не должны.",
+						},
+						{
+							"id":     "s6",
+							"review": true,
+							"text":   "Повторение: какой режим прав ставят приватному ключу ssh?",
+							"options": []map[string]any{
+								{"id": "a", "text": "600", "correct": true},
+								{"id": "b", "text": "644", "correct": false},
+								{"id": "c", "text": "777", "correct": false},
+							},
+							"explanation": "При более широких правах ssh откажется работать с ключом.",
+						},
+					},
+					"resources": []map[string]any{
+						{
+							"title": "GitHub — секреты в Actions",
+							"url":   "https://docs.github.com/ru/actions/security-for-github-actions/security-guides/using-secrets-in-github-actions",
+							"note":  "на русском: как хранить пароли для конвейера",
+						},
+					},
+				},
+			},
+			{
 				Title:       "Безопасные образы и цепочка поставки",
 				Kind:        "text",
 				Summary:     "Как не привезти уязвимость вместе с чужим образом",
@@ -354,6 +435,17 @@ func moduleSecurity() ModuleSeed {
 								{"id": "c", "text": "latest медленнее скачивается", "correct": false},
 							},
 							"explanation": "Фиксированная версия даёт одинаковый результат сборки в любой момент.",
+						},
+						{
+							"id":     "q6",
+							"review": true,
+							"text":   "Повторение: что показывает terraform plan?",
+							"options": []map[string]any{
+								{"id": "a", "text": "Что будет создано, изменено и удалено при применении", "correct": true},
+								{"id": "b", "text": "Список установленных провайдеров", "correct": false},
+								{"id": "c", "text": "Логи прошлых применений", "correct": false},
+							},
+							"explanation": "Особенно внимательно смотрят на строку to destroy.",
 						},
 					},
 				},

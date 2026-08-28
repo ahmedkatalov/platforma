@@ -99,6 +99,86 @@ func moduleNetwork() ModuleSeed {
 				},
 			},
 			{
+				Title:       "Квиз: как работает запрос",
+				Kind:        "quiz",
+				Summary:     "DNS, порты и коды ответов",
+				DurationMin: 6,
+				Content: map[string]any{
+					"passScore": 70,
+					"questions": []map[string]any{
+						{
+							"id":   "w1",
+							"text": "Что делает DNS?",
+							"options": []map[string]any{
+								{"id": "a", "text": "Превращает имя сайта в IP-адрес", "correct": true},
+								{"id": "b", "text": "Шифрует соединение", "correct": false},
+								{"id": "c", "text": "Распределяет нагрузку между серверами", "correct": false},
+							},
+							"explanation": "Это как телефонный справочник: по имени находим номер.",
+						},
+						{
+							"id":   "w2",
+							"text": "На каком порту обычно работает сайт по https?",
+							"options": []map[string]any{
+								{"id": "a", "text": "443", "correct": true},
+								{"id": "b", "text": "80", "correct": false},
+								{"id": "c", "text": "22", "correct": false},
+							},
+							"explanation": "80 — http, 22 — ssh, 443 — https.",
+						},
+						{
+							"id":   "w3",
+							"text": "Сервер вернул 500. О чём это говорит?",
+							"options": []map[string]any{
+								{"id": "a", "text": "Программа ответила ошибкой — сломалось внутри неё", "correct": true},
+								{"id": "b", "text": "Такой страницы не существует", "correct": false},
+								{"id": "c", "text": "Пользователь не авторизован", "correct": false},
+							},
+							"explanation": "404 — нет страницы, 401 — нет авторизации.",
+						},
+						{
+							"id":   "w4",
+							"text": "А если пришёл 502?",
+							"options": []map[string]any{
+								{"id": "a", "text": "Прокси не смог достучаться до программы — скорее всего она не работает", "correct": true},
+								{"id": "b", "text": "Программа вернула ошибку в ответе", "correct": false},
+								{"id": "c", "text": "Истёк сертификат", "correct": false},
+							},
+							"explanation": "500 — программа ответила ошибкой, 502 — не ответила вовсе.",
+						},
+						{
+							"id":       "w5",
+							"text":     "Зачем перед приложением ставят nginx?",
+							"multiple": true,
+							"options": []map[string]any{
+								{"id": "a", "text": "Он берёт на себя шифрование", "correct": true},
+								{"id": "b", "text": "Раздаёт статику быстрее приложения", "correct": true},
+								{"id": "c", "text": "Распределяет запросы между копиями приложения", "correct": true},
+								{"id": "d", "text": "Ускоряет работу базы данных", "correct": false},
+							},
+							"explanation": "Прокси снимает с приложения инфраструктурные задачи.",
+						},
+						{
+							"id":   "w6",
+							"text": "Что нужно сделать перед перезагрузкой nginx?",
+							"options": []map[string]any{
+								{"id": "a", "text": "Проверить настройки командой nginx -t", "correct": true},
+								{"id": "b", "text": "Перезапустить сервер целиком", "correct": false},
+								{"id": "c", "text": "Очистить логи", "correct": false},
+							},
+							"explanation": "Одна опечатка в файле настроек — и сайт ляжет целиком.",
+						},
+					},
+					"resources": []map[string]any{
+						{
+							"title": "MDN — коды ответа HTTP",
+							"url":   "https://developer.mozilla.org/ru/docs/Web/HTTP/Status",
+							"note":  "полный список на русском",
+						},
+					},
+				},
+			},
+			{
 				Title:       "Тренажёр: диагностика запроса",
 				Kind:        "terminal",
 				Summary:     "Найдите, почему сайт отвечает ошибкой",
@@ -312,6 +392,17 @@ func moduleNetwork() ModuleSeed {
 								{"id": "c", "text": "uname -a", "correct": false},
 							},
 							"explanation": "ss показывает сокеты вместе с процессами, которые их держат.",
+						},
+						{
+							"id":     "q6",
+							"review": true,
+							"text":   "Повторение: как отменить коммит, который уже отправлен в общую ветку?",
+							"options": []map[string]any{
+								{"id": "a", "text": "git revert — он создаст коммит-отмену", "correct": true},
+								{"id": "b", "text": "git reset --hard и push --force", "correct": false},
+								{"id": "c", "text": "Удалить ветку", "correct": false},
+							},
+							"explanation": "В общей ветке историю не переписывают.",
 						},
 					},
 				},

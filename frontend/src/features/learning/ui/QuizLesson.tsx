@@ -188,6 +188,11 @@ export default function QuizLesson({
                   <p className="flex-1 font-semibold text-fg">
                     <span className="text-faint">{i + 1}. </span>
                     {q.text}
+                    {q.review && (
+                      <span className="ml-2 align-middle">
+                        <Badge tone="warning">повторение</Badge>
+                      </span>
+                    )}
                   </p>
                   <span className="shrink-0 text-xs text-faint">
                     {timings[q.id] ?? 0} c
@@ -260,6 +265,12 @@ export default function QuizLesson({
         <div className="mb-5">
           <Progress value={((index + 1) / questions.length) * 100} />
         </div>
+
+        {question.review && (
+          <div className="mb-2">
+            <Badge tone="warning">повторение пройденного</Badge>
+          </div>
+        )}
 
         <h2 className="mb-1 text-lg font-bold text-fg">{question.text}</h2>
         {question.multiple && (

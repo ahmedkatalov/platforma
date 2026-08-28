@@ -78,6 +78,75 @@ func moduleGit() ModuleSeed {
 				},
 			},
 			{
+				Title:       "Квиз: основы Git",
+				Kind:        "quiz",
+				Summary:     "Три состояния файла и первые команды",
+				DurationMin: 6,
+				Content: map[string]any{
+					"passScore": 70,
+					"questions": []map[string]any{
+						{
+							"id":   "b1",
+							"text": "В каком порядке изменения проходят путь до истории?",
+							"options": []map[string]any{
+								{"id": "a", "text": "Рабочая папка → индекс → репозиторий", "correct": true},
+								{"id": "b", "text": "Индекс → рабочая папка → репозиторий", "correct": false},
+								{"id": "c", "text": "Репозиторий → индекс → рабочая папка", "correct": false},
+							},
+							"explanation": "git add переносит в индекс, git commit — в репозиторий.",
+						},
+						{
+							"id":   "b2",
+							"text": "Зачем нужен индекс?",
+							"options": []map[string]any{
+								{"id": "a", "text": "Чтобы отобрать в коммит только часть изменений", "correct": true},
+								{"id": "b", "text": "Чтобы ускорить работу Git", "correct": false},
+								{"id": "c", "text": "Чтобы хранить резервную копию файлов", "correct": false},
+							},
+							"explanation": "Поправили пять файлов — закоммитить можно только два.",
+						},
+						{
+							"id":   "b3",
+							"text": "Какую команду стоит набирать чаще всего?",
+							"options": []map[string]any{
+								{"id": "a", "text": "git status — она показывает, что происходит, и ничего не меняет", "correct": true},
+								{"id": "b", "text": "git push", "correct": false},
+								{"id": "c", "text": "git reset --hard", "correct": false},
+							},
+							"explanation": "status безопасен: только смотрит.",
+						},
+						{
+							"id":   "b4",
+							"text": "Какое сообщение коммита лучше?",
+							"options": []map[string]any{
+								{"id": "a", "text": "fix: не терять платежи при таймауте", "correct": true},
+								{"id": "b", "text": "правки", "correct": false},
+								{"id": "c", "text": "ещё раз", "correct": false},
+							},
+							"explanation": "Сообщение пишут для того, кто прочитает его через полгода.",
+						},
+						{
+							"id":     "b5",
+							"review": true,
+							"text":   "Повторение: какой командой найти строки со словом ERROR в файле лога?",
+							"options": []map[string]any{
+								{"id": "a", "text": "grep ERROR app.log", "correct": true},
+								{"id": "b", "text": "cat ERROR app.log", "correct": false},
+								{"id": "c", "text": "ls ERROR app.log", "correct": false},
+							},
+							"explanation": "grep ищет строки по слову внутри файла.",
+						},
+					},
+					"resources": []map[string]any{
+						{
+							"title": "Pro Git — глава про основы",
+							"url":   "https://git-scm.com/book/ru/v2",
+							"note":  "первые главы на русском",
+						},
+					},
+				},
+			},
+			{
 				Title:       "Ветки и работа в команде",
 				Kind:        "text",
 				Summary:     "Зачем нужны ветки, что такое pull request и как откатить ошибку",
@@ -289,6 +358,17 @@ func moduleGit() ModuleSeed {
 								{"id": "c", "text": "Нужно удалить ветку и начать заново", "correct": false},
 							},
 							"explanation": "Открываете файл, оставляете нужный вариант, убираете маркеры, делаете add и commit.",
+						},
+						{
+							"id":     "q7",
+							"review": true,
+							"text":   "Повторение: где хранятся настройки программ в Linux?",
+							"options": []map[string]any{
+								{"id": "a", "text": "/etc", "correct": true},
+								{"id": "b", "text": "/var/log", "correct": false},
+								{"id": "c", "text": "/home", "correct": false},
+							},
+							"explanation": "Настройки в /etc, логи в /var/log.",
 						},
 					},
 					"resources": []map[string]any{

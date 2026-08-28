@@ -104,6 +104,85 @@ func moduleIaC() ModuleSeed {
 				},
 			},
 			{
+				Title:       "Квиз: Terraform и Ansible",
+				Kind:        "quiz",
+				Summary:     "Кто что делает и зачем нужен plan",
+				DurationMin: 6,
+				Content: map[string]any{
+					"passScore": 70,
+					"questions": []map[string]any{
+						{
+							"id":   "i1",
+							"text": "Что делает Terraform, а что Ansible?",
+							"options": []map[string]any{
+								{"id": "a", "text": "Terraform создаёт серверы, Ansible настраивает то, что уже создано", "correct": true},
+								{"id": "b", "text": "Наоборот: Terraform настраивает, Ansible создаёт", "correct": false},
+								{"id": "c", "text": "Оба делают одно и то же", "correct": false},
+							},
+							"explanation": "Terraform строит дом, Ansible завозит мебель.",
+						},
+						{
+							"id":   "i2",
+							"text": "Зачем запускать terraform plan перед apply?",
+							"options": []map[string]any{
+								{"id": "a", "text": "Чтобы увидеть, что будет создано, изменено и удалено", "correct": true},
+								{"id": "b", "text": "Чтобы скачать провайдеры", "correct": false},
+								{"id": "c", "text": "Чтобы сохранить резервную копию", "correct": false},
+							},
+							"explanation": "Провайдеры скачивает init. План показывает три числа — смотрите на destroy.",
+						},
+						{
+							"id":   "i3",
+							"text": "В плане на боевой инфраструктуре видно «1 to destroy». Что делать?",
+							"options": []map[string]any{
+								{"id": "a", "text": "Остановиться и разобраться, какой ресурс удаляется", "correct": true},
+								{"id": "b", "text": "Применить: Terraform знает лучше", "correct": false},
+								{"id": "c", "text": "Удалить файл состояния", "correct": false},
+							},
+							"explanation": "Удаление ресурса на проде — это простой сервиса.",
+						},
+						{
+							"id":   "i4",
+							"text": "Что значит «плейбук идемпотентный»?",
+							"options": []map[string]any{
+								{"id": "a", "text": "Повторный запуск ничего не сломает: что уже сделано — пропустится", "correct": true},
+								{"id": "b", "text": "Плейбук можно запускать только один раз", "correct": false},
+								{"id": "c", "text": "Плейбук работает без подключения к серверу", "correct": false},
+							},
+							"explanation": "Ansible сравнивает текущее состояние с описанным и меняет только разницу.",
+						},
+						{
+							"id":   "i5",
+							"text": "Инженер поправил настройку на сервере руками. Что будет после следующего apply?",
+							"options": []map[string]any{
+								{"id": "a", "text": "Terraform вернёт всё как записано в файлах", "correct": true},
+								{"id": "b", "text": "Terraform добавит правку в код", "correct": false},
+								{"id": "c", "text": "Ничего не изменится", "correct": false},
+							},
+							"explanation": "Источник правды — файлы, а не ручные действия.",
+						},
+						{
+							"id":     "i6",
+							"review": true,
+							"text":   "Повторение: почему пароли не хранят в репозитории?",
+							"options": []map[string]any{
+								{"id": "a", "text": "Всё, что попало в Git, остаётся в истории и считается утёкшим", "correct": true},
+								{"id": "b", "text": "Git не умеет хранить длинные строки", "correct": false},
+								{"id": "c", "text": "Из-за этого репозиторий занимает много места", "correct": false},
+							},
+							"explanation": "Удаление файла не удаляет его из истории.",
+						},
+					},
+					"resources": []map[string]any{
+						{
+							"title": "Terraform — пошаговые уроки",
+							"url":   "https://developer.hashicorp.com/terraform/tutorials",
+							"note":  "с бесплатной песочницей",
+						},
+					},
+				},
+			},
+			{
 				Title:       "Тренажёр: Terraform и Ansible",
 				Kind:        "terminal",
 				Summary:     "Проведите изменение инфраструктуры от плана до применения",
@@ -314,6 +393,17 @@ func moduleIaC() ModuleSeed {
 								{"id": "c", "text": "Ничего, изменения сохранятся навсегда", "correct": false},
 							},
 							"explanation": "Источник правды — код. Ручные правки перезатираются, поэтому менять нужно описание.",
+						},
+						{
+							"id":     "q6",
+							"review": true,
+							"text":   "Повторение: что означает код ответа 500?",
+							"options": []map[string]any{
+								{"id": "a", "text": "Программа ответила ошибкой — сломалось внутри неё", "correct": true},
+								{"id": "b", "text": "Страница не найдена", "correct": false},
+								{"id": "c", "text": "Прокси не дозвонился до приложения", "correct": false},
+							},
+							"explanation": "404 — нет страницы, 502 — приложение не ответило.",
 						},
 					},
 				},

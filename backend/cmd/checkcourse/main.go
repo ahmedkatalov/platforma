@@ -58,6 +58,7 @@ func main() {
 	var problems []string
 	kinds := map[string]int{}
 	var minutes, links, sentences, sentenceLen int
+	var questions, reviewQuestions, quizWithReview int
 
 	for _, module := range course.Modules {
 		if len(module.Lessons) == 0 {
@@ -73,6 +74,11 @@ func main() {
 			links += report.links
 			sentences += report.sentences
 			sentenceLen += report.sentenceLen
+			questions += report.questions
+			reviewQuestions += report.reviewQuestions
+			if report.reviewQuestions > 0 {
+				quizWithReview++
+			}
 
 			if *verbose {
 				status := "ok"
@@ -95,6 +101,8 @@ func main() {
 		kinds["text"], kinds["quiz"], kinds["terminal"], kinds["code"])
 	fmt.Printf("Объём: ~%d ч %d мин · ссылок на материалы: %d · средняя длина предложения: %d знаков\n",
 		minutes/60, minutes%60, links, avg)
+	fmt.Printf("Вопросов: %d, из них на повторение прошлых тем: %d (в %d квизах из %d)\n",
+		questions, reviewQuestions, quizWithReview, kinds["quiz"])
 
 	if len(problems) == 0 {
 		fmt.Println("\n✓ Замечаний нет: задания решаемы, вопросы корректны, материалы на месте.")
@@ -109,10 +117,12 @@ func main() {
 }
 
 type lessonReport struct {
-	problems    []string
-	links       int
-	sentences   int
-	sentenceLen int
+	problems        []string
+	links           int
+	sentences       int
+	sentenceLen     int
+	questions       int
+	reviewQuestions int
 }
 
 func checkLesson(lesson domain.Lesson) lessonReport {
@@ -175,6 +185,12 @@ func checkLesson(lesson domain.Lesson) lessonReport {
 		}
 		if len(quiz.Questions) < 4 {
 			add("мало вопросов (%d)", len(quiz.Questions))
+		}
+		out.questions = len(quiz.Questions)
+		for _, question := range quiz.Questions {
+			if question.Review {
+				out.reviewQuestions++
+			}
 		}
 		for _, question := range quiz.Questions {
 			correct := 0

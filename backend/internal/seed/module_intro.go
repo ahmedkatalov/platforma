@@ -118,6 +118,85 @@ func moduleIntro() ModuleSeed {
 				},
 			},
 			{
+				Title:       "Квиз: термины",
+				Kind:        "quiz",
+				Summary:     "Проверим слова из словаря",
+				DurationMin: 6,
+				Content: map[string]any{
+					"passScore": 70,
+					"questions": []map[string]any{
+						{
+							"id":   "t1",
+							"text": "Что такое репозиторий?",
+							"options": []map[string]any{
+								{"id": "a", "text": "Папка проекта, за которой следит Git", "correct": true},
+								{"id": "b", "text": "Сервер, где работает приложение", "correct": false},
+								{"id": "c", "text": "Хранилище образов контейнеров", "correct": false},
+							},
+							"explanation": "Хранилище образов называется реестром — это другое слово.",
+						},
+						{
+							"id":   "t2",
+							"text": "Чем образ отличается от контейнера?",
+							"options": []map[string]any{
+								{"id": "a", "text": "Образ — шаблон, контейнер — запущенный экземпляр этого шаблона", "correct": true},
+								{"id": "b", "text": "Это одно и то же", "correct": false},
+								{"id": "c", "text": "Контейнер больше по размеру", "correct": false},
+							},
+							"explanation": "Как установочный файл и установленная программа.",
+						},
+						{
+							"id":   "t3",
+							"text": "Что такое пайплайн?",
+							"options": []map[string]any{
+								{"id": "a", "text": "Цепочка автоматических шагов: проверить, собрать, выкатить", "correct": true},
+								{"id": "b", "text": "Сетевой кабель между серверами", "correct": false},
+								{"id": "c", "text": "Файл с настройками сервера", "correct": false},
+							},
+							"explanation": "Пайплайн ещё называют конвейером.",
+						},
+						{
+							"id":   "t4",
+							"text": "Где работают настоящие пользователи?",
+							"options": []map[string]any{
+								{"id": "a", "text": "На проде (production)", "correct": true},
+								{"id": "b", "text": "На stage", "correct": false},
+								{"id": "c", "text": "В репозитории", "correct": false},
+							},
+							"explanation": "Stage — копия прода для проверки, там пользователей нет.",
+						},
+						{
+							"id":       "t5",
+							"text":     "Что из этого — задача обратного прокси?",
+							"multiple": true,
+							"options": []map[string]any{
+								{"id": "a", "text": "Принять запрос и передать его приложению", "correct": true},
+								{"id": "b", "text": "Раздавать картинки и стили", "correct": true},
+								{"id": "c", "text": "Компилировать код приложения", "correct": false},
+							},
+							"explanation": "Обычно эту роль играет nginx.",
+						},
+						{
+							"id":   "t6",
+							"text": "Метрика и лог — в чём разница?",
+							"options": []map[string]any{
+								{"id": "a", "text": "Метрика — число во времени, лог — текстовая запись о событии", "correct": true},
+								{"id": "b", "text": "Метрика хранится дольше лога, в остальном одно и то же", "correct": false},
+								{"id": "c", "text": "Лог собирает только Kubernetes", "correct": false},
+							},
+							"explanation": "Метрика показывает, что сломалось, лог — что именно.",
+						},
+					},
+					"resources": []map[string]any{
+						{
+							"title": "Глоссарий CNCF на русском",
+							"url":   "https://glossary.cncf.io/ru/",
+							"note":  "если какое-то слово осталось непонятным",
+						},
+					},
+				},
+			},
+			{
 				Title:       "Как учиться на платформе",
 				Kind:        "text",
 				Summary:     "Как устроены уроки и что делать, если задание не получается",
