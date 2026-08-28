@@ -75,6 +75,7 @@ export type Enrollment = {
   userId: string;
   courseId: string;
   status: "active" | "completed" | "paused";
+  dueDate: string | null;
   startedAt: string | null;
   completedAt: string | null;
   createdAt: string;
@@ -229,6 +230,7 @@ export type QuizResult = {
   totalCount: number;
   passScore: number;
   questions: QuestionResult[];
+  certificate?: Certificate | null;
 };
 
 export type TerminalCheckResult = {
@@ -237,6 +239,7 @@ export type TerminalCheckResult = {
   hint?: string;
   completedTasks: string[];
   lessonComplete: boolean;
+  certificate?: Certificate | null;
 };
 
 export type CodeCheckResult = {
@@ -244,6 +247,7 @@ export type CodeCheckResult = {
   score: number;
   checks: { ok: boolean; message: string }[];
   hint?: string;
+  certificate?: Certificate | null;
 };
 
 export type Attempt = {
@@ -271,4 +275,36 @@ export type QuizStats = {
   fastestSeconds: number;
   answeredTotal: number;
   answeredCorrect: number;
+};
+
+// --- Сертификаты и файлы ---
+
+export type Certificate = {
+  id: string;
+  serial: string;
+  userId: string;
+  courseId: string;
+  holderName: string;
+  courseTitle: string;
+  score: number;
+  lessonsTotal: number;
+  lessonsCompleted: number;
+  revokedAt: string | null;
+  issuedAt: string;
+};
+
+export type CertificateCheck = {
+  valid: boolean;
+  message?: string;
+  certificate?: Certificate;
+};
+
+export type Asset = {
+  id: string;
+  filename: string;
+  original: string;
+  mime: string;
+  sizeBytes: number;
+  url: string;
+  createdAt: string;
 };

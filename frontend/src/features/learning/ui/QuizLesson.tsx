@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useSubmitQuizMutation } from "@/features/learning/api/lessonApi";
 import { apiErrorMessage } from "@/shared/api/baseApi";
-import type { LessonProgress, QuizContent, QuizResult } from "@/shared/types";
+import type {
+  Certificate, LessonProgress, QuizContent, QuizResult } from "@/shared/types";
 import { Badge, Button, Card, Progress } from "@/shared/ui";
 import { IconCheck, IconClose, IconClock } from "@/shared/ui/icons";
 import { useToast } from "@/shared/ui/ToastProvider";
@@ -21,7 +22,7 @@ export default function QuizLesson({
   lessonId: string;
   content: QuizContent;
   progress?: LessonProgress;
-  onDone: () => void;
+  onDone: (certificate?: Certificate | null) => void;
 }) {
   const questions = content.questions ?? [];
   const passScore = content.passScore ?? 70;
@@ -110,7 +111,7 @@ export default function QuizLesson({
       setResult(data);
       if (data.passed) {
         toast.success(`Квиз пройден: ${Math.round(data.score)}%`);
-        onDone();
+        onDone(data.certificate);
       } else {
         toast.error(`Набрано ${Math.round(data.score)}% — нужно ${Math.round(data.passScore)}%`);
       }
@@ -156,7 +157,7 @@ export default function QuizLesson({
           <div className="mt-4 flex flex-wrap gap-2">
             <Button onClick={retry}>Пройти заново</Button>
             {result.passed && (
-              <Button variant="primary" onClick={onDone}>
+              <Button variant="primary" onClick={() => onDone()}>
                 Дальше
               </Button>
             )}

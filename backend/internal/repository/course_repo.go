@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"platforma/backend/internal/domain"
 
@@ -337,16 +338,33 @@ func (r *CourseRepo) DeleteLesson(ctx context.Context, id string) error {
 
 // --- Записи на курс ---
 
-func (r *CourseRepo) Enroll(ctx context.Context, userID, courseID, assignedBy string) error {
+// Enroll записывает студента на курс. dueDate необязателен — срок прохождения.
+func (r *CourseRepo) Enroll(ctx context.Context, userID, courseID, assignedBy string, dueDate *time.Time) error {
 	var by *string
 	if assignedBy != "" {
 		by = &assignedBy
 	}
 	_, err := r.db.Exec(ctx, `
-		INSERT INTO enrollments (user_id, course_id, assigned_by, started_at)
-		VALUES ($1, $2, $3, now())
-		ON CONFLICT (user_id, course_id) DO NOTHING`, userID, courseID, by)
+		INSERT INTO enrollments (user_id, course_id, assigned_by, started_at, due_date)
+		VALUES ($1, $2, $3, now(), $4)
+		ON CONFLICT (user_id, course_id) DO UPDATE
+		   SET due_date = COALESCE(EXCLUDED.due_date, enrollments.due_date)`,
+		userID, courseID, by, dueDate)
 	return err
+}
+
+// SetDueDate меняет срок прохождения (nil — снять срок).
+func (r *CourseRepo) SetDueDate(ctx context.Context, userID, courseID string, dueDate *time.Time) error {
+	tag, err := r.db.Exec(ctx, `
+		UPDATE enrollments SET due_date = $3, deadline_notified_at = NULL
+		 WHERE user_id = $1 AND course_id = $2`, userID, courseID, dueDate)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 func (r *CourseRepo) Unenroll(ctx context.Context, userID, courseID string) error {
@@ -365,8 +383,8 @@ func (r *CourseRepo) IsEnrolled(ctx context.Context, userID, courseID string) (b
 
 func (r *CourseRepo) EnrollmentsForUser(ctx context.Context, userID string) ([]domain.Enrollment, error) {
 	rows, err := r.db.Query(ctx, `
-		SELECT e.id, e.user_id, e.course_id, e.status, e.started_at, e.completed_at, e.created_at,
-		       c.title, c.slug
+		SELECT e.id, e.user_id, e.course_id, e.status, e.due_date, e.started_at, e.completed_at,
+		       e.created_at, c.title, c.slug
 		  FROM enrollments e
 		  JOIN courses c ON c.id = e.course_id
 		 WHERE e.user_id = $1
@@ -379,7 +397,7 @@ func (r *CourseRepo) EnrollmentsForUser(ctx context.Context, userID string) ([]d
 	out := make([]domain.Enrollment, 0, 4)
 	for rows.Next() {
 		var e domain.Enrollment
-		if err := rows.Scan(&e.ID, &e.UserID, &e.CourseID, &e.Status, &e.StartedAt,
+		if err := rows.Scan(&e.ID, &e.UserID, &e.CourseID, &e.Status, &e.DueDate, &e.StartedAt,
 			&e.CompletedAt, &e.CreatedAt, &e.CourseTitle, &e.CourseSlug); err != nil {
 			return nil, err
 		}

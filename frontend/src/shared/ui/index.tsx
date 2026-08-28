@@ -1,5 +1,6 @@
 import clsx from "clsx";
 import {
+  forwardRef,
   useEffect,
   type ButtonHTMLAttributes,
   type HTMLAttributes,
@@ -24,10 +25,13 @@ export function Button({
   className,
   children,
   disabled,
+  // По умолчанию обычная кнопка: иначе внутри <form> она отправляла бы форму.
+  type = "button",
   ...props
 }: ButtonProps) {
   return (
     <button
+      type={type}
       className={clsx("btn", `btn-${variant}`, className)}
       disabled={disabled || loading}
       {...props}
@@ -97,9 +101,11 @@ export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElem
   return <input className={clsx("input", className)} {...props} />;
 }
 
-export function Textarea({ className, ...props }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  return <textarea className={clsx("input", className)} rows={4} {...props} />;
-}
+export const Textarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<HTMLTextAreaElement>>(
+  function Textarea({ className, ...props }, ref) {
+    return <textarea ref={ref} className={clsx("input", className)} rows={4} {...props} />;
+  },
+);
 
 export function Select({ className, children, ...props }: SelectHTMLAttributes<HTMLSelectElement>) {
   return (

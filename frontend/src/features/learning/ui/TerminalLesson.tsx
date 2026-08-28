@@ -8,7 +8,8 @@ import {
   type ShellState,
 } from "@/features/learning/lib/shell";
 import { apiErrorMessage } from "@/shared/api/baseApi";
-import type { LessonProgress, TaskState, TerminalContent } from "@/shared/types";
+import type {
+  Certificate, LessonProgress, TaskState, TerminalContent } from "@/shared/types";
 import { Badge, Button, Card, Progress } from "@/shared/ui";
 import { IconCheck, IconTerminal } from "@/shared/ui/icons";
 import { useToast } from "@/shared/ui/ToastProvider";
@@ -30,7 +31,7 @@ export default function TerminalLesson({
   content: TerminalContent;
   tasks: TaskState[];
   progress?: LessonProgress;
-  onDone: () => void;
+  onDone: (certificate?: Certificate | null) => void;
 }) {
   const taskList = content.tasks ?? [];
 
@@ -114,7 +115,7 @@ export default function TerminalLesson({
 
         if (check.lessonComplete) {
           toast.success("Все задания выполнены!");
-          onDone();
+          onDone(check.certificate);
         }
       }
     } catch (err) {
@@ -301,7 +302,7 @@ export default function TerminalLesson({
               Сбросить терминал
             </Button>
             {allDone && (
-              <Button variant="primary" onClick={onDone}>
+              <Button variant="primary" onClick={() => onDone()}>
                 Дальше
               </Button>
             )}

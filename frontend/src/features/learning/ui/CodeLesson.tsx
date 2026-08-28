@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 
 import { useCheckCodeMutation } from "@/features/learning/api/lessonApi";
 import { apiErrorMessage } from "@/shared/api/baseApi";
-import type { CodeCheckResult, CodeContent, LessonProgress } from "@/shared/types";
+import type {
+  Certificate, CodeCheckResult, CodeContent, LessonProgress } from "@/shared/types";
 import { Badge, Button, Card, Progress } from "@/shared/ui";
 import { IconCheck, IconClose } from "@/shared/ui/icons";
 import { useToast } from "@/shared/ui/ToastProvider";
@@ -20,7 +21,7 @@ export default function CodeLesson({
   lessonId: string;
   content: CodeContent;
   progress?: LessonProgress;
-  onDone: () => void;
+  onDone: (certificate?: Certificate | null) => void;
 }) {
   const storageKey = `platforma.code.${lessonId}`;
 
@@ -53,7 +54,7 @@ export default function CodeLesson({
       setResult(data);
       if (data.passed) {
         toast.success("Все проверки пройдены");
-        onDone();
+        onDone(data.certificate);
       } else {
         toast.error("Часть проверок не пройдена — посмотрите список справа");
       }
@@ -131,7 +132,7 @@ export default function CodeLesson({
               </ul>
 
               {result.passed && (
-                <Button variant="primary" className="mt-4 w-full" onClick={onDone}>
+                <Button variant="primary" className="mt-4 w-full" onClick={() => onDone()}>
                   Дальше
                 </Button>
               )}

@@ -20,14 +20,18 @@ type Config struct {
 	RefreshTTL    time.Duration
 	CorsOrigins   []string
 	PublicBaseURL string
+	UploadDir     string
+	ReminderEvery time.Duration
 
 	// EmailJS — отправка кодов подтверждения на реальную почту.
-	EmailJSServiceID    string
-	EmailJSTemplateID   string
-	EmailJSPublicKey    string
-	EmailJSPrivateKey   string
-	EmailJSFromName     string
-	VerificationCodeTTL time.Duration
+	EmailJSServiceID  string
+	EmailJSTemplateID string
+	EmailJSPublicKey  string
+	EmailJSPrivateKey string
+	EmailJSFromName   string
+	// Шаблон для уведомлений (сертификаты, дедлайны). По умолчанию — тот же, что для кодов.
+	EmailJSNoticeTemplateID string
+	VerificationCodeTTL     time.Duration
 }
 
 func Load() *Config {
@@ -48,12 +52,16 @@ func Load() *Config {
 		RefreshTTL:    getEnvDuration("REFRESH_TOKEN_TTL", 30*24*time.Hour),
 		CorsOrigins:   getEnvSlice("CORS_ORIGINS", defaultCors),
 		PublicBaseURL: getEnv("PUBLIC_BASE_URL", "http://localhost:5173"),
+		UploadDir:     getEnv("UPLOAD_DIR", "uploads"),
+		ReminderEvery: getEnvDuration("REMINDER_INTERVAL", 6*time.Hour),
 
-		EmailJSServiceID:    getEnv("EMAILJS_SERVICE_ID", ""),
-		EmailJSTemplateID:   getEnv("EMAILJS_TEMPLATE_ID", ""),
-		EmailJSPublicKey:    getEnv("EMAILJS_PUBLIC_KEY", ""),
-		EmailJSPrivateKey:   getEnv("EMAILJS_PRIVATE_KEY", ""),
-		EmailJSFromName:     getEnv("EMAILJS_FROM_NAME", "DevOps Platform"),
+		EmailJSServiceID:  getEnv("EMAILJS_SERVICE_ID", ""),
+		EmailJSTemplateID: getEnv("EMAILJS_TEMPLATE_ID", ""),
+		EmailJSPublicKey:  getEnv("EMAILJS_PUBLIC_KEY", ""),
+		EmailJSPrivateKey: getEnv("EMAILJS_PRIVATE_KEY", ""),
+		EmailJSFromName:   getEnv("EMAILJS_FROM_NAME", "DevOps Platform"),
+		EmailJSNoticeTemplateID: getEnv("EMAILJS_NOTICE_TEMPLATE_ID",
+			getEnv("EMAILJS_TEMPLATE_ID", "")),
 		VerificationCodeTTL: getEnvDuration("VERIFICATION_CODE_TTL", 15*time.Minute),
 	}
 }

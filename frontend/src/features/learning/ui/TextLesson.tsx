@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 
 import { useCompleteLessonMutation } from "@/features/learning/api/lessonApi";
 import { apiErrorMessage } from "@/shared/api/baseApi";
-import type { LessonProgress, TextContent } from "@/shared/types";
+import type {
+  Certificate, LessonProgress, TextContent } from "@/shared/types";
 import { Button, Card } from "@/shared/ui";
 import { IconCheck } from "@/shared/ui/icons";
 import { useToast } from "@/shared/ui/ToastProvider";
@@ -19,7 +20,7 @@ export default function TextLesson({
   lessonId: string;
   content: TextContent;
   progress?: LessonProgress;
-  onDone: () => void;
+  onDone: (certificate?: Certificate | null) => void;
 }) {
   const [complete, { isLoading }] = useCompleteLessonMutation();
   const toast = useToast();
@@ -34,10 +35,10 @@ export default function TextLesson({
   const markDone = async () => {
     const seconds = Math.round((Date.now() - startedAt.current) / 1000);
     try {
-      await complete({ id: lessonId, seconds }).unwrap();
+      const result = await complete({ id: lessonId, seconds }).unwrap();
       setDone(true);
       toast.success("Урок отмечен пройденным");
-      onDone();
+      onDone(result.certificate);
     } catch (err) {
       toast.error(apiErrorMessage(err));
     }

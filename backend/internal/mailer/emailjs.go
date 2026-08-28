@@ -104,6 +104,28 @@ func (m *Mailer) SendInvite(ctx context.Context, to, fullName, tempPassword stri
 	})
 }
 
+// SendNotice отправляет произвольное уведомление: сертификат, дедлайн, напоминание.
+func (m *Mailer) SendNotice(ctx context.Context, to, subject, message, link string) error {
+	to = strings.TrimSpace(to)
+	if to == "" {
+		return errors.New("пустой адрес получателя")
+	}
+
+	return m.send(ctx, m.cfg.EmailJSNoticeTemplateID, to, map[string]any{
+		"to_email":  to,
+		"email":     to,
+		"to_name":   to,
+		"subject":   subject,
+		"title":     subject,
+		"from_name": m.cfg.EmailJSFromName,
+		"message":   message,
+		"link":      link,
+		// Часть шаблонов ожидает код — подставляем ссылку, чтобы письмо не выглядело пустым.
+		"passcode": link,
+		"code":     link,
+	})
+}
+
 func (m *Mailer) send(ctx context.Context, templateID, to string, params map[string]any) error {
 	if !m.Enabled() {
 		return ErrNotConfigured

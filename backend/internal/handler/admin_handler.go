@@ -42,10 +42,13 @@ func NewAdminHandler(
 
 // Routes собирает /api/admin. Редактор курсов монтируется сюда же, чтобы не
 // плодить пересекающиеся Mount-пути в главном роутере.
-func (h *AdminHandler) Routes(courses http.Handler) http.Handler {
+func (h *AdminHandler) Routes(courses, certificates, reports, uploads http.Handler) http.Handler {
 	r := chi.NewRouter()
 
 	r.Mount("/courses", courses)
+	r.Mount("/certificates", certificates)
+	r.Mount("/reports", reports)
+	r.Mount("/uploads", uploads)
 
 	r.Get("/overview", h.overview)
 	r.Get("/audit", h.auditLog)
@@ -58,6 +61,7 @@ func (h *AdminHandler) Routes(courses http.Handler) http.Handler {
 		r.Delete("/{id}", h.deleteUser)
 		r.Post("/{id}/reset-password", h.resetUserPassword)
 		r.Post("/{id}/enrollments", h.enroll)
+		r.Patch("/{id}/enrollments/{courseId}", h.setDueDate)
 		r.Delete("/{id}/enrollments/{courseId}", h.unenroll)
 	})
 
@@ -245,19 +249,58 @@ func (h *AdminHandler) resetUserPassword(w http.ResponseWriter, r *http.Request)
 func (h *AdminHandler) enroll(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		CourseID string `json:"courseId"`
+		DueDate  string `json:"dueDate"`
 	}
 	if err := decodeJSON(w, r, &body); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
+	dueDate, err := parseDate(body.DueDate)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "Некорректная дата дедлайна")
+		return
+	}
+
 	userID := chi.URLParam(r, "id")
-	if err := h.courses.Enroll(r.Context(), userID, body.CourseID, middleware.UserID(r.Context())); err != nil {
+	if err := h.courses.Enroll(r.Context(), userID, body.CourseID, middleware.UserID(r.Context()), dueDate); err != nil {
 		writeError(w, http.StatusBadRequest, "Не удалось записать студента на курс")
 		return
 	}
 	h.audit.Log(r.Context(), middleware.UserID(r.Context()), "enrollment.create", "user", userID,
 		map[string]any{"courseId": body.CourseID})
+
+	enrollments, err := h.courses.EnrollmentsForUser(r.Context(), userID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Не удалось загрузить курсы")
+		return
+	}
+	writeJSON(w, http.StatusOK, enrollments)
+}
+
+// PATCH /admin/users/{id}/enrollments/{courseId} — изменить срок прохождения.
+func (h *AdminHandler) setDueDate(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		DueDate string `json:"dueDate"`
+	}
+	if err := decodeJSON(w, r, &body); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	dueDate, err := parseDate(body.DueDate)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "Некорректная дата дедлайна")
+		return
+	}
+
+	userID := chi.URLParam(r, "id")
+	courseID := chi.URLParam(r, "courseId")
+
+	if err := h.courses.SetDueDate(r.Context(), userID, courseID, dueDate); err != nil {
+		writeError(w, statusForRepoError(err), "Не удалось изменить срок")
+		return
+	}
 
 	enrollments, err := h.courses.EnrollmentsForUser(r.Context(), userID)
 	if err != nil {

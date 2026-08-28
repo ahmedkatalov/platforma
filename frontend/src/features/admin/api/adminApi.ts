@@ -83,13 +83,27 @@ export const adminApi = baseApi.injectEndpoints({
         body: { sendMail },
       }),
     }),
-    enroll: builder.mutation<Enrollment[], { userId: string; courseId: string }>({
-      query: ({ userId, courseId }) => ({
+    enroll: builder.mutation<
+      Enrollment[],
+      { userId: string; courseId: string; dueDate?: string }
+    >({
+      query: ({ userId, courseId, dueDate }) => ({
         url: `/admin/users/${userId}/enrollments`,
         method: "POST",
-        body: { courseId },
+        body: { courseId, dueDate: dueDate ?? "" },
       }),
       invalidatesTags: (_r, _e, { userId }) => [{ type: "User", id: userId }, "Courses", "Overview"],
+    }),
+    setDueDate: builder.mutation<
+      Enrollment[],
+      { userId: string; courseId: string; dueDate: string }
+    >({
+      query: ({ userId, courseId, dueDate }) => ({
+        url: `/admin/users/${userId}/enrollments/${courseId}`,
+        method: "PATCH",
+        body: { dueDate },
+      }),
+      invalidatesTags: (_r, _e, { userId }) => [{ type: "User", id: userId }],
     }),
     unenroll: builder.mutation<{ message: string }, { userId: string; courseId: string }>({
       query: ({ userId, courseId }) => ({
@@ -124,6 +138,7 @@ export const {
   useDeleteUserMutation,
   useResetUserPasswordMutation,
   useEnrollMutation,
+  useSetDueDateMutation,
   useUnenrollMutation,
   useGetStudentsProgressQuery,
   useGetAuditQuery,

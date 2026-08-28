@@ -7,11 +7,13 @@ import LoginPage from "@/features/auth/ui/LoginPage";
 import RegisterPage from "@/features/auth/ui/RegisterPage";
 import AppearancePage from "@/features/admin/ui/AppearancePage";
 import AuditPage from "@/features/admin/ui/AuditPage";
+import AdminCertificatesPage from "@/features/admin/ui/CertificatesPage";
 import AdminCoursesPage from "@/features/admin/ui/CoursesPage";
 import CourseEditorPage from "@/features/admin/ui/CourseEditorPage";
 import AdminDashboardPage from "@/features/admin/ui/DashboardPage";
 import StudentDetailPage from "@/features/admin/ui/StudentDetailPage";
 import StudentsPage from "@/features/admin/ui/StudentsPage";
+import CertificatePage from "@/features/certificates/ui/CertificatePage";
 import LessonPage from "@/features/learning/ui/LessonPage";
 import StudentCoursePage from "@/features/student/ui/CoursePage";
 import StudentCoursesPage from "@/features/student/ui/CoursesPage";
@@ -106,12 +108,16 @@ export default function App() {
         }
       />
 
+      {/* Сертификат открыт всем: ссылку можно показать работодателю */}
+      <Route path="/certificates/:serial" element={<CertificatePage />} />
+
       <Route path="/admin" element={<RequireAuth role="admin" />}>
         <Route index element={<AdminDashboardPage />} />
         <Route path="students" element={<StudentsPage />} />
         <Route path="students/:id" element={<StudentDetailPage />} />
         <Route path="courses" element={<AdminCoursesPage />} />
         <Route path="courses/:id" element={<CourseEditorPage />} />
+        <Route path="certificates" element={<AdminCertificatesPage />} />
         <Route path="appearance" element={<AppearancePage />} />
         <Route path="audit" element={<AuditPage />} />
         <Route path="profile" element={<ProfilePage />} />

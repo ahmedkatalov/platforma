@@ -98,6 +98,7 @@ type Enrollment struct {
 	UserID      string     `json:"userId"`
 	CourseID    string     `json:"courseId"`
 	Status      string     `json:"status"`
+	DueDate     *time.Time `json:"dueDate"`
 	StartedAt   *time.Time `json:"startedAt"`
 	CompletedAt *time.Time `json:"completedAt"`
 	CreatedAt   time.Time  `json:"createdAt"`

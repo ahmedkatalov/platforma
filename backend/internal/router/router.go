@@ -24,6 +24,9 @@ type Deps struct {
 	Courses *handler.CourseHandler
 	Lessons *handler.LessonHandler
 	Theme   *handler.ThemeHandler
+	Certs   *handler.CertificateHandler
+	Reports *handler.ReportHandler
+	Uploads *handler.UploadHandler
 }
 
 func New(d Deps) http.Handler {
@@ -42,6 +45,10 @@ func New(d Deps) http.Handler {
 		MaxAge:           300,
 	}))
 
+	// Загруженные картинки отдаём статикой.
+	r.Handle("/uploads/*", http.StripPrefix("/uploads/",
+		http.FileServer(http.Dir(d.Config.UploadDir))))
+
 	r.Get("/health", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"status":"ok"}`))
@@ -51,6 +58,7 @@ func New(d Deps) http.Handler {
 		// Публичное.
 		r.Mount("/auth", d.Auth.Routes())
 		r.Get("/theme", d.Theme.Public)
+		r.Mount("/certificates", d.Certs.PublicRoutes())
 
 		// Требует авторизации.
 		r.Group(func(r chi.Router) {
@@ -63,7 +71,12 @@ func New(d Deps) http.Handler {
 			// Только администратор.
 			r.Group(func(r chi.Router) {
 				r.Use(appmw.RequireAdmin)
-				r.Mount("/admin", d.Admin.Routes(d.Courses.AdminRoutes()))
+				r.Mount("/admin", d.Admin.Routes(
+					d.Courses.AdminRoutes(),
+					d.Certs.AdminRoutes(),
+					d.Reports.Routes(),
+					d.Uploads.Routes(),
+				))
 			})
 		})
 	})

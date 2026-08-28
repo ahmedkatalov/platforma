@@ -11,6 +11,7 @@ import {
   YAxis,
 } from "recharts";
 
+import { useGetMyCertificatesQuery } from "@/features/certificates/api/certificatesApi";
 import { useGetMyAttemptsQuery, useGetMyStatsQuery } from "@/shared/api/meApi";
 import type { Attempt } from "@/shared/types";
 import { Badge, Card, EmptyState, PageHeader, Progress, Select, Spinner, StatCard } from "@/shared/ui";
@@ -34,6 +35,7 @@ export default function StatsPage() {
   const [days, setDays] = useState(30);
   const { data: stats, isLoading } = useGetMyStatsQuery(days);
   const { data: attempts = [] } = useGetMyAttemptsQuery(20);
+  const { data: certificates = [] } = useGetMyCertificatesQuery();
 
   if (isLoading || !stats) {
     return (
@@ -258,6 +260,38 @@ export default function StatsPage() {
           icon={<IconClock size={20} />}
         />
       </div>
+
+      {certificates.length > 0 && (
+        <Card className="mt-[var(--gap)] p-[var(--pad)]">
+          <h2 className="mb-4 text-base font-bold text-fg">Мои сертификаты</h2>
+
+          <div className="grid gap-[var(--gap)] md:grid-cols-2">
+            {certificates.map((cert) => (
+              <a
+                key={cert.id}
+                href={`/certificates/${cert.serial}`}
+                target="_blank"
+                rel="noreferrer"
+                className="card-flat block p-4 transition-colors hover:bg-surface-hover"
+              >
+                <div className="mb-2 flex items-start justify-between gap-2">
+                  <p className="text-sm font-bold text-fg">{cert.courseTitle}</p>
+                  {cert.revokedAt ? (
+                    <Badge tone="danger">Отозван</Badge>
+                  ) : (
+                    <Badge tone="success">Действителен</Badge>
+                  )}
+                </div>
+                <p className="font-mono text-xs font-bold text-accent">{cert.serial}</p>
+                <p className="mt-1 text-xs text-faint">
+                  балл {Math.round(cert.score)}% · {cert.lessonsCompleted} из {cert.lessonsTotal}{" "}
+                  уроков · выдан {stampFmt.format(new Date(cert.issuedAt))}
+                </p>
+              </a>
+            ))}
+          </div>
+        </Card>
+      )}
 
       <Card className="mt-[var(--gap)] overflow-hidden">
         <div className="border-b border-line px-[var(--pad)] py-3">

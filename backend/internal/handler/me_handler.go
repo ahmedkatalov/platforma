@@ -18,6 +18,7 @@ type MeHandler struct {
 	stats    *repository.StatsRepo
 	theme    *repository.ThemeRepo
 	progress *repository.ProgressRepo
+	certs    *repository.CertificateRepo
 	auth     *AuthHandler
 }
 
@@ -28,10 +29,11 @@ func NewMeHandler(
 	stats *repository.StatsRepo,
 	theme *repository.ThemeRepo,
 	progress *repository.ProgressRepo,
+	certs *repository.CertificateRepo,
 	auth *AuthHandler,
 ) *MeHandler {
 	return &MeHandler{users: users, courses: courses, activity: activity,
-		stats: stats, theme: theme, progress: progress, auth: auth}
+		stats: stats, theme: theme, progress: progress, certs: certs, auth: auth}
 }
 
 func (h *MeHandler) Routes() http.Handler {
@@ -41,6 +43,7 @@ func (h *MeHandler) Routes() http.Handler {
 	r.Post("/change-password", h.auth.ChangePassword)
 	r.Get("/stats", h.myStats)
 	r.Get("/attempts", h.myAttempts)
+	r.Get("/certificates", h.myCertificates)
 	r.Post("/activity", h.trackActivity)
 	r.Get("/preferences", h.getPreferences)
 	r.Put("/preferences", h.putPreferences)
@@ -124,6 +127,16 @@ func (h *MeHandler) myAttempts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, attempts)
+}
+
+// myCertificates — сертификаты, полученные студентом.
+func (h *MeHandler) myCertificates(w http.ResponseWriter, r *http.Request) {
+	certs, err := h.certs.ForUser(r.Context(), middleware.UserID(r.Context()))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Не удалось загрузить сертификаты")
+		return
+	}
+	writeJSON(w, http.StatusOK, certs)
 }
 
 // trackActivity — фронтенд периодически шлёт проведённое время.

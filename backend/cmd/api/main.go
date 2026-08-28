@@ -14,6 +14,7 @@ import (
 	"platforma/backend/internal/db"
 	"platforma/backend/internal/dotenv"
 	"platforma/backend/internal/handler"
+	"platforma/backend/internal/jobs"
 	"platforma/backend/internal/mailer"
 	"platforma/backend/internal/repository"
 	"platforma/backend/internal/router"
@@ -49,6 +50,9 @@ func main() {
 	statsRepo := repository.NewStatsRepo(pool)
 	themeRepo := repository.NewThemeRepo(pool)
 	progressRepo := repository.NewProgressRepo(pool)
+	certRepo := repository.NewCertificateRepo(pool)
+	assetRepo := repository.NewAssetRepo(pool)
+	reminderRepo := repository.NewReminderRepo(pool)
 
 	// Сервисы.
 	tokens := auth.NewTokenManager(cfg.JWTSecret, cfg.AccessTTL, cfg.RefreshTTL)
@@ -63,14 +67,18 @@ func main() {
 	// Хендлеры.
 	authHandler := handler.NewAuthHandler(authSvc)
 	meHandler := handler.NewMeHandler(userRepo, courseRepo, activityRepo, statsRepo, themeRepo,
-		progressRepo, authHandler)
+		progressRepo, certRepo, authHandler)
 	adminHandler := handler.NewAdminHandler(userRepo, courseRepo, statsRepo, activityRepo, auditRepo,
 		themeRepo, progressRepo, userSvc)
 	courseHandler := handler.NewCourseHandler(courseRepo, auditRepo, progressRepo)
-	lessonHandler := handler.NewLessonHandler(progressRepo, courseRepo, activityRepo)
+	lessonHandler := handler.NewLessonHandler(progressRepo, courseRepo, activityRepo, certRepo, mail, cfg)
 	themeHandler := handler.NewThemeHandler(themeRepo)
+	certHandler := handler.NewCertificateHandler(certRepo)
+	reportHandler := handler.NewReportHandler(statsRepo, certRepo)
+	uploadHandler := handler.NewUploadHandler(assetRepo, cfg.UploadDir)
 
 	go cleanupLoop(ctx, tokenRepo, codeRepo)
+	go jobs.NewReminders(reminderRepo, mail, cfg).Run(ctx, cfg.ReminderEvery)
 
 	srv := &http.Server{
 		Addr: ":" + cfg.Port,
@@ -83,6 +91,9 @@ func main() {
 			Courses: courseHandler,
 			Lessons: lessonHandler,
 			Theme:   themeHandler,
+			Certs:   certHandler,
+			Reports: reportHandler,
+			Uploads: uploadHandler,
 		}),
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       15 * time.Second,

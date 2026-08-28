@@ -6,6 +6,7 @@ import {
   useEnrollMutation,
   useGetUserQuery,
   useResetUserPasswordMutation,
+  useSetDueDateMutation,
   useUnenrollMutation,
   useUpdateUserMutation,
 } from "@/features/admin/api/adminApi";
@@ -18,6 +19,7 @@ import {
   Card,
   EmptyState,
   Field,
+  Input,
   Modal,
   PageHeader,
   Progress,
@@ -35,6 +37,7 @@ const STATUS_LABEL: Record<UserStatus, string> = {
 };
 
 const dayFmt = new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "short" });
+const dueFmt = new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "2-digit", year: "2-digit" });
 const stampFmt = new Intl.DateTimeFormat("ru-RU", {
   day: "2-digit",
   month: "2-digit",
@@ -59,6 +62,8 @@ export default function StudentDetailPage() {
   const [resetPassword, { isLoading: resetting }] = useResetUserPasswordMutation();
 
   const [courseId, setCourseId] = useState("");
+  const [dueDate, setDueDate] = useState("");
+  const [setEnrollmentDue] = useSetDueDateMutation();
   const [newPassword, setNewPassword] = useState<CreatedStudent | null>(null);
   const toast = useToast();
 
@@ -91,9 +96,20 @@ export default function StudentDetailPage() {
   const assignCourse = async () => {
     if (!courseId) return;
     try {
-      await enroll({ userId: user.id, courseId }).unwrap();
+      await enroll({ userId: user.id, courseId, dueDate: dueDate || undefined }).unwrap();
       setCourseId("");
-      toast.success("Курс назначен");
+      setDueDate("");
+      toast.success(dueDate ? "Курс назначен со сроком прохождения" : "Курс назначен");
+    } catch (err) {
+      toast.error(apiErrorMessage(err));
+    }
+  };
+
+  // Срок можно поменять в любой момент; пустое значение снимает дедлайн.
+  const changeDue = async (id: string, value: string) => {
+    try {
+      await setEnrollmentDue({ userId: user.id, courseId: id, dueDate: value }).unwrap();
+      toast.success(value ? "Срок обновлён" : "Срок снят");
     } catch (err) {
       toast.error(apiErrorMessage(err));
     }
@@ -237,8 +253,8 @@ export default function StudentDetailPage() {
         <Card className="p-[var(--pad)] lg:col-span-2">
           <h2 className="mb-4 text-base font-bold text-fg">Курсы студента</h2>
 
-          <div className="mb-4 flex gap-2">
-            <Field>
+          <div className="mb-4 space-y-2">
+            <Field label="Курс">
               <Select value={courseId} onChange={(e) => setCourseId(e.target.value)}>
                 <option value="">Выберите курс…</option>
                 {available.map((course) => (
@@ -248,9 +264,19 @@ export default function StudentDetailPage() {
                 ))}
               </Select>
             </Field>
-            <Button variant="primary" onClick={assignCourse} disabled={!courseId} loading={enrolling}>
-              Назначить
-            </Button>
+
+            <div className="flex items-end gap-2">
+              <Field label="Срок прохождения" hint="Необязательно — напомним студенту письмом">
+                <Input
+                  type="date"
+                  value={dueDate}
+                  onChange={(e) => setDueDate(e.target.value)}
+                />
+              </Field>
+              <Button variant="primary" onClick={assignCourse} disabled={!courseId} loading={enrolling}>
+                Назначить
+              </Button>
+            </div>
           </div>
 
           {enrollments.length === 0 ? (
@@ -258,22 +284,38 @@ export default function StudentDetailPage() {
           ) : (
             <ul className="space-y-2">
               {enrollments.map((enrollment) => (
-                <li
-                  key={enrollment.id}
-                  className="card-flat flex items-center gap-3 p-3"
-                >
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold text-fg">{enrollment.courseTitle}</p>
-                    <p className="text-xs text-faint">{enrollment.courseSlug}</p>
+                <li key={enrollment.id} className="card-flat p-3">
+                  <div className="flex items-center gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-fg">
+                        {enrollment.courseTitle}
+                      </p>
+                      <p className="text-xs text-faint">{enrollment.courseSlug}</p>
+                    </div>
+                    {enrollment.dueDate && (
+                      <Badge tone={new Date(enrollment.dueDate) < new Date() ? "danger" : "warning"}>
+                        до {dueFmt.format(new Date(enrollment.dueDate))}
+                      </Badge>
+                    )}
+                    <Button
+                      variant="ghost"
+                      className="h-8 !px-2 text-danger"
+                      onClick={() => removeCourse(enrollment.courseId)}
+                      title="Снять курс"
+                    >
+                      <IconTrash size={16} />
+                    </Button>
                   </div>
-                  <Button
-                    variant="ghost"
-                    className="h-8 !px-2 text-danger"
-                    onClick={() => removeCourse(enrollment.courseId)}
-                    title="Снять курс"
-                  >
-                    <IconTrash size={16} />
-                  </Button>
+
+                  <div className="mt-2 flex items-center gap-2">
+                    <span className="text-xs text-faint">Срок:</span>
+                    <Input
+                      type="date"
+                      value={enrollment.dueDate ? enrollment.dueDate.slice(0, 10) : ""}
+                      onChange={(e) => changeDue(enrollment.courseId, e.target.value)}
+                      className="h-8 text-xs"
+                    />
+                  </div>
                 </li>
               ))}
             </ul>

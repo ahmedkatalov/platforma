@@ -1,9 +1,12 @@
 import { Link, useParams } from "react-router-dom";
 
 import { useGetStudentCourseQuery } from "@/features/admin/api/coursesApi";
+import { useGetMeQuery } from "@/shared/api/meApi";
 import type { LessonKind, LessonProgress } from "@/shared/types";
 import { Badge, Card, EmptyState, PageHeader, Progress, Spinner } from "@/shared/ui";
 import { IconBook, IconCheck, IconChevron, IconClock } from "@/shared/ui/icons";
+
+const dueFmt = new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "long" });
 
 const KIND_LABEL: Record<LessonKind, string> = {
   text: "Теория",
@@ -22,6 +25,7 @@ const KIND_TONE: Record<LessonKind, "default" | "accent" | "success" | "warning"
 export default function CoursePage() {
   const { slug = "" } = useParams();
   const { data, isLoading, isError } = useGetStudentCourseQuery(slug, { skip: !slug });
+  const { data: me } = useGetMeQuery();
 
   if (isLoading) {
     return (
@@ -50,6 +54,20 @@ export default function CoursePage() {
 
   const { course, enrolled } = data;
   const modules = course.modules ?? [];
+
+  // Срок прохождения приходит вместе с записью на курс.
+  const enrollment = me?.enrollments.find((item) => item.courseId === course.id);
+  const deadline = enrollment?.dueDate
+    ? (() => {
+        const due = new Date(enrollment.dueDate);
+        const days = Math.ceil((due.getTime() - Date.now()) / 86_400_000);
+        return {
+          label: dueFmt.format(due),
+          overdue: days < 0,
+          soon: days >= 0 && days <= 3,
+        };
+      })()
+    : null;
 
   const progressByLesson = new Map<string, LessonProgress>();
   (data.progress ?? []).forEach((item) => progressByLesson.set(item.lessonId, item));
@@ -95,6 +113,14 @@ export default function CoursePage() {
           <Badge tone="success">Курс доступен вам</Badge>
         ) : (
           <Badge tone="warning">Нужен доступ от администратора</Badge>
+        )}
+        {deadline && (
+          <Badge tone={deadline.overdue ? "danger" : deadline.soon ? "warning" : "default"}>
+            <IconClock size={12} />
+            {deadline.overdue
+              ? `срок истёк ${deadline.label}`
+              : `сдать до ${deadline.label}`}
+          </Badge>
         )}
         {course.tags.map((tag) => (
           <Badge key={tag} tone="accent">

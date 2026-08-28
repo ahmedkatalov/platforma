@@ -29,8 +29,9 @@ const ADMIN_NAV: NavItem[] = [
   { to: "/admin", label: "Обзор", icon: <IconDashboard size={18} />, end: true },
   { to: "/admin/students", label: "Студенты", icon: <IconUsers size={18} /> },
   { to: "/admin/courses", label: "Курсы", icon: <IconBook size={18} /> },
+  { to: "/admin/certificates", label: "Сертификаты", icon: <IconShield size={18} /> },
   { to: "/admin/appearance", label: "Оформление", icon: <IconPalette size={18} /> },
-  { to: "/admin/audit", label: "Журнал", icon: <IconShield size={18} /> },
+  { to: "/admin/audit", label: "Журнал", icon: <IconSettings size={18} /> },
 ];
 
 const STUDENT_NAV: NavItem[] = [

@@ -125,6 +125,19 @@ html.glow-animated body::before {
   100% { transform: translate3d(-2%, 2%, 0) scale(1.02); }
 }
 
+/* Печать сертификата: без фоновой подсветки и лишних элементов. */
+@media print {
+  body::before { display: none; }
+  body { background: #ffffff; color: #0b1020; }
+  .card {
+    box-shadow: none;
+    backdrop-filter: none;
+    border-color: #d5d9e2;
+    background: #ffffff;
+  }
+  .card-flat { background: #f4f6fa; border-color: #d5d9e2; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   html.glow-animated body::before { animation: none; }
   * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }

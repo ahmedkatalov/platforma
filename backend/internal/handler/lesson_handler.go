@@ -1,12 +1,18 @@
 package handler
 
 import (
+	"context"
 	"errors"
+	"fmt"
+	"log"
 	"net/http"
 	"regexp"
 	"strings"
+	"time"
 
+	"platforma/backend/internal/config"
 	"platforma/backend/internal/domain"
+	"platforma/backend/internal/mailer"
 	"platforma/backend/internal/middleware"
 	"platforma/backend/internal/repository"
 
@@ -18,14 +24,81 @@ type LessonHandler struct {
 	progress *repository.ProgressRepo
 	courses  *repository.CourseRepo
 	activity *repository.ActivityRepo
+	certs    *repository.CertificateRepo
+	mail     *mailer.Mailer
+	cfg      *config.Config
 }
 
 func NewLessonHandler(
 	progress *repository.ProgressRepo,
 	courses *repository.CourseRepo,
 	activity *repository.ActivityRepo,
+	certs *repository.CertificateRepo,
+	mail *mailer.Mailer,
+	cfg *config.Config,
 ) *LessonHandler {
-	return &LessonHandler{progress: progress, courses: courses, activity: activity}
+	return &LessonHandler{progress: progress, courses: courses, activity: activity,
+		certs: certs, mail: mail, cfg: cfg}
+}
+
+// finishLesson отмечает урок пройденным и, если курс закрыт целиком, выдаёт сертификат.
+// Возвращает сертификат, если он выдан именно сейчас.
+func (h *LessonHandler) finishLesson(
+	r *http.Request,
+	userID, lessonID, courseID string,
+	score *float64,
+	seconds int,
+) (*repository.Certificate, error) {
+	if err := h.progress.Complete(r.Context(), userID, lessonID, score, seconds); err != nil {
+		return nil, err
+	}
+	_ = h.activity.Touch(r.Context(), userID, seconds)
+
+	completion, err := h.certs.Completion(r.Context(), userID, courseID)
+	if err != nil || completion.Total == 0 || completion.Completed < completion.Total {
+		return nil, nil
+	}
+
+	// Курс пройден целиком — выдаём сертификат (повторная выдача просто обновит данные).
+	existing, err := h.certs.ForUser(r.Context(), userID)
+	if err == nil {
+		for _, cert := range existing {
+			if cert.CourseID == courseID {
+				return nil, nil
+			}
+		}
+	}
+
+	cert, err := h.certs.Issue(r.Context(), userID, courseID, *completion)
+	if err != nil {
+		log.Printf("сертификат: не удалось выдать: %v", err)
+		return nil, nil
+	}
+
+	go h.notifyCertificate(cert)
+	return cert, nil
+}
+
+// notifyCertificate отправляет письмо о выдаче сертификата, не задерживая ответ.
+func (h *LessonHandler) notifyCertificate(cert *repository.Certificate) {
+	if !h.mail.Enabled() {
+		log.Printf("сертификат %s выдан для %s (письмо не отправлено — EmailJS не настроен)",
+			cert.Serial, cert.HolderName)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	link := strings.TrimRight(h.cfg.PublicBaseURL, "/") + "/certificates/" + cert.Serial
+	subject := "Курс пройден: " + cert.CourseTitle
+	message := fmt.Sprintf(
+		"Поздравляем! Курс «%s» пройден полностью. Ваш сертификат № %s доступен по ссылке: %s",
+		cert.CourseTitle, cert.Serial, link)
+
+	if err := h.mail.SendNotice(ctx, cert.HolderEmail, subject, message, link); err != nil {
+		log.Printf("сертификат: письмо не отправлено: %v", err)
+	}
 }
 
 func (h *LessonHandler) Routes() http.Handler {
@@ -139,7 +212,8 @@ func (h *LessonHandler) complete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	lessonID := chi.URLParam(r, "id")
-	if _, err := h.access(r, lessonID); err != nil {
+	lesson, err := h.access(r, lessonID)
+	if err != nil {
 		h.writeAccessError(w, err)
 		return
 	}
@@ -147,13 +221,16 @@ func (h *LessonHandler) complete(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.UserID(r.Context())
 	seconds := clampSeconds(body.Seconds)
 
-	if err := h.progress.Complete(r.Context(), userID, lessonID, nil, seconds); err != nil {
+	cert, err := h.finishLesson(r, userID, lessonID, lesson.CourseID, nil, seconds)
+	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Не удалось сохранить прогресс")
 		return
 	}
-	_ = h.activity.Touch(r.Context(), userID, seconds)
 
-	writeJSON(w, http.StatusOK, map[string]string{"message": "Урок отмечен пройденным"})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"message":     "Урок отмечен пройденным",
+		"certificate": cert,
+	})
 }
 
 // POST /api/lessons/{id}/quiz — проверка ответов на сервере.
@@ -207,18 +284,28 @@ func (h *LessonHandler) submitQuiz(w http.ResponseWriter, r *http.Request) {
 	}
 
 	score := result.Score
+	var cert *repository.Certificate
+
 	if result.Passed {
-		err = h.progress.Complete(r.Context(), userID, lessonID, &score, seconds)
+		cert, err = h.finishLesson(r, userID, lessonID, lesson.CourseID, &score, seconds)
 	} else {
 		err = h.progress.TouchAttempt(r.Context(), userID, lessonID, &score, seconds)
+		_ = h.activity.Touch(r.Context(), userID, seconds)
 	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Не удалось сохранить прогресс")
 		return
 	}
-	_ = h.activity.Touch(r.Context(), userID, seconds)
 
-	writeJSON(w, http.StatusOK, result)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"score":        result.Score,
+		"passed":       result.Passed,
+		"correctCount": result.CorrectCount,
+		"totalCount":   result.TotalCount,
+		"passScore":    result.PassScore,
+		"questions":    result.Questions,
+		"certificate":  cert,
+	})
 }
 
 // POST /api/lessons/{id}/terminal — проверка одной команды из задания.
@@ -286,13 +373,15 @@ func (h *LessonHandler) checkTerminal(w http.ResponseWriter, r *http.Request) {
 	}
 
 	seconds := clampSeconds(body.Seconds)
+	var cert *repository.Certificate
+
 	if allDone {
 		score := 100.0
-		if err := h.progress.Complete(r.Context(), userID, lessonID, &score, seconds); err != nil {
+		cert, err = h.finishLesson(r, userID, lessonID, lesson.CourseID, &score, seconds)
+		if err != nil {
 			writeError(w, http.StatusInternalServerError, "Не удалось сохранить прогресс")
 			return
 		}
-		_ = h.activity.Touch(r.Context(), userID, seconds)
 	}
 
 	message := task.Success
@@ -309,6 +398,7 @@ func (h *LessonHandler) checkTerminal(w http.ResponseWriter, r *http.Request) {
 		"hint":           task.Hint,
 		"completedTasks": keys(completed),
 		"lessonComplete": allDone,
+		"certificate":    cert,
 	})
 }
 
@@ -389,22 +479,24 @@ func (h *LessonHandler) checkCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var cert *repository.Certificate
 	if passedAll {
-		err = h.progress.Complete(r.Context(), userID, lessonID, &score, seconds)
+		cert, err = h.finishLesson(r, userID, lessonID, lesson.CourseID, &score, seconds)
 	} else {
 		err = h.progress.TouchAttempt(r.Context(), userID, lessonID, &score, seconds)
+		_ = h.activity.Touch(r.Context(), userID, seconds)
 	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Не удалось сохранить прогресс")
 		return
 	}
-	_ = h.activity.Touch(r.Context(), userID, seconds)
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"passed": passedAll,
-		"score":  score,
-		"checks": results,
-		"hint":   code.Hint,
+		"passed":      passedAll,
+		"score":       score,
+		"checks":      results,
+		"hint":        code.Hint,
+		"certificate": cert,
 	})
 }
 

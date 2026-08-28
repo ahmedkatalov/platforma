@@ -28,6 +28,14 @@ export default function Markdown({ children }: { children: string }) {
           ),
           li: ({ children }) => <li className="pl-1">{children}</li>,
           strong: ({ children }) => <strong className="font-bold text-fg">{children}</strong>,
+          img: ({ src, alt }) => (
+            <img
+              src={typeof src === "string" ? src : undefined}
+              alt={alt ?? ""}
+              loading="lazy"
+              className="mx-auto max-w-full rounded-[var(--radius-md)] border border-line"
+            />
+          ),
           a: ({ children, href }) => (
             <a
               href={href}

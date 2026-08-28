@@ -1,5 +1,6 @@
 import { baseApi } from "@/shared/api/baseApi";
 import type {
+  Certificate,
   CodeCheckResult,
   LessonView,
   QuizResult,
@@ -21,7 +22,10 @@ export const lessonApi = baseApi.injectEndpoints({
     startLesson: builder.mutation<{ message: string }, string>({
       query: (id) => ({ url: `/lessons/${id}/start`, method: "POST" }),
     }),
-    completeLesson: builder.mutation<{ message: string }, { id: string; seconds: number }>({
+    completeLesson: builder.mutation<
+      { message: string; certificate?: Certificate | null },
+      { id: string; seconds: number }
+    >({
       query: ({ id, seconds }) => ({
         url: `/lessons/${id}/complete`,
         method: "POST",

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const maxBodySize = 1 << 20 // 1 MB
@@ -41,6 +42,19 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, dst any) error {
 		return errors.New("некорректный JSON в теле запроса")
 	}
 	return nil
+}
+
+// parseDate разбирает дату вида 2026-09-01. Пустая строка означает «без даты».
+func parseDate(value string) (*time.Time, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil, nil
+	}
+	parsed, err := time.Parse("2006-01-02", value)
+	if err != nil {
+		return nil, err
+	}
+	return &parsed, nil
 }
 
 func queryInt(r *http.Request, key string, fallback, min, max int) int {

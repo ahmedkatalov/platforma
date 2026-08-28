@@ -5,3 +5,6 @@ dist/
 .DS_Store
 .idea/
 backend/tmp/
+
+# загруженные картинки уроков
+backend/uploads/

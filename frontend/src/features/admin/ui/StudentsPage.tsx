@@ -8,6 +8,7 @@ import {
   useUpdateUserMutation,
 } from "@/features/admin/api/adminApi";
 import { apiErrorMessage } from "@/shared/api/baseApi";
+import { downloadFile } from "@/shared/lib/download";
 import type { CreatedStudent, Role, User, UserStatus } from "@/shared/types";
 import {
   Badge,
@@ -64,6 +65,14 @@ export default function StudentsPage() {
     }
   };
 
+  const exportCsv = async () => {
+    try {
+      await downloadFile("/api/admin/reports/students.csv", "students.csv");
+    } catch (err) {
+      toast.error(apiErrorMessage(err, "Не удалось скачать отчёт"));
+    }
+  };
+
   const removeUser = async (user: User) => {
     if (!window.confirm(`Удалить аккаунт ${user.email}? Действие необратимо.`)) return;
     try {
@@ -80,9 +89,12 @@ export default function StudentsPage() {
         title="Студенты"
         subtitle="Аккаунты, доступы и статусы"
         actions={
-          <Button variant="primary" icon={<IconPlus size={18} />} onClick={() => setCreateOpen(true)}>
-            Создать аккаунт
-          </Button>
+          <>
+            <Button onClick={exportCsv}>Выгрузить CSV</Button>
+            <Button variant="primary" icon={<IconPlus size={18} />} onClick={() => setCreateOpen(true)}>
+              Создать аккаунт
+            </Button>
+          </>
         }
       />
 

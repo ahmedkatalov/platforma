@@ -7,6 +7,7 @@ import {
   useStartLessonMutation,
 } from "@/features/learning/api/lessonApi";
 import type {
+  Certificate,
   CodeContent,
   LessonKind,
   LessonProgress,
@@ -14,7 +15,7 @@ import type {
   TerminalContent,
   TextContent,
 } from "@/shared/types";
-import { Badge, Button, Card, EmptyState, Progress, Spinner } from "@/shared/ui";
+import { Badge, Button, Card, EmptyState, Modal, Progress, Spinner } from "@/shared/ui";
 import {
   IconBook,
   IconCheck,
@@ -52,6 +53,7 @@ export default function LessonPage() {
   const [startLesson] = useStartLessonMutation();
 
   const [asideOpen, setAsideOpen] = useState(false);
+  const [certificate, setCertificate] = useState<Certificate | null>(null);
 
   useEffect(() => {
     if (lessonId) void startLesson(lessonId);
@@ -107,7 +109,12 @@ export default function LessonPage() {
   const progress = progressByLesson.get(lesson.id);
   const completed = progress?.status === "completed";
 
-  const goNext = () => {
+  // Если урок закрыл курс целиком — сначала показываем сертификат.
+  const goNext = (issued?: Certificate | null) => {
+    if (issued) {
+      setCertificate(issued);
+      return;
+    }
     if (data.nextLessonId) {
       navigate(`/learn/courses/${data.courseSlug}/lessons/${data.nextLessonId}`);
     } else {
@@ -225,6 +232,55 @@ export default function LessonPage() {
       </aside>
 
       {/* Урок */}
+      <Modal
+        open={Boolean(certificate)}
+        onClose={() => setCertificate(null)}
+        title="Курс пройден!"
+        footer={
+          <>
+            <Button onClick={() => setCertificate(null)}>Закрыть</Button>
+            {certificate && (
+              <a
+                href={`/certificates/${certificate.serial}`}
+                target="_blank"
+                rel="noreferrer"
+                className="btn btn-primary"
+              >
+                Открыть сертификат
+              </a>
+            )}
+          </>
+        }
+      >
+        {certificate && (
+          <div className="space-y-4 text-center">
+            <span
+              className="mx-auto grid h-16 w-16 place-items-center rounded-full text-accent-fg"
+              style={{ background: "var(--gradient)" }}
+            >
+              <IconCheck size={32} />
+            </span>
+
+            <div>
+              <p className="text-lg font-bold text-fg">{certificate.courseTitle}</p>
+              <p className="mt-1 text-sm text-muted">
+                Пройдено {certificate.lessonsCompleted} из {certificate.lessonsTotal} уроков ·
+                средний балл {Math.round(certificate.score)}%
+              </p>
+            </div>
+
+            <div className="card-flat p-3">
+              <p className="text-xs text-faint">Номер сертификата</p>
+              <p className="font-mono text-base font-bold text-accent">{certificate.serial}</p>
+            </div>
+
+            <p className="text-xs text-muted">
+              Ссылку на сертификат можно отправить работодателю — подлинность проверяется по номеру.
+            </p>
+          </div>
+        )}
+      </Modal>
+
       <div className="min-w-0">
         <div className="mb-4 flex flex-wrap items-center gap-2">
           <Button className="xl:hidden" onClick={() => setAsideOpen((v) => !v)}>

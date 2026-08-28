@@ -1,8 +1,10 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import type { LessonKind } from "@/shared/types";
 import { Badge, Button, Field, Input, Select, Textarea } from "@/shared/ui";
 import { IconPlus, IconTrash } from "@/shared/ui/icons";
+
+import AssetPicker from "./AssetPicker";
 
 // Визуальные конструкторы содержимого уроков. Работают поверх того же JSON,
 // который хранится в базе, — можно в любой момент переключиться на «сырой» режим.
@@ -34,16 +36,42 @@ function Section({
 // --- Теория ---
 
 function TextEditor({ value, onChange }: { value: AnyRecord; onChange: (next: AnyRecord) => void }) {
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const areaRef = useRef<HTMLTextAreaElement>(null);
+
+  const body = String(value.body ?? "");
+
+  // Вставляем markdown-ссылку на картинку в текущую позицию курсора.
+  const insert = (markdown: string) => {
+    const area = areaRef.current;
+    const at = area?.selectionStart ?? body.length;
+    const next = `${body.slice(0, at)}\n\n${markdown}\n\n${body.slice(at)}`;
+    onChange({ ...value, body: next });
+  };
+
   return (
-    <Field label="Текст урока (Markdown)" hint="Поддерживаются заголовки, списки, таблицы и блоки кода">
+    <>
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <span className="text-sm font-semibold text-muted">Текст урока (Markdown)</span>
+        <Button variant="ghost" onClick={() => setPickerOpen(true)}>
+          Вставить картинку
+        </Button>
+      </div>
+
       <Textarea
-        value={String(value.body ?? "")}
+        ref={areaRef}
+        value={body}
         onChange={(e) => onChange({ ...value, body: e.target.value })}
         rows={16}
         className="font-mono text-xs"
         spellCheck={false}
       />
-    </Field>
+      <p className="mt-1 text-xs text-faint">
+        Поддерживаются заголовки, списки, таблицы, блоки кода и картинки.
+      </p>
+
+      <AssetPicker open={pickerOpen} onClose={() => setPickerOpen(false)} onPick={insert} />
+    </>
   );
 }
 
