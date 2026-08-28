@@ -19,6 +19,7 @@ import StudentCoursePage from "@/features/student/ui/CoursePage";
 import StudentCoursesPage from "@/features/student/ui/CoursesPage";
 import StudentDashboardPage from "@/features/student/ui/DashboardPage";
 import ProfilePage from "@/features/student/ui/ProfilePage";
+import QuizzesPage from "@/features/student/ui/QuizzesPage";
 import StudentStatsPage from "@/features/student/ui/StatsPage";
 import { useGetMeQuery } from "@/shared/api/meApi";
 import { tokenStorage } from "@/shared/api/tokenStorage";
@@ -128,6 +129,7 @@ export default function App() {
         <Route path="courses" element={<StudentCoursesPage />} />
         <Route path="courses/:slug" element={<StudentCoursePage />} />
         <Route path="courses/:slug/lessons/:lessonId" element={<LessonPage />} />
+        <Route path="quizzes" element={<QuizzesPage />} />
         <Route path="stats" element={<StudentStatsPage />} />
         <Route path="profile" element={<ProfilePage />} />
       </Route>

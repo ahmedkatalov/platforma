@@ -290,6 +290,64 @@ func moduleGit() ModuleSeed {
 				},
 			},
 			{
+				Title:       "Практика: .gitignore для проекта",
+				Kind:        "code",
+				Summary:     "Закройте от Git всё, что не должно попасть в репозиторий",
+				DurationMin: 15,
+				Content: map[string]any{
+					"language": "gitignore",
+					"task": "Соберите .gitignore для проекта. В него должны попасть:\n\n" +
+						"1. файл с секретами `.env`;\n" +
+						"2. приватные ключи по шаблону `*.key`;\n" +
+						"3. папка зависимостей `node_modules/`;\n" +
+						"4. папка сборки `dist/`;\n" +
+						"5. системный файл `.DS_Store`.\n\n" +
+						"Файл `.env.example` наоборот должен попадать в репозиторий — добавьте для него " +
+						"исключение строкой `!.env.example`.",
+					"starter": "# Что не должно попасть в репозиторий\n" +
+						"\n" +
+						"# секреты\n" +
+						"\n" +
+						"# зависимости и сборка\n" +
+						"\n" +
+						"# системные файлы\n",
+					"hint": "Восклицательный знак в начале строки отменяет игнорирование: !.env.example",
+					"checks": []map[string]any{
+						{"type": "regex", "value": "(?m)^\\.env$", "message": "Файл .env игнорируется"},
+						{"type": "regex", "value": "(?m)^\\*\\.key$", "message": "Приватные ключи игнорируются"},
+						{"type": "regex", "value": "(?m)^node_modules/?$", "message": "Папка зависимостей игнорируется"},
+						{"type": "regex", "value": "(?m)^dist/?$", "message": "Папка сборки игнорируется"},
+						{"type": "regex", "value": "(?m)^\\.DS_Store$", "message": "Системный файл игнорируется"},
+						{"type": "regex", "value": "(?m)^!\\.env\\.example$", "message": "Шаблон .env.example не игнорируется"},
+					},
+					"solution": "# Что не должно попасть в репозиторий\n" +
+						"\n" +
+						"# секреты\n" +
+						".env\n" +
+						"*.key\n" +
+						"!.env.example\n" +
+						"\n" +
+						"# зависимости и сборка\n" +
+						"node_modules/\n" +
+						"dist/\n" +
+						"\n" +
+						"# системные файлы\n" +
+						".DS_Store\n",
+					"resources": []map[string]any{
+						{
+							"title": "Документация по .gitignore",
+							"url":   "https://git-scm.com/docs/gitignore",
+							"note":  "правила шаблонов: звёздочки, слэши и исключения",
+						},
+						{
+							"title": "Готовые .gitignore для языков и фреймворков",
+							"url":   "https://github.com/github/gitignore",
+							"note":  "не пишите с нуля — возьмите готовый и дополните",
+						},
+					},
+				},
+			},
+			{
 				Title:       "Проверка: Git",
 				Kind:        "quiz",
 				Summary:     "Состояния файлов, ветки и отмена изменений",

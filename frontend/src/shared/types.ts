@@ -315,3 +315,21 @@ export type Asset = {
   url: string;
   createdAt: string;
 };
+
+export type QuizCard = {
+  lessonId: string;
+  title: string;
+  summary: string;
+  courseId: string;
+  courseSlug: string;
+  courseTitle: string;
+  moduleTitle: string;
+  position: number;
+  questions: number;
+  passScore: number;
+  durationMin: number;
+  status: "not_started" | "in_progress" | "completed";
+  bestScore: number | null;
+  attempts: number;
+  lastTriedAt: string | null;
+};

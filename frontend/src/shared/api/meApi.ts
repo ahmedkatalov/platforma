@@ -3,6 +3,7 @@ import type {
   ActivityDay,
   Attempt,
   Enrollment,
+  QuizCard,
   QuizStats,
   StudentSummary,
   User,
@@ -30,6 +31,10 @@ export const meApi = baseApi.injectEndpoints({
       query: (limit) => `/me/attempts?limit=${limit ?? 20}`,
       providesTags: ["Attempts"],
     }),
+    getMyQuizzes: builder.query<QuizCard[], void>({
+      query: () => "/me/quizzes",
+      providesTags: ["Progress"],
+    }),
     trackActivity: builder.mutation<{ message: string }, { seconds: number }>({
       query: (body) => ({ url: "/me/activity", method: "POST", body }),
     }),
@@ -53,6 +58,7 @@ export const {
   useGetMeQuery,
   useGetMyStatsQuery,
   useGetMyAttemptsQuery,
+  useGetMyQuizzesQuery,
   useTrackActivityMutation,
   useGetPreferencesQuery,
   useSavePreferencesMutation,

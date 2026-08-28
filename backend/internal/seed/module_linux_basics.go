@@ -523,6 +523,65 @@ func moduleLinux() ModuleSeed {
 				},
 			},
 			{
+				Title:       "Практика: скрипт проверки сервера",
+				Kind:        "code",
+				Summary:     "Соберите короткий bash-скрипт для быстрой диагностики",
+				DurationMin: 20,
+				Content: map[string]any{
+					"language": "bash",
+					"task": "Допишите скрипт, который выводит состояние сервера. В нём должно быть:\n\n" +
+						"1. первая строка `#!/bin/bash`;\n" +
+						"2. проверка свободного места командой `df -h`;\n" +
+						"3. проверка памяти командой `free -h`;\n" +
+						"4. подсчёт строк с `ERROR` в `/var/log/app.log` через `grep` и `wc -l`;\n" +
+						"5. проверка службы командой `systemctl status nginx`.",
+					"starter": "# Скрипт быстрой проверки сервера\n" +
+						"\n" +
+						"echo \"=== Диск ===\"\n" +
+						"\n" +
+						"echo \"=== Память ===\"\n" +
+						"\n" +
+						"echo \"=== Ошибки в логе ===\"\n" +
+						"\n" +
+						"echo \"=== Служба nginx ===\"\n",
+					"hint": "Первая строка скрипта называется shebang и выглядит так: #!/bin/bash",
+					"checks": []map[string]any{
+						{"type": "regex", "value": "^#!/bin/bash", "message": "Скрипт начинается с #!/bin/bash"},
+						{"type": "regex", "value": "df\\s+-h", "message": "Проверяется свободное место"},
+						{"type": "regex", "value": "free\\s+-h", "message": "Проверяется память"},
+						{"type": "regex", "value": "grep\\s+(-\\w+\\s+)*ERROR", "message": "Ищутся ошибки в логе"},
+						{"type": "regex", "value": "wc\\s+-l|grep\\s+-c", "message": "Ошибки подсчитываются"},
+						{"type": "contains", "value": "systemctl status nginx", "message": "Проверяется служба nginx"},
+					},
+					"solution": "#!/bin/bash\n" +
+						"# Скрипт быстрой проверки сервера\n" +
+						"\n" +
+						"echo \"=== Диск ===\"\n" +
+						"df -h\n" +
+						"\n" +
+						"echo \"=== Память ===\"\n" +
+						"free -h\n" +
+						"\n" +
+						"echo \"=== Ошибки в логе ===\"\n" +
+						"grep ERROR /var/log/app.log | wc -l\n" +
+						"\n" +
+						"echo \"=== Служба nginx ===\"\n" +
+						"systemctl status nginx\n",
+					"resources": []map[string]any{
+						{
+							"title": "Bash Reference Manual",
+							"url":   "https://www.gnu.org/software/bash/manual/bash.html",
+							"note":  "переменные, условия и циклы, когда скрипт вырастет",
+						},
+						{
+							"title": "ShellCheck — проверка скриптов на ошибки",
+							"url":   "https://www.shellcheck.net/",
+							"note":  "вставьте скрипт и увидите проблемы, которые легко пропустить",
+						},
+					},
+				},
+			},
+			{
 				Title:       "Проверка: Linux",
 				Kind:        "quiz",
 				Summary:     "Навигация, права, процессы и логи",

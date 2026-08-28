@@ -43,6 +43,7 @@ func (h *MeHandler) Routes() http.Handler {
 	r.Post("/change-password", h.auth.ChangePassword)
 	r.Get("/stats", h.myStats)
 	r.Get("/attempts", h.myAttempts)
+	r.Get("/quizzes", h.myQuizzes)
 	r.Get("/certificates", h.myCertificates)
 	r.Post("/activity", h.trackActivity)
 	r.Get("/preferences", h.getPreferences)
@@ -116,6 +117,16 @@ func (h *MeHandler) myStats(w http.ResponseWriter, r *http.Request) {
 		"streak":   streak,
 		"quiz":     quiz,
 	})
+}
+
+// myQuizzes — все квизы доступных курсов с результатами студента.
+func (h *MeHandler) myQuizzes(w http.ResponseWriter, r *http.Request) {
+	quizzes, err := h.progress.Quizzes(r.Context(), middleware.UserID(r.Context()))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Не удалось загрузить квизы")
+		return
+	}
+	writeJSON(w, http.StatusOK, quizzes)
 }
 
 // myAttempts — история попыток по квизам, терминалу и коду.

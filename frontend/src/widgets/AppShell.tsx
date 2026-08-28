@@ -11,6 +11,7 @@ import { useTheme } from "@/shared/theme/ThemeProvider";
 import {
   IconBook,
   IconChart,
+  IconCheck,
   IconClose,
   IconDashboard,
   IconLogout,
@@ -37,6 +38,7 @@ const ADMIN_NAV: NavItem[] = [
 const STUDENT_NAV: NavItem[] = [
   { to: "/learn", label: "Главная", icon: <IconDashboard size={18} />, end: true },
   { to: "/learn/courses", label: "Мои курсы", icon: <IconBook size={18} /> },
+  { to: "/learn/quizzes", label: "Квизы", icon: <IconCheck size={18} /> },
   { to: "/learn/stats", label: "Статистика", icon: <IconChart size={18} /> },
 ];
 

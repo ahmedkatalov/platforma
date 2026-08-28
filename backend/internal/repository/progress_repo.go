@@ -407,3 +407,74 @@ func (r *ProgressRepo) CompletedTaskIDs(ctx context.Context, userID, lessonID st
 	}
 	return out, rows.Err()
 }
+
+// QuizCard — квиз в списке «Квизы» у студента.
+type QuizCard struct {
+	LessonID    string     `json:"lessonId"`
+	Title       string     `json:"title"`
+	Summary     string     `json:"summary"`
+	CourseID    string     `json:"courseId"`
+	CourseSlug  string     `json:"courseSlug"`
+	CourseTitle string     `json:"courseTitle"`
+	ModuleTitle string     `json:"moduleTitle"`
+	Position    int        `json:"position"`
+	Questions   int        `json:"questions"`
+	PassScore   float64    `json:"passScore"`
+	DurationMin int        `json:"durationMin"`
+	Status      string     `json:"status"`
+	BestScore   *float64   `json:"bestScore"`
+	Attempts    int        `json:"attempts"`
+	LastTriedAt *time.Time `json:"lastTriedAt"`
+}
+
+// Quizzes собирает все квизы курсов, на которые записан студент,
+// вместе с его результатами. Нужен для отдельной страницы «Квизы».
+func (r *ProgressRepo) Quizzes(ctx context.Context, userID string) ([]QuizCard, error) {
+	rows, err := r.db.Query(ctx, `
+		SELECT l.id, l.title, l.summary, l.content, l.duration_min,
+		       c.id, c.slug, c.title, m.title,
+		       row_number() OVER (ORDER BY m.position, m.created_at, l.position, l.created_at),
+		       COALESCE(p.status, 'not_started'), p.best_score,
+		       COALESCE(p.attempts, 0),
+		       (SELECT max(a.created_at) FROM lesson_attempts a
+		         WHERE a.user_id = $1 AND a.lesson_id = l.id)
+		  FROM lessons l
+		  JOIN modules m ON m.id = l.module_id
+		  JOIN courses c ON c.id = m.course_id
+		  JOIN enrollments e ON e.course_id = c.id AND e.user_id = $1
+		  LEFT JOIN lesson_progress p ON p.lesson_id = l.id AND p.user_id = $1
+		 WHERE l.kind = 'quiz' AND c.status = 'published'
+		 ORDER BY c.position, m.position, m.created_at, l.position, l.created_at`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := make([]QuizCard, 0, 16)
+	for rows.Next() {
+		var card QuizCard
+		var content json.RawMessage
+
+		if err := rows.Scan(&card.LessonID, &card.Title, &card.Summary, &content, &card.DurationMin,
+			&card.CourseID, &card.CourseSlug, &card.CourseTitle, &card.ModuleTitle, &card.Position,
+			&card.Status, &card.BestScore, &card.Attempts, &card.LastTriedAt); err != nil {
+			return nil, err
+		}
+
+		// Количество вопросов и порог читаем прямо из содержимого урока.
+		var quiz struct {
+			PassScore float64           `json:"passScore"`
+			Questions []json.RawMessage `json:"questions"`
+		}
+		if err := json.Unmarshal(content, &quiz); err == nil {
+			card.Questions = len(quiz.Questions)
+			card.PassScore = quiz.PassScore
+		}
+		if card.PassScore <= 0 {
+			card.PassScore = 70
+		}
+
+		out = append(out, card)
+	}
+	return out, rows.Err()
+}
