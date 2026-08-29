@@ -83,6 +83,18 @@ func moduleKubernetes() ModuleSeed {
 						"kubectl logs api-7d9f             # логи приложения\n" +
 						"kubectl rollout undo deploy/api   # откатить обновление\n" +
 						"```\n\n" +
+						"Вот как выглядит вывод `kubectl get pods` на практике:\n" +
+						"\n" +
+						"```bash\n" +
+						"kubectl get pods\n" +
+						"NAME            READY   STATUS             RESTARTS   AGE\n" +
+						"api-7d9f-2k4l   1/1     Running            0          6m\n" +
+						"api-7d9f-8x1m   1/1     Running            0          6m\n" +
+						"api-7d9f-qp3z   0/1     CrashLoopBackOff   5          3m\n" +
+						"```\n" +
+						"\n" +
+						"`READY 1/1` — под готов. Третий под: `0/1`, статус `CrashLoopBackOff` и растущий `RESTARTS` — значит, падает при старте.\n" +
+						"\n" +
 						"Частые состояния подов:\n\n" +
 						"| Состояние | Что значит |\n" +
 						"|---|---|\n" +
@@ -217,6 +229,18 @@ func moduleKubernetes() ModuleSeed {
 						"5. повторяет, пока не обновятся все.\n\n" +
 						"Такой способ называется **rolling update**. Старая версия работает, " +
 						"пока новая не готова.\n\n" +
+						"Во время выката старые и новые поды какое-то время живут вместе. Это видно по возрасту (`AGE`):\n" +
+						"\n" +
+						"```bash\n" +
+						"kubectl get pods\n" +
+						"NAME            READY   STATUS    RESTARTS   AGE\n" +
+						"api-6b4c-abcd   1/1     Running   0          20m\n" +
+						"api-6b4c-efgh   1/1     Running   0          20m\n" +
+						"api-9f2d-ijkl   0/1     Running   0          8s\n" +
+						"```\n" +
+						"\n" +
+						"Старые поды (`api-6b4c`, 20m) держат трафик. Новый (`api-9f2d`, 8s) уже `Running`, но `0/1` — readinessProbe ещё не пустила к нему трафик.\n" +
+						"\n" +
 						"## Ключевой момент: что значит «готов»\n\n" +
 						"Кластер не знает, когда ваше приложение действительно готово принимать запросы. " +
 						"Он узнаёт это из **readinessProbe**.\n\n" +

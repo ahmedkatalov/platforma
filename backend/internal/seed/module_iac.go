@@ -50,6 +50,20 @@ func moduleIaC() ModuleSeed {
 						"```\n\n" +
 						"Если на боевой инфраструктуре видите `to destroy` — остановитесь и разберитесь. " +
 						"Это удаление настоящего сервера.\n\n" +
+						"Команду `apply` показывают, но не показывают, что она делает. А это главная команда — и она задаёт вопрос:\n" +
+						"\n" +
+						"```\n" +
+						"Do you want to perform these actions?\n" +
+						"  Enter a value: yes\n" +
+						"\n" +
+						"aws_instance.app: Creating...\n" +
+						"aws_instance.app: Creation complete after 12s\n" +
+						"\n" +
+						"Apply complete! Resources: 1 added, 0 changed, 0 destroyed.\n" +
+						"```\n" +
+						"\n" +
+						"Пока не наберёте `yes`, ничего не создастся. Это защита от случайного запуска.\n" +
+						"\n" +
 						"## Состояние\n\n" +
 						"Terraform запоминает, что он создал. Эта память называется **состоянием**.\n\n" +
 						"В команде состояние хранят не на ноутбуке, а в общем месте с блокировкой. Иначе двое " +
@@ -241,6 +255,15 @@ func moduleIaC() ModuleSeed {
 						"ansible-playbook playbook.yml             # применить\n" +
 						"ansible-playbook playbook.yml --limit web-1   # только на один сервер\n" +
 						"```\n\n" +
+						"Первая команда — быстрая проверка связи. `pong` в ответ значит, что SSH работает:\n" +
+						"\n" +
+						"```\n" +
+						"web-1 | SUCCESS => { \"ping\": \"pong\" }\n" +
+						"web-2 | SUCCESS => { \"ping\": \"pong\" }\n" +
+						"```\n" +
+						"\n" +
+						"Если вместо `pong` пришло `UNREACHABLE` — сервер недоступен: проверьте адрес и SSH-ключ.\n" +
+						"\n" +
 						"Флаг `--check` — это аналог `terraform plan`. Привычка та же: " +
 						"сначала посмотреть, потом применять.\n\n" +
 						"## Шаблоны и переменные\n\n" +

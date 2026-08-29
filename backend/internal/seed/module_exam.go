@@ -43,6 +43,21 @@ func moduleExam() ModuleSeed {
 						"1. Соберите свой маленький проект: приложение, база, Dockerfile, конвейер сборки.\n" +
 						"2. Выложите его на GitHub — это лучшее портфолио для junior.\n" +
 						"3. Поднимите Kubernetes локально (minikube или kind) и выкатите туда своё приложение.\n" +
+						"Три команды, чтобы попробовать прямо сейчас:\n" +
+						"\n" +
+						"```bash\n" +
+						"minikube start\n" +
+						"# minikube v1.33 on Darwin\n" +
+						"# Done! kubectl настроен на кластер \"minikube\"\n" +
+						"\n" +
+						"kubectl apply -f deployment.yaml\n" +
+						"# deployment.apps/api created\n" +
+						"\n" +
+						"kubectl get pods\n" +
+						"# NAME             READY   STATUS    RESTARTS   AGE\n" +
+						"# api-5f9c-abcde   1/1     Running   0          20s\n" +
+						"```\n" +
+						"\n" +
 						"4. Дальше можно готовиться к сертификации CKA — она признаётся работодателями.\n\n" +
 						"Не пытайтесь выучить всё сразу. Возьмите один инструмент и доведите его " +
 						"до уверенного владения. Для первой работы этого достаточно.\n\n" +

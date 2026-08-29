@@ -49,6 +49,20 @@ func moduleLinux() ModuleSeed {
 						"cd ..            # подняться на уровень выше\n" +
 						"```\n\n" +
 						"Этих пяти команд хватит, чтобы осмотреться на незнакомом сервере.\n\n" +
+						"А теперь та же навигация как живая сессия. Заметьте, как меняется приглашение:\n" +
+						"\n" +
+						"```\n" +
+						"student@devops:~$ pwd\n" +
+						"/home/student\n" +
+						"student@devops:~$ ls\n" +
+						"notes.txt  projects  photo.jpg\n" +
+						"student@devops:~$ cd projects\n" +
+						"student@devops:~/projects$ pwd\n" +
+						"/home/student/projects\n" +
+						"```\n" +
+						"\n" +
+						"После `cd` приглашение стало `~/projects` — оно всегда показывает, где вы сейчас.\n" +
+						"\n" +
 						"## Частые ошибки новичка\n\n" +
 						"- **Забыли, где находитесь.** Наберите `pwd` — это ничего не сломает.\n" +
 						"- **Команда не найдена.** Проверьте раскладку и опечатки: Linux различает большие и маленькие буквы.\n" +
@@ -264,6 +278,18 @@ func moduleLinux() ModuleSeed {
 						"chmod 600 secret.key  # только владелец, больше никто\n" +
 						"chmod 755 deploy.sh   # все могут запускать, менять — владелец\n" +
 						"```\n\n" +
+						"Посмотрите, как chmod меняет права. Слева от файла — та самая строка rwx:\n" +
+						"\n" +
+						"```\n" +
+						"student@devops:~$ ls -l secret.key\n" +
+						"-rw-r--r-- 1 student student 1675 Aug 27 09:00 secret.key\n" +
+						"student@devops:~$ chmod 600 secret.key\n" +
+						"student@devops:~$ ls -l secret.key\n" +
+						"-rw------- 1 student student 1675 Aug 27 09:00 secret.key\n" +
+						"```\n" +
+						"\n" +
+						"До chmod остальные могли читать файл, после `600` — только владелец.\n" +
+						"\n" +
 						"## Почему 777 — плохо\n\n" +
 						"`chmod 777` даёт всем полные права. Файл сможет изменить любая программа на сервере, " +
 						"включая ту, которую взломали.\n\n" +
@@ -400,6 +426,18 @@ func moduleLinux() ModuleSeed {
 						"systemctl restart nginx   # перезапустить\n" +
 						"systemctl enable nginx    # запускать при загрузке сервера\n" +
 						"```\n\n" +
+						"Вот как выглядит ответ `systemctl status`:\n" +
+						"\n" +
+						"```\n" +
+						"student@devops:~$ systemctl status nginx\n" +
+						"● nginx.service - A high performance web server\n" +
+						"     Loaded: loaded (/lib/systemd/system/nginx.service; enabled)\n" +
+						"     Active: active (running) since Wed 2026-08-27 09:00:14; 2h ago\n" +
+						"   Main PID: 1043 (nginx: master process)\n" +
+						"```\n" +
+						"\n" +
+						"Главная строка — `Active`. `active (running)` — работает, `failed` — упала, `inactive (dead)` — остановлена.\n" +
+						"\n" +
 						"Важная деталь: `start` запускает сейчас, `enable` — включает автозапуск. " +
 						"Это разные вещи. Забыли `enable` — после перезагрузки сервера служба не поднимется.\n\n" +
 						"## Логи\n\n" +
