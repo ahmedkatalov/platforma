@@ -24,7 +24,6 @@ func NewAuthHandler(a *service.AuthService) *AuthHandler { return &AuthHandler{a
 func (h *AuthHandler) Routes() http.Handler {
 	r := chi.NewRouter()
 	r.Post("/send-code", h.sendCode)
-	r.Post("/register", h.register)
 	r.Post("/login", h.login)
 	r.Post("/refresh", h.refresh)
 	r.Post("/logout", h.logout)
@@ -41,8 +40,11 @@ func (h *AuthHandler) sendCode(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if body.Purpose == "" {
-		body.Purpose = domain.PurposeRegistration
+	// Самостоятельная регистрация отключена: аккаунты создаёт администратор.
+	// Код на почту выдаётся только для восстановления пароля.
+	if body.Purpose != domain.PurposePasswordReset {
+		writeError(w, http.StatusForbidden, "Регистрация закрыта — аккаунт создаёт администратор")
+		return
 	}
 
 	if err := h.auth.SendCode(r.Context(), body.Email, body.Purpose); err != nil {
@@ -59,19 +61,10 @@ func (h *AuthHandler) sendCode(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *AuthHandler) register(w http.ResponseWriter, r *http.Request) {
-	var body service.RegisterInput
-	if err := decodeJSON(w, r, &body); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	session, err := h.auth.Register(r.Context(), body, r.UserAgent(), clientIP(r))
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	writeJSON(w, http.StatusCreated, session)
+// register оставлен закрытым: самостоятельная регистрация недоступна,
+// аккаунты студентов создаёт администратор в разделе «Студенты».
+func (h *AuthHandler) register(w http.ResponseWriter, _ *http.Request) {
+	writeError(w, http.StatusForbidden, "Регистрация закрыта — аккаунт создаёт администратор")
 }
 
 func (h *AuthHandler) login(w http.ResponseWriter, r *http.Request) {

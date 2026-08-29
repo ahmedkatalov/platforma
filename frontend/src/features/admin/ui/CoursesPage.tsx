@@ -159,6 +159,13 @@ export default function CoursesPage() {
                   <IconEdit size={16} />
                   Редактировать
                 </Link>
+                <Link
+                  to={`/learn/courses/${course.slug}`}
+                  className="btn btn-secondary"
+                  title="Открыть курс глазами студента"
+                >
+                  <IconBook size={16} />
+                </Link>
                 <Button
                   variant="ghost"
                   className="text-danger"

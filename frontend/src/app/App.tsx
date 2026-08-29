@@ -4,7 +4,6 @@ import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { sessionEnded, userRefreshed } from "@/features/auth/authSlice";
 import ForgotPasswordPage from "@/features/auth/ui/ForgotPasswordPage";
 import LoginPage from "@/features/auth/ui/LoginPage";
-import RegisterPage from "@/features/auth/ui/RegisterPage";
 import AppearancePage from "@/features/admin/ui/AppearancePage";
 import AuditPage from "@/features/admin/ui/AuditPage";
 import AdminCertificatesPage from "@/features/admin/ui/CertificatesPage";
@@ -93,14 +92,8 @@ export default function App() {
           </PublicOnly>
         }
       />
-      <Route
-        path="/register"
-        element={
-          <PublicOnly>
-            <RegisterPage />
-          </PublicOnly>
-        }
-      />
+      {/* Регистрация закрыта: аккаунты создаёт администратор. Старую ссылку уводим на вход. */}
+      <Route path="/register" element={<Navigate to="/login" replace />} />
       <Route
         path="/forgot-password"
         element={

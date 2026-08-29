@@ -35,14 +35,6 @@ export default function LoginPage() {
     <AuthLayout
       title="Вход на платформу"
       subtitle="Введите почту и пароль, выданные администратором"
-      footer={
-        <>
-          Нет аккаунта?{" "}
-          <Link to="/register" className="font-semibold text-accent hover:underline">
-            Зарегистрироваться
-          </Link>
-        </>
-      }
     >
       <form onSubmit={onSubmit} className="space-y-4">
         <Field label="Почта">

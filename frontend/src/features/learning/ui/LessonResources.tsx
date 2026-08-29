@@ -20,7 +20,7 @@ export default function LessonResources({ items }: { items?: LessonResource[] })
               href={item.url}
               target="_blank"
               rel="noreferrer noopener"
-              className="card-flat flex items-start gap-3 p-3 transition-colors hover:bg-surface-hover"
+              className="group card-flat flex items-start gap-3 border-l-2 border-accent-border p-3 transition-colors hover:border-accent hover:bg-accent-soft"
             >
               <span className="mt-0.5 shrink-0 text-accent" aria-hidden="true">
                 <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75}>
@@ -30,7 +30,12 @@ export default function LessonResources({ items }: { items?: LessonResource[] })
               </span>
 
               <span className="min-w-0 flex-1">
-                <span className="block text-sm font-semibold text-fg">{item.title}</span>
+                <span className="flex items-center gap-1 text-sm font-semibold text-accent underline decoration-transparent underline-offset-2 transition group-hover:decoration-current">
+                  {item.title}
+                  <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="shrink-0 opacity-70" aria-hidden="true">
+                    <path d="M7 17L17 7M17 7H8M17 7v9" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </span>
                 {item.note && <span className="mt-0.5 block text-xs text-muted">{item.note}</span>}
                 <span className="mt-1 block truncate font-mono text-[11px] text-faint">
                   {item.url.replace(/^https?:\/\//, "")}

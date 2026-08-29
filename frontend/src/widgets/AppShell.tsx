@@ -11,6 +11,7 @@ import { useTheme } from "@/shared/theme/ThemeProvider";
 import {
   IconBook,
   IconChart,
+  IconChevron,
   IconCheck,
   IconClose,
   IconDashboard,
@@ -76,7 +77,18 @@ export default function AppShell() {
   if (!user) return null;
 
   const isAdmin = user.role === "admin";
-  const nav = isAdmin ? ADMIN_NAV : STUDENT_NAV;
+  // Навигацию выбираем по разделу, а не только по роли: админ может открыть
+  // курс в разделе /learn и пройти его ровно как студент.
+  const inStudentArea = location.pathname.startsWith("/learn");
+  const nav =
+    isAdmin && inStudentArea
+      ? [
+          { to: "/admin/courses", label: "← В админку", icon: <IconChevron size={18} className="rotate-180" />, end: false },
+          ...STUDENT_NAV,
+        ]
+      : inStudentArea
+        ? STUDENT_NAV
+        : ADMIN_NAV;
 
   const handleLogout = async () => {
     const refreshToken = tokenStorage.refresh();
@@ -114,7 +126,11 @@ export default function AppShell() {
           <div className="min-w-0">
             <p className="truncate text-sm font-bold text-fg">DevOps Platform</p>
             <p className="truncate text-[11px] text-faint">
-              {isAdmin ? "Панель администратора" : "Личный кабинет"}
+              {inStudentArea
+                ? isAdmin
+                  ? "Просмотр как студент"
+                  : "Личный кабинет"
+                : "Панель администратора"}
             </p>
           </div>
           <button

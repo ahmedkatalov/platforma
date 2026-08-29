@@ -105,9 +105,15 @@ export default function CourseEditorPage() {
         title={course.title}
         subtitle={`/${course.slug} · ${course.modulesCount} модулей · ${course.lessonsCount} уроков`}
         actions={
-          <Link to="/admin/courses" className="btn btn-ghost">
-            К списку курсов
-          </Link>
+          <>
+            <Link to={`/learn/courses/${course.slug}`} className="btn btn-secondary">
+              <IconBook size={16} />
+              Открыть как студент
+            </Link>
+            <Link to="/admin/courses" className="btn btn-ghost">
+              К списку курсов
+            </Link>
+          </>
         }
       />
 
