@@ -9,6 +9,7 @@ import {
 import type {
   Certificate,
   CodeContent,
+  Lesson,
   LessonKind,
   LessonProgress,
   QuizContent,
@@ -23,6 +24,8 @@ import {
   IconClock,
   IconTerminal,
 } from "@/shared/ui/icons";
+
+import { groupThemes } from "@/features/learning/lib/themes";
 
 import CodeLesson from "./CodeLesson";
 import NoteSelection from "./NoteSelection";
@@ -185,49 +188,76 @@ export default function LessonPage() {
             </div>
           </Link>
 
-          <nav className="max-h-[60vh] space-y-3 overflow-y-auto">
-            {modules.map((module, moduleIndex) => (
-              <div key={module.id}>
-                <p className="mb-1 px-2 text-[11px] font-bold uppercase tracking-wide text-faint">
-                  {moduleIndex + 1}. {module.title}
-                </p>
-                <ul className="space-y-0.5">
-                  {(module.lessons ?? []).map((item) => {
-                    const state = progressByLesson.get(item.id);
-                    const active = item.id === lesson.id;
+          <nav className="max-h-[60vh] space-y-4 overflow-y-auto">
+            {modules.map((module, moduleIndex) => {
+              const themes = groupThemes(module);
 
-                    return (
-                      <li key={item.id}>
-                        <Link
-                          to={`/learn/courses/${data.courseSlug}/lessons/${item.id}`}
-                          className={`flex items-center gap-2 rounded-[var(--radius-md)] px-2 py-1.5 text-sm transition-colors ${
-                            active
-                              ? "bg-accent-soft font-semibold text-accent"
-                              : "text-muted hover:bg-surface-2 hover:text-fg"
-                          }`}
-                        >
-                          <span
-                            className={`grid h-4 w-4 shrink-0 place-items-center rounded-full border text-[10px] ${
-                              state?.status === "completed"
-                                ? "border-[var(--success)] bg-[var(--success)] text-white"
-                                : "border-line"
-                            }`}
-                          >
-                            {state?.status === "completed" && <IconCheck size={10} />}
-                          </span>
-                          <span className="min-w-0 flex-1 truncate">{item.title}</span>
-                          {item.kind !== "text" && (
-                            <span className="shrink-0 text-[10px] text-faint">
-                              {KIND_LABEL[item.kind].slice(0, 4)}
-                            </span>
+              const renderRow = (item: Lesson, isQuiz: boolean) => {
+                const state = progressByLesson.get(item.id);
+                const active = item.id === lesson.id;
+                const done = state?.status === "completed";
+                return (
+                  <li key={item.id}>
+                    <Link
+                      to={`/learn/courses/${data.courseSlug}/lessons/${item.id}`}
+                      className={`flex items-center gap-2 rounded-[var(--radius-md)] px-2 py-1.5 text-sm transition-colors ${
+                        active
+                          ? "bg-accent-soft font-semibold text-accent"
+                          : "text-muted hover:bg-surface-2 hover:text-fg"
+                      }`}
+                    >
+                      <span
+                        className={`grid h-4 w-4 shrink-0 place-items-center rounded-full border text-[10px] ${
+                          done
+                            ? "border-[var(--success)] bg-[var(--success)] text-white"
+                            : isQuiz
+                              ? "border-accent-border text-accent"
+                              : "border-line"
+                        }`}
+                      >
+                        {done && <IconCheck size={10} />}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate">{item.title}</span>
+                      {item.kind !== "text" && (
+                        <span className="shrink-0 text-[10px] text-faint">
+                          {KIND_LABEL[item.kind].slice(0, 4)}
+                        </span>
+                      )}
+                    </Link>
+                  </li>
+                );
+              };
+
+              return (
+                <div key={module.id}>
+                  <p className="mb-1.5 px-2 text-[11px] font-bold uppercase tracking-wide text-faint">
+                    Глава {moduleIndex + 1}. {module.title}
+                  </p>
+
+                  <div className="space-y-2">
+                    {themes.map((theme, ti) => (
+                      <div key={theme.key} className="rounded-[var(--radius-md)] bg-surface-2/40 p-1.5">
+                        <p className="truncate px-1.5 pb-1 text-xs font-semibold text-fg">
+                          <span className="text-faint">{ti + 1}. </span>
+                          {theme.title}
+                        </p>
+                        <ul className="space-y-0.5">
+                          {theme.pages.map((page) => renderRow(page, false))}
+                          {theme.quiz && (
+                            <>
+                              <li className="px-2 pt-0.5 text-[10px] font-bold uppercase tracking-wide text-accent">
+                                Проверка темы
+                              </li>
+                              {renderRow(theme.quiz, true)}
+                            </>
                           )}
-                        </Link>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-            ))}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
           </nav>
         </Card>
       </aside>

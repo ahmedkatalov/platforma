@@ -1,26 +1,27 @@
 import { Link, useParams } from "react-router-dom";
 
 import { useGetStudentCourseQuery } from "@/features/admin/api/coursesApi";
+import { groupThemes, themeProgress, type Theme } from "@/features/learning/lib/themes";
 import { useGetMeQuery } from "@/shared/api/meApi";
-import type { LessonKind, LessonProgress } from "@/shared/types";
+import type { Lesson, LessonKind, LessonProgress } from "@/shared/types";
 import { Badge, Card, EmptyState, PageHeader, Progress, Spinner } from "@/shared/ui";
-import { IconBook, IconCheck, IconChevron, IconClock } from "@/shared/ui/icons";
+import {
+  IconBook,
+  IconCheck,
+  IconChevron,
+  IconClock,
+  IconEdit,
+  IconTerminal,
+} from "@/shared/ui/icons";
 
 const dueFmt = new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "long" });
 
-const KIND_LABEL: Record<LessonKind, string> = {
-  text: "Теория",
-  quiz: "Квиз",
-  terminal: "Терминал",
-  code: "Код",
-};
-
-const KIND_TONE: Record<LessonKind, "default" | "accent" | "success" | "warning"> = {
-  text: "default",
-  quiz: "accent",
-  terminal: "success",
-  code: "warning",
-};
+function pageIcon(kind: LessonKind) {
+  if (kind === "terminal") return <IconTerminal size={15} />;
+  if (kind === "code") return <IconEdit size={15} />;
+  if (kind === "quiz") return <IconCheck size={15} />;
+  return <IconBook size={15} />;
+}
 
 export default function CoursePage() {
   const { slug = "" } = useParams();
@@ -55,35 +56,26 @@ export default function CoursePage() {
   const { course, enrolled } = data;
   const modules = course.modules ?? [];
 
-  // Срок прохождения приходит вместе с записью на курс.
   const enrollment = me?.enrollments.find((item) => item.courseId === course.id);
   const deadline = enrollment?.dueDate
     ? (() => {
         const due = new Date(enrollment.dueDate);
         const days = Math.ceil((due.getTime() - Date.now()) / 86_400_000);
-        return {
-          label: dueFmt.format(due),
-          overdue: days < 0,
-          soon: days >= 0 && days <= 3,
-        };
+        return { label: dueFmt.format(due), overdue: days < 0, soon: days >= 0 && days <= 3 };
       })()
     : null;
 
   const progressByLesson = new Map<string, LessonProgress>();
   (data.progress ?? []).forEach((item) => progressByLesson.set(item.lessonId, item));
+  const isDone = (id: string) => progressByLesson.get(id)?.status === "completed";
 
   const allLessons = modules.flatMap((module) => module.lessons ?? []);
-  const doneCount = allLessons.filter(
-    (lesson) => progressByLesson.get(lesson.id)?.status === "completed",
-  ).length;
+  const doneCount = allLessons.filter((l) => isDone(l.id)).length;
   const coursePercent = allLessons.length ? (doneCount / allLessons.length) * 100 : 0;
+  const totalMinutes = allLessons.reduce((sum, l) => sum + l.durationMin, 0);
+  const nextLesson = allLessons.find((l) => !isDone(l.id));
 
-  const totalMinutes = allLessons.reduce((sum, lesson) => sum + lesson.durationMin, 0);
-
-  // Следующий непройденный урок — кнопка «Продолжить».
-  const nextLesson = allLessons.find(
-    (lesson) => progressByLesson.get(lesson.id)?.status !== "completed",
-  );
+  const lessonHref = (lesson: Lesson) => `/learn/courses/${course.slug}/lessons/${lesson.id}`;
 
   return (
     <>
@@ -96,10 +88,7 @@ export default function CoursePage() {
               К списку курсов
             </Link>
             {enrolled && nextLesson && (
-              <Link
-                to={`/learn/courses/${course.slug}/lessons/${nextLesson.id}`}
-                className="btn btn-primary"
-              >
+              <Link to={lessonHref(nextLesson)} className="btn btn-primary">
                 {doneCount > 0 ? "Продолжить" : "Начать обучение"}
                 <IconChevron size={16} />
               </Link>
@@ -117,9 +106,7 @@ export default function CoursePage() {
         {deadline && (
           <Badge tone={deadline.overdue ? "danger" : deadline.soon ? "warning" : "default"}>
             <IconClock size={12} />
-            {deadline.overdue
-              ? `срок истёк ${deadline.label}`
-              : `сдать до ${deadline.label}`}
+            {deadline.overdue ? `срок истёк ${deadline.label}` : `сдать до ${deadline.label}`}
           </Badge>
         )}
         {course.tags.map((tag) => (
@@ -150,102 +137,161 @@ export default function CoursePage() {
         </Card>
       )}
 
-      <Card className="p-[var(--pad)]">
-        <h2 className="mb-4 text-base font-bold text-fg">Программа курса</h2>
-
-        {modules.length === 0 ? (
+      {modules.length === 0 ? (
+        <Card>
           <EmptyState title="Программа ещё готовится" icon={<IconBook size={32} />} />
-        ) : (
-          <div className="space-y-3">
-            {modules.map((module, index) => {
-              const lessons = module.lessons ?? [];
-              const moduleDone = lessons.filter(
-                (lesson) => progressByLesson.get(lesson.id)?.status === "completed",
-              ).length;
+        </Card>
+      ) : (
+        <div className="space-y-[var(--gap)]">
+          {modules.map((module, index) => {
+            const themes = groupThemes(module);
+            const lessons = module.lessons ?? [];
+            const moduleDone = lessons.filter((l) => isDone(l.id)).length;
+            const modulePercent = lessons.length ? (moduleDone / lessons.length) * 100 : 0;
 
-              return (
-                <div key={module.id} className="card-flat overflow-hidden">
-                  <div className="flex items-center gap-3 border-b border-line p-3">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-bold text-fg">
-                        <span className="text-faint">Модуль {index + 1}. </span>
-                        {module.title}
-                      </p>
-                      {module.summary && (
-                        <p className="mt-0.5 text-xs text-muted">{module.summary}</p>
-                      )}
-                    </div>
-                    {enrolled && lessons.length > 0 && (
-                      <Badge tone={moduleDone === lessons.length ? "success" : "default"}>
-                        {moduleDone}/{lessons.length}
-                      </Badge>
+            return (
+              <Card key={module.id} className="overflow-hidden p-0">
+                {/* Шапка главы */}
+                <div className="flex items-center gap-4 border-b border-line p-[var(--pad)]">
+                  <span
+                    className="grid h-11 w-11 shrink-0 place-items-center rounded-[var(--radius-md)] text-lg font-extrabold text-accent-fg"
+                    style={{ background: "var(--gradient)" }}
+                  >
+                    {index + 1}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[11px] font-bold uppercase tracking-wide text-faint">
+                      Глава {index + 1}
+                    </p>
+                    <h2 className="truncate text-base font-bold text-fg sm:text-lg">
+                      {module.title}
+                    </h2>
+                    {module.summary && (
+                      <p className="mt-0.5 line-clamp-1 text-xs text-muted">{module.summary}</p>
                     )}
                   </div>
-
-                  <ul className="divide-y divide-[var(--border)]">
-                    {lessons.map((lesson) => {
-                      const state = progressByLesson.get(lesson.id);
-                      const done = state?.status === "completed";
-
-                      const row = (
-                        <>
-                          <span
-                            className={`grid h-5 w-5 shrink-0 place-items-center rounded-full border ${
-                              done
-                                ? "border-[var(--success)] bg-[var(--success)] text-white"
-                                : "border-line text-faint"
-                            }`}
-                          >
-                            {done && <IconCheck size={12} />}
-                          </span>
-                          <Badge tone={KIND_TONE[lesson.kind]}>{KIND_LABEL[lesson.kind]}</Badge>
-                          <span
-                            className={`min-w-0 flex-1 truncate text-sm ${
-                              done ? "text-muted" : "text-fg"
-                            }`}
-                          >
-                            {lesson.title}
-                          </span>
-                          {state?.bestScore != null && lesson.kind !== "text" && (
-                            <span className="shrink-0 text-xs font-semibold text-accent">
-                              {Math.round(state.bestScore)}%
-                            </span>
-                          )}
-                          <span className="shrink-0 text-xs text-faint">
-                            {lesson.durationMin} мин
-                          </span>
-                        </>
-                      );
-
-                      return (
-                        <li key={lesson.id}>
-                          {enrolled ? (
-                            <Link
-                              to={`/learn/courses/${course.slug}/lessons/${lesson.id}`}
-                              className="flex items-center gap-3 px-3 py-2.5 transition-colors hover:bg-surface-hover"
-                            >
-                              {row}
-                              <IconChevron size={16} className="shrink-0 text-faint" />
-                            </Link>
-                          ) : (
-                            <div className="flex items-center gap-3 px-3 py-2.5 opacity-70">{row}</div>
-                          )}
-                        </li>
-                      );
-                    })}
-
-                    {lessons.length === 0 && (
-                      <li className="px-3 py-3 text-center text-xs text-faint">
-                        Уроки скоро появятся
-                      </li>
-                    )}
-                  </ul>
+                  <div className="hidden w-40 shrink-0 sm:block">
+                    <div className="mb-1 flex justify-between text-[11px] text-faint">
+                      <span>{themes.length} тем</span>
+                      {enrolled && (
+                        <span className="font-bold text-accent">{Math.round(modulePercent)}%</span>
+                      )}
+                    </div>
+                    {enrolled && <Progress value={modulePercent} />}
+                  </div>
                 </div>
-              );
-            })}
+
+                {/* Темы главы */}
+                <div className="space-y-[var(--gap)] p-[var(--pad)]">
+                  {themes.map((theme, ti) => (
+                    <ThemeCard
+                      key={theme.key}
+                      theme={theme}
+                      index={ti + 1}
+                      enrolled={enrolled}
+                      isDone={isDone}
+                      progressByLesson={progressByLesson}
+                      lessonHref={lessonHref}
+                    />
+                  ))}
+                </div>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+    </>
+  );
+}
+
+function ThemeCard({
+  theme,
+  index,
+  enrolled,
+  isDone,
+  progressByLesson,
+  lessonHref,
+}: {
+  theme: Theme;
+  index: number;
+  enrolled: boolean;
+  isDone: (id: string) => boolean;
+  progressByLesson: Map<string, LessonProgress>;
+  lessonHref: (lesson: Lesson) => string;
+}) {
+  const prog = themeProgress(theme, isDone);
+  const complete = prog.total > 0 && prog.done === prog.total;
+
+  const Row = ({ lesson, isQuiz }: { lesson: Lesson; isQuiz: boolean }) => {
+    const state = progressByLesson.get(lesson.id);
+    const done = state?.status === "completed";
+    const inner = (
+      <>
+        <span
+          className={`grid h-6 w-6 shrink-0 place-items-center rounded-full border text-[11px] ${
+            done
+              ? "border-[var(--success)] bg-[var(--success)] text-white"
+              : isQuiz
+                ? "border-accent-border bg-accent-soft text-accent"
+                : "border-line text-faint"
+          }`}
+        >
+          {done ? <IconCheck size={13} /> : pageIcon(lesson.kind)}
+        </span>
+        <span className={`min-w-0 flex-1 truncate text-sm ${done ? "text-muted" : "text-fg"}`}>
+          {lesson.title}
+        </span>
+        {state?.bestScore != null && lesson.kind !== "text" && (
+          <span className="shrink-0 text-xs font-semibold text-accent">
+            {Math.round(state.bestScore)}%
+          </span>
+        )}
+        <span className="hidden shrink-0 text-xs text-faint sm:inline">{lesson.durationMin} мин</span>
+        {enrolled && <IconChevron size={15} className="shrink-0 text-faint" />}
+      </>
+    );
+
+    const cls = `flex items-center gap-3 rounded-[var(--radius-md)] px-2.5 py-2 ${
+      isQuiz ? "bg-accent-soft/40" : ""
+    } ${enrolled ? "transition-colors hover:bg-surface-hover" : "opacity-70"}`;
+
+    return enrolled ? (
+      <Link to={lessonHref(lesson)} className={cls}>
+        {inner}
+      </Link>
+    ) : (
+      <div className={cls}>{inner}</div>
+    );
+  };
+
+  return (
+    <div className="card-flat overflow-hidden">
+      <div className="flex items-center gap-3 border-b border-line px-3 py-2.5">
+        <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-surface-2 text-xs font-bold text-muted">
+          {index}
+        </span>
+        <p className="min-w-0 flex-1 truncate text-sm font-bold text-fg">Тема: {theme.title}</p>
+        {enrolled && (
+          <Badge tone={complete ? "success" : "default"}>
+            {prog.done}/{prog.total}
+          </Badge>
+        )}
+      </div>
+
+      <div className="space-y-0.5 p-2">
+        {theme.pages.map((page) => (
+          <Row key={page.id} lesson={page} isQuiz={false} />
+        ))}
+
+        {theme.quiz && (
+          <div className="mt-1 border-t border-line pt-1">
+            <p className="px-2.5 pb-1 pt-1 text-[11px] font-bold uppercase tracking-wide text-accent">
+              Проверка темы
+            </p>
+            <Row lesson={theme.quiz} isQuiz />
           </div>
         )}
-      </Card>
-    </>
+      </div>
+    </div>
   );
 }
