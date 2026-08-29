@@ -725,6 +725,110 @@ func moduleKubernetes() ModuleSeed {
 					},
 				},
 			},
+			{
+				Title:       "Отладка в кластере: находим причину",
+				Kind:        "text",
+				Summary:     "get, describe, logs, events и exec — разбор пода, который не поднимается",
+				DurationMin: 15,
+				Content: map[string]any{
+					"body": "## Зачем это нужно\n\n" +
+						"Под не поднимается или падает. **В Kubernetes причина почти всегда видна — надо знать, куда смотреть.** " +
+						"Разберём порядок отладки.\n\n" +
+						"## 1. Статус — kubectl get pods\n\n" +
+						"```\n" +
+						"student@devops:~$ kubectl get pods\n" +
+						"NAME          READY   STATUS             RESTARTS   AGE\n" +
+						"api-7d9f      0/1     CrashLoopBackOff   5          4m\n" +
+						"api-3k2p      1/1     Running            0          4m\n" +
+						"```\n\n" +
+						"**`CrashLoopBackOff`** значит: под падает при старте, и кластер снова и снова его перезапускает. " +
+						"`RESTARTS 5` подтверждает.\n\n" +
+						"## 2. События — kubectl describe\n\n" +
+						"`describe` показывает раздел **Events** — историю того, что происходило с подом:\n\n" +
+						"```\n" +
+						"student@devops:~$ kubectl describe pod api-7d9f\n" +
+						"Events:\n" +
+						"  Warning  BackOff     Back-off restarting failed container\n" +
+						"  Warning  Unhealthy   Readiness probe failed: connection refused\n" +
+						"```\n\n" +
+						"Здесь видно: проба готовности не проходит — приложение не отвечает на своём порту.\n\n" +
+						"## 3. Логи — kubectl logs\n\n" +
+						"```\n" +
+						"student@devops:~$ kubectl logs api-7d9f\n" +
+						"ERROR failed to reach payment service: timeout after 5s\n" +
+						"```\n\n" +
+						"Логи самого приложения. При `CrashLoopBackOff` причина почти всегда здесь.\n\n" +
+						"> Если под уже перезапустился, логи прошлого запуска смотрят так: `kubectl logs api-7d9f --previous`.\n\n" +
+						"## 4. События всего кластера — kubectl get events\n\n" +
+						"```\n" +
+						"student@devops:~$ kubectl get events\n" +
+						"TYPE      REASON      OBJECT        MESSAGE\n" +
+						"Warning   BackOff     pod/api-7d9f  Back-off restarting failed container\n" +
+						"Warning   Unhealthy   pod/api-7d9f  Readiness probe failed: connection refused\n" +
+						"```\n\n" +
+						"Полезно, когда непонятно, какой именно объект сломался.\n\n" +
+						"## 5. Заглянуть внутрь — kubectl exec\n\n" +
+						"```\n" +
+						"student@devops:~$ kubectl exec -it api-7d9f -- sh\n" +
+						"/ # (вы внутри пода, для выхода наберите exit)\n" +
+						"```\n\n" +
+						"Как `docker exec`, но для пода: проверить переменные, файлы, сеть изнутри.\n\n" +
+						"## Частые статусы и что делать\n\n" +
+						"| Статус | Что значит | Куда смотреть |\n" +
+						"|---|---|---|\n" +
+						"| `CrashLoopBackOff` | падает при старте | `kubectl logs` |\n" +
+						"| `ImagePullBackOff` | не может скачать образ | `describe` (Events): опечатка в имени или нет доступа |\n" +
+						"| `Pending` | нет места на узлах | `describe`: не хватает ресурсов |\n\n" +
+						"## Запомнить\n\n" +
+						"1. Порядок: `get pods` → `describe` (Events) → `logs`.\n" +
+						"2. `CrashLoopBackOff` — причина в логах приложения.\n" +
+						"3. `ImagePullBackOff` — проблема с образом, смотрите Events.",
+					"resources": []map[string]any{
+						{"title": "Kubernetes — отладка подов", "url": "https://kubernetes.io/docs/tasks/debug/debug-application/debug-pods/", "note": "официальный разбор статусов и причин"},
+						{"title": "kubectl describe и события", "url": "https://kubernetes.io/docs/reference/kubectl/generated/kubectl_describe/", "note": "как читать раздел Events"},
+						{"title": "kubectl logs — справочник", "url": "https://kubernetes.io/docs/reference/kubectl/generated/kubectl_logs/", "note": "--previous, --tail, -f и другие флаги"},
+					},
+				},
+			},
+			{
+				Title:       "Тренажёр: разбор упавшего пода",
+				Kind:        "terminal",
+				Summary:     "Найдите причину CrashLoopBackOff по шагам",
+				DurationMin: 16,
+				Content: map[string]any{
+					"intro": "Под api-7d9f в CrashLoopBackOff. Проведите отладку: статус, события, логи, загляните внутрь рабочего пода.",
+					"shell": "student@devops",
+					"tasks": []map[string]any{
+						{"id": "k1", "prompt": "Посмотрите список подов и их статусы", "expected": []string{"kubectl get pods", "kubectl get pod", "kubectl get po"}, "hint": "kubectl get pods", "success": "Видно api-7d9f в CrashLoopBackOff с 5 рестартами."},
+						{"id": "k2", "prompt": "Посмотрите события и подробности пода api-7d9f", "expected": []string{"kubectl describe pod api-7d9f", "kubectl describe po api-7d9f"}, "hint": "kubectl describe pod имя", "success": "В Events видно: readiness probe failed."},
+						{"id": "k3", "prompt": "Прочитайте логи пода api-7d9f", "expected": []string{"kubectl logs api-7d9f"}, "hint": "kubectl logs имя", "success": "В логах причина: таймаут к платёжному сервису."},
+						{"id": "k4", "prompt": "Посмотрите события всего кластера", "expected": []string{"kubectl get events", "kubectl get ev"}, "hint": "kubectl get events", "success": "Те же предупреждения по api-7d9f, привязанные ко времени."},
+						{"id": "k5", "prompt": "Зайдите внутрь рабочего пода api-3k2p через sh", "expected": []string{"kubectl exec -it api-3k2p -- sh", "kubectl exec api-3k2p -- sh", "kubectl exec -it api-3k2p sh"}, "hint": "kubectl exec -it имя -- sh", "success": "Вы внутри пода — можно проверить конфиг и сеть."},
+					},
+					"resources": []map[string]any{
+						{"title": "Kubernetes — kubectl exec", "url": "https://kubernetes.io/docs/tasks/debug/debug-application/get-shell-running-container/", "note": "как получить оболочку внутри пода"},
+					},
+				},
+			},
+			{
+				Title:       "Квиз: отладка кластера",
+				Kind:        "quiz",
+				Summary:     "Статусы подов, события и логи",
+				DurationMin: 8,
+				Content: map[string]any{
+					"passScore": 70,
+					"questions": []map[string]any{
+						{"id": "q1", "text": "Под в CrashLoopBackOff. С чего начать?", "options": []map[string]any{{"id": "a", "text": "Посмотреть kubectl logs пода", "correct": true}, {"id": "b", "text": "Увеличить число реплик", "correct": false}, {"id": "c", "text": "Перезапустить кластер", "correct": false}}, "explanation": "Под падает при старте — причина почти всегда в логах приложения."},
+						{"id": "q2", "text": "Где в kubectl describe искать историю того, что было с подом?", "options": []map[string]any{{"id": "a", "text": "В разделе Events", "correct": true}, {"id": "b", "text": "В разделе Labels", "correct": false}, {"id": "c", "text": "В разделе Image", "correct": false}}, "explanation": "Events показывает, что кластер делал с подом и на чём споткнулся."},
+						{"id": "q3", "text": "Под в ImagePullBackOff. Что это значит?", "options": []map[string]any{{"id": "a", "text": "Кластер не может скачать образ: опечатка в имени или нет доступа", "correct": true}, {"id": "b", "text": "Приложение упало при старте", "correct": false}, {"id": "c", "text": "Не хватает места на узле", "correct": false}}, "explanation": "Проблема с образом, а не с кодом — детали в Events через describe."},
+						{"id": "q4", "text": "Под уже перезапустился. Как посмотреть логи прошлого запуска?", "options": []map[string]any{{"id": "a", "text": "kubectl logs pod --previous", "correct": true}, {"id": "b", "text": "kubectl get pods --old", "correct": false}, {"id": "c", "text": "kubectl restart logs", "correct": false}}, "explanation": "Флаг --previous показывает логи предыдущего, упавшего контейнера."},
+						{"id": "q5", "review": true, "text": "Повторение: зачем поду readinessProbe при обновлении?", "options": []map[string]any{{"id": "a", "text": "Чтобы трафик не шёл в ещё не готовый под", "correct": true}, {"id": "b", "text": "Чтобы перезапускать зависшие контейнеры", "correct": false}, {"id": "c", "text": "Чтобы ограничить память", "correct": false}}, "explanation": "Readiness решает, слать ли трафик; liveness — перезапускать ли контейнер."},
+					},
+					"resources": []map[string]any{
+						{"title": "Kubernetes — статусы и жизненный цикл пода", "url": "https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/", "note": "что означают Pending, Running, CrashLoopBackOff"},
+					},
+				},
+			},
 		},
 	}
 }

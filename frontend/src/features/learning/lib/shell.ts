@@ -375,6 +375,25 @@ function runDocker(args: string[]): string {
       return rest[0] === "up"
         ? " ✔ Container db   Started\n ✔ Container app  Started"
         : " ✔ Container app  Removed\n ✔ Container db   Removed";
+    case "inspect":
+      return [
+        "[",
+        "    {",
+        '        "Id": "3f1c9a4b7e21c8f0a6d9e4c7b3128f5a",',
+        '        "State": { "Status": "running", "Running": true, "ExitCode": 0, "OOMKilled": false },',
+        '        "Config": { "Image": "nginx:1.27", "Env": ["PATH=/usr/bin"] },',
+        '        "NetworkSettings": { "IPAddress": "172.17.0.2", "Ports": { "80/tcp": "8080" } }',
+        "    }",
+        "]",
+      ].join("\n");
+    case "stats":
+      return [
+        "CONTAINER   CPU %   MEM USAGE / LIMIT   MEM %   NET I/O",
+        "web         0.03%   12.4MiB / 512MiB    2.42%   1.2kB / 0B",
+        "db          0.15%   48.9MiB / 512MiB    9.55%   3.4kB / 0B",
+      ].join("\n");
+    case "top":
+      return "UID    PID    PPID   C   CMD\nroot   1043   1020   0   nginx: master process";
     default:
       return `docker: '${sub ?? ""}' is not a docker command.\nSee 'docker --help'`;
   }
@@ -385,6 +404,15 @@ function runKubectl(args: string[]): string {
   const [sub, ...rest] = args;
   switch (sub) {
     case "get":
+      if (rest[0]?.startsWith("ev")) {
+        return [
+          "LAST SEEN   TYPE      REASON      OBJECT        MESSAGE",
+          "2m          Normal    Scheduled   pod/api-7d9f  Successfully assigned api-7d9f to node-1",
+          "2m          Normal    Pulled      pod/api-7d9f  Container image \"api:1.5.0\" already present",
+          "90s         Warning   BackOff     pod/api-7d9f  Back-off restarting failed container",
+          "80s         Warning   Unhealthy   pod/api-7d9f  Readiness probe failed: connection refused",
+        ].join("\n");
+      }
       if (rest[0]?.startsWith("po")) return KUBECTL_PODS;
       if (rest[0]?.startsWith("deploy")) {
         return [
@@ -414,6 +442,16 @@ function runKubectl(args: string[]): string {
       return "deployment.apps/api configured";
     case "delete":
       return `${rest.join(" ")} deleted`;
+    case "exec":
+      return "/ # (вы внутри пода, для выхода наберите exit)";
+    case "top":
+      return [
+        "NAME          CPU(cores)   MEMORY(bytes)",
+        "api-7d9f      42m          128Mi",
+        "api-3k2p      38m          121Mi",
+      ].join("\n");
+    case "port-forward":
+      return "Forwarding from 127.0.0.1:8080 -> 8080\nForwarding from [::1]:8080 -> 8080";
     default:
       return `error: unknown command "${sub ?? ""}" for "kubectl"`;
   }

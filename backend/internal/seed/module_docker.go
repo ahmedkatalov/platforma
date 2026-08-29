@@ -647,6 +647,121 @@ func moduleDocker() ModuleSeed {
 					},
 				},
 			},
+			{
+				Title:       "Отладка контейнеров: заглянуть внутрь",
+				Kind:        "text",
+				Summary:     "logs, exec, inspect и stats — как понять, почему контейнер упал или тормозит",
+				DurationMin: 14,
+				Content: map[string]any{
+					"body": "## Зачем это нужно\n\n" +
+						"Контейнер упал или тормозит. **Догадки не помогут — нужно заглянуть внутрь.** " +
+						"Для этого хватает четырёх команд.\n\n" +
+						"## 1. Статус — docker ps\n\n" +
+						"Первый вопрос: контейнер вообще работает?\n\n" +
+						"```\n" +
+						"student@devops:~$ docker ps -a\n" +
+						"CONTAINER ID   IMAGE        STATUS                      NAMES\n" +
+						"3f1c9a4b7e21   nginx:1.27   Up 12 minutes               web\n" +
+						"9b2d8c5f0a13   api:1.5.0    Exited (1) 30 seconds ago   api\n" +
+						"```\n\n" +
+						"Флаг `-a` показывает и остановленные. **`Exited (1)`** значит: контейнер `api` " +
+						"упал с кодом 1. Дальше выясняем почему.\n\n" +
+						"## 2. Логи — docker logs\n\n" +
+						"```\n" +
+						"student@devops:~$ docker logs api\n" +
+						"2026-08-30T09:15:02Z ERROR failed to connect to db: connection refused\n" +
+						"```\n\n" +
+						"Логи почти всегда называют причину. Здесь приложение не достучалось до базы.\n\n" +
+						"## 3. Заглянуть внутрь — docker exec\n\n" +
+						"Иногда нужно проверить что-то прямо в контейнере — файл, переменную, сеть:\n\n" +
+						"```\n" +
+						"student@devops:~$ docker exec -it web sh\n" +
+						"/ # (вы внутри контейнера, для выхода наберите exit)\n" +
+						"```\n\n" +
+						"`-it` даёт интерактивную оболочку. Это как «зайти по ssh», но в контейнер.\n\n" +
+						"## 4. Подробности — docker inspect\n\n" +
+						"`inspect` выдаёт всё о контейнере в JSON. Два самых полезных поля:\n\n" +
+						"```\n" +
+						"student@devops:~$ docker inspect web\n" +
+						"        \"State\": { \"Status\": \"running\", \"ExitCode\": 0, \"OOMKilled\": false },\n" +
+						"        \"NetworkSettings\": { \"IPAddress\": \"172.17.0.2\", \"Ports\": { \"80/tcp\": \"8080\" } }\n" +
+						"```\n\n" +
+						"> **`OOMKilled: true`** — важнейший признак: контейнеру не хватило памяти, и его убило ядро. " +
+						"Тогда причина не в коде, а в лимите памяти.\n\n" +
+						"## 5. Ресурсы — docker stats\n\n" +
+						"```\n" +
+						"student@devops:~$ docker stats\n" +
+						"CONTAINER   CPU %   MEM USAGE / LIMIT   MEM %\n" +
+						"web         0.03%   12.4MiB / 512MiB    2.42%\n" +
+						"```\n\n" +
+						"Показывает нагрузку в реальном времени — сразу видно, кто ест память или процессор.\n\n" +
+						"## Порядок отладки\n\n" +
+						"1. Работает? → `docker ps -a` (смотрим STATUS).\n" +
+						"2. Что в логах? → `docker logs`.\n" +
+						"3. Хватает памяти? → `docker inspect` (OOMKilled) и `docker stats`.\n" +
+						"4. Нужно проверить руками? → `docker exec -it ... sh`.\n\n" +
+						"## Запомнить\n\n" +
+						"1. `docker ps -a` показывает упавшие контейнеры и код выхода.\n" +
+						"2. Причина почти всегда в `docker logs`.\n" +
+						"3. `OOMKilled: true` в inspect — контейнеру не хватило памяти.",
+					"resources": []map[string]any{
+						{
+							"title": "Docker — просмотр логов контейнера",
+							"url":   "https://docs.docker.com/reference/cli/docker/container/logs/",
+							"note":  "флаги -f, --tail, --since для чтения логов",
+						},
+						{
+							"title": "docker exec — команды в работающем контейнере",
+							"url":   "https://docs.docker.com/reference/cli/docker/container/exec/",
+							"note":  "как зайти внутрь и что там можно",
+						},
+						{
+							"title": "docker inspect — метаданные контейнера",
+							"url":   "https://docs.docker.com/reference/cli/docker/inspect/",
+							"note":  "State, OOMKilled, сеть и тома одним ответом",
+						},
+					},
+				},
+			},
+			{
+				Title:       "Тренажёр: чиним упавший контейнер",
+				Kind:        "terminal",
+				Summary:     "Пройдите отладку по шагам: статус, логи, внутренности",
+				DurationMin: 16,
+				Content: map[string]any{
+					"intro": "Контейнер api упал. Проведите разбор: статус, логи, ресурсы, загляните внутрь работающего web.",
+					"shell": "student@devops",
+					"tasks": []map[string]any{
+						{"id": "d1", "prompt": "Покажите все контейнеры, включая остановленные", "expected": []string{"docker ps -a", "docker ps --all"}, "hint": "docker ps с флагом -a", "success": "Видно, что api в статусе Exited (1) — упал."},
+						{"id": "d2", "prompt": "Прочитайте логи контейнера api", "expected": []string{"docker logs api"}, "hint": "docker logs и имя", "success": "В логах причина: не достучался до базы."},
+						{"id": "d3", "prompt": "Посмотрите подробности контейнера web (inspect)", "expected": []string{"docker inspect web"}, "hint": "docker inspect и имя", "success": "В State виден ExitCode и OOMKilled, в конце — сеть и порты."},
+						{"id": "d4", "prompt": "Проверьте потребление ресурсов контейнерами", "expected": []string{"docker stats"}, "hint": "одна команда docker", "success": "Память и CPU в норме — дело не в ресурсах."},
+						{"id": "d5", "prompt": "Зайдите внутрь работающего контейнера web через sh", "expected": []string{"docker exec -it web sh", "docker exec web sh", "docker exec -it web /bin/sh"}, "hint": "docker exec -it имя sh", "success": "Вы внутри контейнера — можно проверить файлы и сеть."},
+					},
+					"resources": []map[string]any{
+						{"title": "Docker — отладка контейнеров", "url": "https://docs.docker.com/engine/containers/run/", "note": "жизненный цикл и диагностика контейнера"},
+					},
+				},
+			},
+			{
+				Title:       "Квиз: отладка контейнеров",
+				Kind:        "quiz",
+				Summary:     "Статус, логи, inspect и нехватка памяти",
+				DurationMin: 8,
+				Content: map[string]any{
+					"passScore": 70,
+					"questions": []map[string]any{
+						{"id": "q1", "text": "Контейнер в статусе Exited (1). Что это значит?", "options": []map[string]any{{"id": "a", "text": "Он упал с кодом ошибки 1", "correct": true}, {"id": "b", "text": "Он успешно завершился", "correct": false}, {"id": "c", "text": "Он приостановлен", "correct": false}}, "explanation": "Код 0 — успех, любой другой — ошибка. Дальше смотрим docker logs."},
+						{"id": "q2", "text": "Где быстрее всего найти причину падения контейнера?", "options": []map[string]any{{"id": "a", "text": "В docker logs", "correct": true}, {"id": "b", "text": "В docker images", "correct": false}, {"id": "c", "text": "В docker pull", "correct": false}}, "explanation": "Логи почти всегда называют причину прямым текстом."},
+						{"id": "q3", "text": "В docker inspect видно OOMKilled: true. О чём это?", "options": []map[string]any{{"id": "a", "text": "Контейнеру не хватило памяти, его убило ядро", "correct": true}, {"id": "b", "text": "Контейнер удалён вручную", "correct": false}, {"id": "c", "text": "Ошибка в образе", "correct": false}}, "explanation": "Причина не в коде, а в лимите памяти — его надо поднять или найти утечку."},
+						{"id": "q4", "text": "Зачем docker exec -it web sh?", "options": []map[string]any{{"id": "a", "text": "Зайти внутрь работающего контейнера и проверить всё руками", "correct": true}, {"id": "b", "text": "Пересобрать образ", "correct": false}, {"id": "c", "text": "Остановить контейнер", "correct": false}}, "explanation": "Это как ssh, но в контейнер: файлы, переменные, сеть."},
+						{"id": "q5", "review": true, "text": "Повторение: почему данные базы хранят в томе, а не внутри контейнера?", "options": []map[string]any{{"id": "a", "text": "Без тома данные пропадут при пересоздании контейнера", "correct": true}, {"id": "b", "text": "С томом контейнер быстрее", "correct": false}, {"id": "c", "text": "Тома обязательны для любого контейнера", "correct": false}}, "explanation": "Слой контейнера недолговечен — базы всегда работают с томами."},
+					},
+					"resources": []map[string]any{
+						{"title": "Docker — управление ресурсами контейнера", "url": "https://docs.docker.com/engine/containers/resource_constraints/", "note": "лимиты памяти и CPU, чтобы избежать OOMKilled"},
+					},
+				},
+			},
 		},
 	}
 }
