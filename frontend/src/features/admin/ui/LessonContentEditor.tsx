@@ -38,14 +38,27 @@ function Section({
 function TextEditor({ value, onChange }: { value: AnyRecord; onChange: (next: AnyRecord) => void }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const areaRef = useRef<HTMLTextAreaElement>(null);
+  // Запоминаем позицию курсора: при открытии окна выбора текстовое поле теряет
+  // фокус, поэтому берём место вставки в момент клика по кнопке.
+  const cursorRef = useRef<number | null>(null);
 
   const body = String(value.body ?? "");
 
-  // Вставляем markdown-ссылку на картинку в текущую позицию курсора.
+  const rememberCursor = () => {
+    cursorRef.current = areaRef.current?.selectionStart ?? null;
+  };
+
+  const openPicker = () => {
+    rememberCursor();
+    setPickerOpen(true);
+  };
+
+  // Вставляем markdown-картинку туда, где стоял курсор (или в конец текста).
   const insert = (markdown: string) => {
-    const area = areaRef.current;
-    const at = area?.selectionStart ?? body.length;
-    const next = `${body.slice(0, at)}\n\n${markdown}\n\n${body.slice(at)}`;
+    const at = cursorRef.current ?? body.length;
+    const before = body.slice(0, at).replace(/\s+$/, "");
+    const after = body.slice(at).replace(/^\s+/, "");
+    const next = `${before}\n\n${markdown}\n\n${after}`.replace(/^\n+/, "");
     onChange({ ...value, body: next });
   };
 
@@ -53,7 +66,7 @@ function TextEditor({ value, onChange }: { value: AnyRecord; onChange: (next: An
     <>
       <div className="mb-2 flex items-center justify-between gap-2">
         <span className="text-sm font-semibold text-muted">Текст урока (Markdown)</span>
-        <Button variant="ghost" onClick={() => setPickerOpen(true)}>
+        <Button variant="ghost" onMouseDown={rememberCursor} onClick={openPicker}>
           Вставить картинку
         </Button>
       </div>
@@ -62,6 +75,9 @@ function TextEditor({ value, onChange }: { value: AnyRecord; onChange: (next: An
         ref={areaRef}
         value={body}
         onChange={(e) => onChange({ ...value, body: e.target.value })}
+        onSelect={rememberCursor}
+        onKeyUp={rememberCursor}
+        onClick={rememberCursor}
         rows={16}
         className="font-mono text-xs"
         spellCheck={false}
