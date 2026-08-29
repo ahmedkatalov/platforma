@@ -52,6 +52,23 @@ func moduleObservability() ModuleSeed {
 						"http_requests_total{code=\"500\"} 37\n" +
 						"```\n\n" +
 						"Prometheus раз в 15 секунд забирает эти числа и хранит. Grafana рисует по ним графики.\n\n" +
+						"Снимите метрики руками и научитесь читать отказ.\n" +
+						"\n" +
+						"```bash\n" +
+						"# только счётчики запросов\n" +
+						"curl -s http://app:8080/metrics | grep http_requests_total\n" +
+						"http_requests_total{code=\"200\"} 18422\n" +
+						"http_requests_total{code=\"500\"} 37\n" +
+						"\n" +
+						"# а теперь приложение не отвечает\n" +
+						"curl -s http://app:8080/metrics\n" +
+						"curl: (7) Failed to connect to app port 8080: Connection refused\n" +
+						"```\n" +
+						"\n" +
+						"Читаем так: `(7)` — до порта не достучались, процесс упал или не слушает.\n" +
+						"\n" +
+						"Для Prometheus такая цель станет `up == 0` — это первый признак аварии.\n" +
+						"\n" +
 						"## Алерты\n\n" +
 						"Алерт — сообщение дежурному, когда что-то пошло не так.\n\n" +
 						"```yaml\n" +
@@ -82,6 +99,24 @@ func moduleObservability() ModuleSeed {
 						"- **Смотрят среднее время ответа.** Оно прячет проблемы.\n" +
 						"- **Ставят алерт на любое отклонение.** Через неделю их игнорируют все.\n" +
 						"- **Пишут в лог пароли.** Потом эти логи улетают во внешний сервис.\n\n" +
+						"Перед перезапуском Prometheus правила проверяют статикой — это ловит ошибки заранее.\n" +
+						"\n" +
+						"```bash\n" +
+						"promtool check rules /etc/prometheus/alerts.yml\n" +
+						"Checking /etc/prometheus/alerts.yml\n" +
+						"  SUCCESS: 2 rules found\n" +
+						"\n" +
+						"# кто-то забыл закрыть скобку в expr\n" +
+						"promtool check rules /etc/prometheus/alerts.yml\n" +
+						"Checking /etc/prometheus/alerts.yml\n" +
+						"  FAILED: group \"api\", rule 2, \"HighLatency\":\n" +
+						"    could not parse expression: parse error at char 63: unclosed left parenthesis\n" +
+						"```\n" +
+						"\n" +
+						"`parse error at char 63` указывает позицию в строке expr — ищите незакрытую скобку там.\n" +
+						"\n" +
+						"Битые правила не доедут до прода: `promtool` вернёт код выхода 1, и деплой упадёт.\n" +
+						"\n" +
 						"## Запомнить\n\n" +
 						"1. Метрика говорит «сломалось», лог — «что именно».\n" +
 						"2. Смотрите процентили, а не среднее.\n" +
@@ -96,6 +131,21 @@ func moduleObservability() ModuleSeed {
 							"title": "Grafana — документация",
 							"url":   "https://grafana.com/docs/grafana/latest/",
 							"note":  "как строить графики и панели",
+						},
+						{
+							"title": "Google SRE Book — Monitoring Distributed Systems",
+							"url":   "https://sre.google/sre-book/monitoring-distributed-systems/",
+							"note":  "первоисточник четырёх золотых сигналов",
+						},
+						{
+							"title": "Prometheus — Histograms and summaries",
+							"url":   "https://prometheus.io/docs/practices/histograms/",
+							"note":  "как считаются p95 и p99 через histogram_quantile",
+						},
+						{
+							"title": "Prometheus — Metric types",
+							"url":   "https://prometheus.io/docs/concepts/metric_types/",
+							"note":  "counter, gauge, histogram — из чего состоят метрики",
 						},
 					},
 				},
@@ -226,6 +276,19 @@ func moduleObservability() ModuleSeed {
 						"- **Собирают трассировки всех запросов подряд.** Это дорого, обычно берут выборку.\n" +
 						"- **Ждут, что OpenTelemetry сам всё покажет.** Он собирает и передаёт, " +
 						"а рисуют графики Grafana и подобные.\n\n" +
+						"Коллектор может принимать спаны, но молча не доставлять их — смотрите его логи.\n" +
+						"\n" +
+						"```bash\n" +
+						"docker logs otel-collector --tail 4\n" +
+						"2026-08-30T09:14:02Z info  TracesExporter {\"kind\": \"exporter\", \"name\": \"otlp\", \"spans\": 128}\n" +
+						"2026-08-30T09:14:07Z error exporterhelper/queue_sender.go  Exporting failed, will retry\n" +
+						"  {\"error\": \"rpc error: code = Unavailable desc = dial tcp 10.0.0.5:4317: connect: connection refused\"}\n" +
+						"```\n" +
+						"\n" +
+						"Приём идёт (`spans: 128`), а экспорт в бэкенд на порт `4317` падает с `connection refused`.\n" +
+						"\n" +
+						"Данные копятся в очереди коллектора: адрес экспортёра неверен или бэкенд лежит.\n" +
+						"\n" +
 						"## Запомнить\n\n" +
 						"1. OpenTelemetry — общий формат для метрик, логов и трассировок.\n" +
 						"2. Трассировка показывает, на каком шаге теряется время.\n" +
@@ -240,6 +303,21 @@ func moduleObservability() ModuleSeed {
 							"title": "Демо OpenTelemetry",
 							"url":   "https://opentelemetry.io/docs/demo/",
 							"note":  "готовое приложение из нескольких сервисов, можно запустить и потрогать",
+						},
+						{
+							"title": "OpenTelemetry — Traces",
+							"url":   "https://opentelemetry.io/docs/concepts/signals/traces/",
+							"note":  "что такое trace и span и как связаны шаги запроса",
+						},
+						{
+							"title": "OpenTelemetry — Collector",
+							"url":   "https://opentelemetry.io/docs/collector/",
+							"note":  "зачем нужен коллектор и как он маршрутизирует данные",
+						},
+						{
+							"title": "W3C — Trace Context",
+							"url":   "https://www.w3.org/TR/trace-context/",
+							"note":  "стандарт заголовка traceparent для сквозного id запроса",
 						},
 					},
 				},
@@ -268,6 +346,19 @@ func moduleObservability() ModuleSeed {
 						"| 99.99% | около 4 минут |\n\n" +
 						"Каждая девятка после запятой стоит дорого. 99.99% требует дублирования, " +
 						"автоматических откатов и дежурства круглосуточно.\n\n" +
+						"SLI можно посчитать запросом к Prometheus, а не оценивать на глаз.\n" +
+						"\n" +
+						"```bash\n" +
+						"# доля НЕошибочных ответов за 30 дней\n" +
+						"curl -s http://prometheus:9090/api/v1/query \\\n" +
+						"  --data-urlencode 'query=sum(rate(http_requests_total{code!~\"5..\"}[30d]))/sum(rate(http_requests_total[30d]))'\n" +
+						"{\"status\":\"success\",\"data\":{\"result\":[{\"value\":[1756544042,\"0.9987\"]}]}}\n" +
+						"```\n" +
+						"\n" +
+						"`0.9987` — это 99.87% при цели 99.9%: бюджет ошибок исчерпан, катить новое нельзя.\n" +
+						"\n" +
+						"Опечатка в запросе видна сразу: API вернёт `\"status\":\"error\"` и код HTTP 400.\n" +
+						"\n" +
 						"## Зачем нужен бюджет на практике\n\n" +
 						"Бюджет ошибок — это правило для команды:\n\n" +
 						"- бюджет не израсходован → катим новые функции;\n" +
@@ -290,6 +381,23 @@ func moduleObservability() ModuleSeed {
 						"1. Мало алертов, и все по делу.\n" +
 						"2. Инструкция к каждому алерту: что проверить, что сделать.\n" +
 						"3. Право откатить релиз без согласований.\n\n" +
+						"На дежурстве шумный алерт во время планового релиза глушат, а не терпят.\n" +
+						"\n" +
+						"```bash\n" +
+						"# заглушить HighLatency на час, пока катится релиз\n" +
+						"amtool silence add alertname=HighLatency --duration=1h \\\n" +
+						"  --author=student --comment=\"deploy #482\"\n" +
+						"b3f1c2a4-9d0e-4f21-8a77-1c2b3d4e5f60\n" +
+						"\n" +
+						"# в другой сессии без настроенного адреса Alertmanager\n" +
+						"amtool silence query\n" +
+						"query failed: Get \"http://localhost:9093/api/v2/silences\": dial tcp 127.0.0.1:9093: connect: connection refused\n" +
+						"```\n" +
+						"\n" +
+						"Тишина адресная: гасит только `HighLatency`, а `HighErrorRate` продолжит будить.\n" +
+						"\n" +
+						"amtool по умолчанию идёт на `localhost:9093` — задайте `--alertmanager.url` для другого хоста.\n" +
+						"\n" +
 						"## После инцидента\n\n" +
 						"Пишут разбор: что произошло, как чинили, что сделать, чтобы не повторилось.\n\n" +
 						"Разбор не ищет виноватого. Если человек смог уронить прод одной командой, " +
@@ -312,6 +420,21 @@ func moduleObservability() ModuleSeed {
 							"title": "SRE Book — глава про дежурство",
 							"url":   "https://sre.google/sre-book/being-on-call/",
 							"note":  "как устроено дежурство в больших командах",
+						},
+						{
+							"title": "Google SRE Book — Service Level Objectives",
+							"url":   "https://sre.google/sre-book/service-level-objectives/",
+							"note":  "строгие определения SLI, SLO и SLA",
+						},
+						{
+							"title": "Google SRE Book — Embracing Risk",
+							"url":   "https://sre.google/sre-book/embracing-risk/",
+							"note":  "откуда берётся бюджет ошибок и как им пользуются",
+						},
+						{
+							"title": "Google SRE Book — Postmortem Culture",
+							"url":   "https://sre.google/sre-book/postmortem-culture/",
+							"note":  "разбор инцидента без поиска виноватых",
 						},
 					},
 				},

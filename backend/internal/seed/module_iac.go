@@ -64,12 +64,49 @@ func moduleIaC() ModuleSeed {
 						"\n" +
 						"Пока не наберёте `yes`, ничего не создастся. Это защита от случайного запуска.\n" +
 						"\n" +
+						"Не всякое изменение безобидно. Иногда правка не меняет ресурс, а пересоздаёт его: старый удаляют, новый строят. Это видно по `-/+` и пометке `forces replacement`.\n" +
+						"\n" +
+						"```bash\n" +
+						"$ terraform plan\n" +
+						"...\n" +
+						"Terraform will perform the following actions:\n" +
+						"\n" +
+						"  # aws_instance.app must be replaced\n" +
+						"-/+ resource \"aws_instance\" \"app\" {\n" +
+						"      ~ ami           = \"ami-0abc123\" -> \"ami-0def456\" # forces replacement\n" +
+						"      ~ id            = \"i-0a1b2c3d4e\" -> (known after apply)\n" +
+						"        instance_type = \"t3.micro\"\n" +
+						"        # (8 unchanged attributes hidden)\n" +
+						"    }\n" +
+						"\n" +
+						"Plan: 1 to add, 0 to change, 1 to destroy.\n" +
+						"```\n" +
+						"\n" +
+						"Читаем так: `~` — атрибут меняется, `-/+` — ресурс удалят и создадут заново. Смена `ami` пересоздаёт машину, и диск с данными на ней пропадёт. Строка `1 to destroy` — сигнал остановиться и понять, что именно удаляется.\n" +
+						"\n" +
 						"## Состояние\n\n" +
 						"Terraform запоминает, что он создал. Эта память называется **состоянием**.\n\n" +
 						"В команде состояние хранят не на ноутбуке, а в общем месте с блокировкой. Иначе двое " +
 						"применят изменения одновременно и затрут работу друг друга.\n\n" +
 						"> Есть открытый форк Terraform — **OpenTofu**. Команды те же, файлы те же. " +
 						"Если увидите `tofu plan` — это он.\n\n" +
+						"Состояние общее, поэтому его блокируют на время операции. Если коллега применяет прямо сейчас, ваш `apply` упрётся в блокировку.\n" +
+						"\n" +
+						"```bash\n" +
+						"$ terraform apply\n" +
+						"╷\n" +
+						"│ Error: Error acquiring the state lock\n" +
+						"│\n" +
+						"│ Lock Info:\n" +
+						"│   ID:        6f3d2b1a-8c04-4e77-9a2b-...\n" +
+						"│   Operation: OperationTypeApply\n" +
+						"│   Who:       alice@web-ci\n" +
+						"│   Created:   2026-08-30 09:14:02 UTC\n" +
+						"╵\n" +
+						"```\n" +
+						"\n" +
+						"Это не поломка, а защита от одновременной записи. Правильно — дождаться, пока коллега закончит. Команду `force-unlock` трогают только когда точно известно, что процесс мёртв, иначе состояние испортится.\n" +
+						"\n" +
 						"## Ansible: настраиваем сервер\n\n" +
 						"Ansible читает список задач и выполняет их на сервере:\n\n" +
 						"```yaml\n" +
@@ -113,6 +150,26 @@ func moduleIaC() ModuleSeed {
 							"title": "Ansible — документация",
 							"url":   "https://docs.ansible.com/ansible/latest/",
 							"note":  "модули, роли и примеры плейбуков",
+						},
+						{
+							"title": "What is Terraform — введение",
+							"url":   "https://developer.hashicorp.com/terraform/intro",
+							"note":  "что такое инфраструктура как код и цикл write-plan-apply",
+						},
+						{
+							"title": "terraform plan — справочник команды",
+							"url":   "https://developer.hashicorp.com/terraform/cli/commands/plan",
+							"note":  "как читать план: add / change / destroy и режим -destroy",
+						},
+						{
+							"title": "terraform apply — справочник команды",
+							"url":   "https://developer.hashicorp.com/terraform/cli/commands/apply",
+							"note":  "подтверждение yes и применение сохранённого плана",
+						},
+						{
+							"title": "Terraform State — состояние",
+							"url":   "https://developer.hashicorp.com/terraform/language/state",
+							"note":  "зачем нужно состояние и почему его выносят в удалённый бэкенд",
 						},
 					},
 				},
@@ -266,6 +323,35 @@ func moduleIaC() ModuleSeed {
 						"\n" +
 						"Флаг `--check` — это аналог `terraform plan`. Привычка та же: " +
 						"сначала посмотреть, потом применять.\n\n" +
+						"Запуск плейбука печатает статус каждой задачи, а в конце — сводку `PLAY RECAP`.\n" +
+						"\n" +
+						"```bash\n" +
+						"$ ansible-playbook -i inventory playbook.yml\n" +
+						"\n" +
+						"PLAY [Настроить веб-серверы] ***********************\n" +
+						"\n" +
+						"TASK [Gathering Facts] *****************************\n" +
+						"ok: [web-1]\n" +
+						"fatal: [web-2]: UNREACHABLE! => {\"msg\": \"Failed to connect to the host via ssh: Connection timed out\", \"unreachable\": true}\n" +
+						"\n" +
+						"TASK [Установить nginx] ****************************\n" +
+						"changed: [web-1]\n" +
+						"\n" +
+						"PLAY RECAP *****************************************\n" +
+						"web-1  : ok=2  changed=1  unreachable=0  failed=0\n" +
+						"web-2  : ok=0  changed=0  unreachable=1  failed=1\n" +
+						"```\n" +
+						"\n" +
+						"`web-2` недоступен по SSH — это проблема связи, а не плейбука: проверьте адрес и ключ. На `web-1` задача `changed=1`, то есть nginx реально поставился. Запускаем ещё раз и проверяем идемпотентность.\n" +
+						"\n" +
+						"```bash\n" +
+						"$ ansible-playbook -i inventory playbook.yml --limit web-1\n" +
+						"...\n" +
+						"web-1  : ok=2  changed=0  unreachable=0  failed=0\n" +
+						"```\n" +
+						"\n" +
+						"Теперь `changed=0`: второй прогон ничего не тронул, система уже в нужном состоянии.\n" +
+						"\n" +
 						"## Шаблоны и переменные\n\n" +
 						"Конфиги обычно не копируют как есть, а собирают из шаблона:\n\n" +
 						"```yaml\n" +
@@ -277,6 +363,20 @@ func moduleIaC() ModuleSeed {
 						"```\n\n" +
 						"В шаблоне подставляются переменные: адрес приложения, число процессов, домен. " +
 						"Строка `notify` перезапустит nginx, но только если файл действительно изменился.\n\n" +
+						"`UNREACHABLE` — это про связь. А `failed` — уже ошибка самой задачи. Например, опечатка в имени пакета.\n" +
+						"\n" +
+						"```bash\n" +
+						"$ ansible-playbook -i inventory playbook.yml\n" +
+						"\n" +
+						"TASK [Установить nginx] ****************************\n" +
+						"fatal: [web-1]: FAILED! => {\"changed\": false, \"msg\": \"No package matching 'nginxx' is available\"}\n" +
+						"\n" +
+						"PLAY RECAP *****************************************\n" +
+						"web-1  : ok=1  changed=0  unreachable=0  failed=1\n" +
+						"```\n" +
+						"\n" +
+						"Суть ошибки читаем в поле `msg`: пакета `nginxx` нет в репозитории. Ansible останавливает хост на первой упавшей задаче и дальше по нему не идёт. Исправляем имя пакета и запускаем снова.\n" +
+						"\n" +
 						"## Роли\n\n" +
 						"Когда плейбук разрастается, его делят на роли: отдельно nginx, отдельно " +
 						"приложение, отдельно мониторинг. Роль — это папка со своими задачами, " +
@@ -300,6 +400,26 @@ func moduleIaC() ModuleSeed {
 							"title": "Ansible Galaxy — готовые роли",
 							"url":   "https://galaxy.ansible.com/",
 							"note":  "не пишите с нуля то, что уже написали до вас",
+						},
+						{
+							"title": "Getting started with Ansible",
+							"url":   "https://docs.ansible.com/ansible/latest/getting_started/index.html",
+							"note":  "control node, инвентарь, managed node и первый плейбук",
+						},
+						{
+							"title": "How to build your inventory",
+							"url":   "https://docs.ansible.com/ansible/latest/inventory_guide/intro_inventory.html",
+							"note":  "группы и хосты в форматах INI и YAML, переменные хостов",
+						},
+						{
+							"title": "Ansible playbooks — введение",
+							"url":   "https://docs.ansible.com/ansible/latest/playbook_guide/playbooks_intro.html",
+							"note":  "структура плейбука: hosts, tasks и вызовы модулей",
+						},
+						{
+							"title": "Templating (Jinja2)",
+							"url":   "https://docs.ansible.com/ansible/latest/playbook_guide/playbooks_templating.html",
+							"note":  "шаблоны Jinja2 и подстановка переменных в конфиги",
 						},
 					},
 				},

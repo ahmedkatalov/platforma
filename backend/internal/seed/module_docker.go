@@ -62,6 +62,32 @@ func moduleDocker() ModuleSeed {
 						"\n" +
 						"Колонка PORTS подтверждает проброс: снаружи 8080, внутри контейнера 80.\n" +
 						"\n" +
+						"## Когда контейнер сразу падает\n" +
+						"\n" +
+						"Бывает, контейнер запустился и тут же остановился. В `docker ps` его уже нет, но `docker ps -a` и логи всё покажут.\n" +
+						"\n" +
+						"```bash\n" +
+						"$ docker run -d --name api myapp:1.0\n" +
+						"9f3a1b2c4d5e6a7b8c9d\n" +
+						"\n" +
+						"$ docker ps\n" +
+						"CONTAINER ID   IMAGE   STATUS   PORTS   NAMES\n" +
+						"\n" +
+						"$ docker ps -a\n" +
+						"CONTAINER ID   IMAGE       STATUS                     NAMES\n" +
+						"9f3a1b2c4d5e   myapp:1.0   Exited (1) 4 seconds ago   api\n" +
+						"\n" +
+						"$ docker logs api\n" +
+						"panic: open /config/app.yaml: no such file or directory\n" +
+						"```\n" +
+						"\n" +
+						"Порядок чтения простой. `docker ps` пуст, значит смотрим `docker ps -a`.\n" +
+						"\n" +
+						"Статус `Exited (1)` — код выхода 1, программа упала. Причину даёт `docker logs`.\n" +
+						"\n" +
+						"Здесь не хватило файла конфига внутри контейнера: его забыли положить в образ или пробросить томом.\n" +
+						"\n" +
+						"\n" +
 						"## Важно: данные внутри контейнера не вечны\n\n" +
 						"Удалили контейнер — исчезло всё, что он записал внутрь себя.\n\n" +
 						"Поэтому базы данных и загруженные файлы хранят в **томах** — отдельном хранилище, " +
@@ -69,6 +95,30 @@ func moduleDocker() ModuleSeed {
 						"```bash\n" +
 						"docker run -v pgdata:/var/lib/postgresql/data postgres:16\n" +
 						"```\n\n" +
+						"## Когда порт уже занят\n" +
+						"\n" +
+						"Частая ошибка при запуске — порт хоста уже держит другой контейнер или процесс.\n" +
+						"\n" +
+						"```bash\n" +
+						"$ docker run -d -p 8080:80 --name web nginx:1.27\n" +
+						"docker: Error response from daemon: driver failed programming external\n" +
+						"connectivity on endpoint web: Bind for 0.0.0.0:8080 failed: port is already allocated.\n" +
+						"\n" +
+						"$ docker ps\n" +
+						"CONTAINER ID   IMAGE        STATUS         PORTS                  NAMES\n" +
+						"c4d1a9f2b8e7   nginx:1.27   Up 3 minutes   0.0.0.0:8080->80/tcp   web-old\n" +
+						"\n" +
+						"$ docker run -d -p 8081:80 --name web nginx:1.27\n" +
+						"b7e2c1a4d9f0e3a5c6d7\n" +
+						"```\n" +
+						"\n" +
+						"Текст `port is already allocated` говорит прямо: порт 8080 занят.\n" +
+						"\n" +
+						"`docker ps` находит виновника — старый контейнер `web-old` уже слушает 8080.\n" +
+						"\n" +
+						"Решение — освободить порт через `docker stop web-old` либо взять свободный, как здесь 8081.\n" +
+						"\n" +
+						"\n" +
 						"## Частые ошибки новичка\n\n" +
 						"- **Пишут `latest` вместо версии.** Сегодня скачается одно, завтра другое. Указывайте версию: `nginx:1.27`.\n" +
 						"- **Хранят данные внутри контейнера.** После пересоздания они пропадут.\n" +
@@ -87,6 +137,21 @@ func moduleDocker() ModuleSeed {
 							"title": "Play with Docker — песочница в браузере",
 							"url":   "https://labs.play-with-docker.com/",
 							"note":  "можно потрогать настоящий Docker без установки",
+						},
+						{
+							"title": "Docker overview: образ, контейнер, реестр",
+							"url":   "https://docs.docker.com/get-started/docker-overview/",
+							"note":  "официальное объяснение образа, контейнера и registry",
+						},
+						{
+							"title": "Справочник docker run",
+							"url":   "https://docs.docker.com/reference/cli/docker/container/run/",
+							"note":  "все флаги запуска: -d, -p, --name, -v",
+						},
+						{
+							"title": "Docker volumes",
+							"url":   "https://docs.docker.com/engine/storage/volumes/",
+							"note":  "почему данные держат в томах, а не внутри контейнера",
 						},
 					},
 				},
@@ -224,6 +289,38 @@ func moduleDocker() ModuleSeed {
 						"Зависимости не менялись — шаги 2 и 3 взяты из кэша, сборка заняла секунды.\n" +
 						"\n" +
 						"Разница между этими вариантами — минуты на каждой сборке.\n\n" +
+						"## Когда сборка падает\n" +
+						"\n" +
+						"Сборка обрывается на конкретном шаге. Docker показывает номер шага, инструкцию и вывод команды.\n" +
+						"\n" +
+						"```bash\n" +
+						"$ docker build -t myapp:1.0 .\n" +
+						"[+] Building 4.2s (8/9)\n" +
+						" => [1/5] FROM golang:1.25-alpine                  0.0s\n" +
+						" => [2/5] WORKDIR /src                             0.1s\n" +
+						" => [3/5] COPY go.mod go.sum ./                    0.1s\n" +
+						" => [4/5] RUN go mod download                      2.0s\n" +
+						" => ERROR [5/5] RUN go build -o /app ./cmd/api     1.9s\n" +
+						"------\n" +
+						" > [5/5] RUN go build -o /app ./cmd/api:\n" +
+						"0.9 cmd/api/main.go:12:2: undefined: hndler\n" +
+						"------\n" +
+						"Dockerfile:6\n" +
+						"--------------------\n" +
+						"   5 |     COPY . .\n" +
+						"   6 | >>> RUN go build -o /app ./cmd/api\n" +
+						"   7 |\n" +
+						"--------------------\n" +
+						"ERROR: failed to solve: process \"/bin/sh -c go build\" did not complete successfully: exit code: 1\n" +
+						"```\n" +
+						"\n" +
+						"Читаем снизу вверх. `exit code: 1` — команда внутри `RUN` завершилась с ошибкой.\n" +
+						"\n" +
+						"Стрелки `>>>` указывают на проблемную инструкцию: строка 6 Dockerfile.\n" +
+						"\n" +
+						"Сама причина выше: компилятор нашёл опечатку `undefined: hndler` в файле и строке.\n" +
+						"\n" +
+						"\n" +
 						"## Многоэтапная сборка\n\n" +
 						"Для сборки нужен компилятор, а для запуска — нет. Зачем тащить его в готовый образ?\n\n" +
 						"```dockerfile\n" +
@@ -265,6 +362,35 @@ func moduleDocker() ModuleSeed {
 						"`docker-compose` встречается в статьях, но это предыдущая версия.\n\n" +
 						"Внутри Compose сервисы видят друг друга по имени: приложение подключается к базе " +
 						"по адресу `db`, а не по IP.\n\n" +
+						"## Когда сервис в Compose не поднимается\n" +
+						"\n" +
+						"Запустили `docker compose up`, но один сервис крутится в перезапуске. Смотрим статусы и логи.\n" +
+						"\n" +
+						"```bash\n" +
+						"$ docker compose up -d\n" +
+						"[+] Running 2/2\n" +
+						" Container proj-db-1   Started\n" +
+						" Container proj-app-1  Started\n" +
+						"\n" +
+						"$ docker compose ps\n" +
+						"NAME         IMAGE         STATUS                       PORTS\n" +
+						"proj-app-1   proj-app      Restarting (1) 5 seconds ago\n" +
+						"proj-db-1    postgres:16   Up 9 seconds                 5432/tcp\n" +
+						"\n" +
+						"$ docker compose logs app --tail 2\n" +
+						"proj-app-1  | dial tcp 172.18.0.2:5432: connect: connection refused\n" +
+						"proj-app-1  | exit status 1\n" +
+						"```\n" +
+						"\n" +
+						"Статус `Restarting` — контейнер падает, и Compose поднимает его снова.\n" +
+						"\n" +
+						"Лог объясняет причину: `connection refused` на порт 5432, база ещё не готова к соединениям.\n" +
+						"\n" +
+						"Важный нюанс: `depends_on` ждёт запуска контейнера базы, но не её готовности.\n" +
+						"\n" +
+						"Лечится проверкой `healthcheck` у базы или повторами подключения в самом приложении.\n" +
+						"\n" +
+						"\n" +
 						"## Частые ошибки новичка\n\n" +
 						"- **`COPY . .` в начале файла.** Ломает кэш, каждая сборка идёт с нуля.\n" +
 						"- **Секреты внутри Dockerfile.** Они остаются в слоях образа даже после удаления файла.\n" +
@@ -283,6 +409,21 @@ func moduleDocker() ModuleSeed {
 							"title": "Справочник docker-compose.yml",
 							"url":   "https://docs.docker.com/reference/compose-file/",
 							"note":  "все поля файла с примерами",
+						},
+						{
+							"title": "Dockerfile reference",
+							"url":   "https://docs.docker.com/reference/dockerfile/",
+							"note":  "все инструкции: FROM, COPY, RUN, CMD, ENTRYPOINT",
+						},
+						{
+							"title": "Docker build cache",
+							"url":   "https://docs.docker.com/build/cache/",
+							"note":  "как работает кэш слоёв и что его инвалидирует",
+						},
+						{
+							"title": "Multi-stage builds",
+							"url":   "https://docs.docker.com/build/building/multi-stage/",
+							"note":  "официально про многоэтапную сборку и уменьшение образа",
 						},
 					},
 				},

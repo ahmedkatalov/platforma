@@ -36,9 +36,57 @@ func moduleExam() ModuleSeed {
 						"| Kubernetes | под, деплоймент, сервис, пробы, `logs` при падении |\n" +
 						"| Мониторинг | метрика против лога, процентили вместо среднего |\n" +
 						"| Безопасность | секрет в Git — отзывать, не запускать от root |\n\n" +
+						"### Разбор: под падает по кругу\n" +
+						"\n" +
+						"Типичный вызов на дежурстве — под в `CrashLoopBackOff`. Сначала статус, потом логи упавшей попытки.\n" +
+						"\n" +
+						"```bash\n" +
+						"$ kubectl get pods\n" +
+						"NAME             READY   STATUS             RESTARTS      AGE\n" +
+						"api-7d9f-abcde   0/1     CrashLoopBackOff   5 (28s ago)   4m\n" +
+						"api-7d9f-fghij   1/1     Running            0             4m\n" +
+						"\n" +
+						"$ kubectl logs api-7d9f-abcde --previous\n" +
+						"2026-08-30T09:14:02Z INFO  starting api v1.4.3\n" +
+						"2026-08-30T09:14:02Z FATAL config: env DB_PASSWORD is required\n" +
+						"panic: missing required env DB_PASSWORD\n" +
+						"\n" +
+						"$ kubectl describe pod api-7d9f-abcde | grep -A4 'Last State'\n" +
+						"    Last State:     Terminated\n" +
+						"      Reason:       Error\n" +
+						"      Exit Code:    1\n" +
+						"      Started:      Fri, 30 Aug 2026 09:14:02 +0000\n" +
+						"      Finished:     Fri, 30 Aug 2026 09:14:02 +0000\n" +
+						"```\n" +
+						"\n" +
+						"Читаем так: `Exit Code: 1` — приложение само вышло с ошибкой, образ скачался.\n" +
+						"Значит это не `ImagePullBackOff`. Причина в `--previous`: нет секрета `DB_PASSWORD`.\n" +
+						"\n" +
+						"\n" +
 						"## Сертификат\n\n" +
 						"Когда все уроки курса пройдены, платформа сама выдаёт сертификат: " +
 						"уникальный номер и страница проверки, ссылку на которую можно отправить работодателю.\n\n" +
+						"### Разбор: служба не поднялась\n" +
+						"\n" +
+						"Ещё частый сценарий — сервис в статусе `failed`. Статус и хвост журнала обычно всё объясняют.\n" +
+						"\n" +
+						"```bash\n" +
+						"$ systemctl status api --no-pager\n" +
+						"● api.service - API service\n" +
+						"     Loaded: loaded (/etc/systemd/system/api.service; enabled)\n" +
+						"     Active: failed (Result: exit-code) since Fri 2026-08-30 09:20:11 UTC\n" +
+						"    Process: 4123 ExecStart=/usr/bin/api (code=exited, status=203/EXEC)\n" +
+						"\n" +
+						"$ journalctl -u api -n 3 --no-pager\n" +
+						"Aug 30 09:20:11 web1 systemd[1]: Started API service.\n" +
+						"Aug 30 09:20:11 web1 systemd[1]: api.service: Failed at step EXEC: Permission denied\n" +
+						"Aug 30 09:20:11 web1 systemd[1]: api.service: Main process exited, status=203/EXEC\n" +
+						"```\n" +
+						"\n" +
+						"`status=203/EXEC` — systemd не смог запустить файл, почти всегда это права.\n" +
+						"Проверяем бит запуска: `ls -l /usr/bin/api`, чинится через `chmod +x`.\n" +
+						"\n" +
+						"\n" +
 						"## Что делать после курса\n\n" +
 						"1. Соберите свой маленький проект: приложение, база, Dockerfile, конвейер сборки.\n" +
 						"2. Выложите его на GitHub — это лучшее портфолио для junior.\n" +
@@ -61,6 +109,28 @@ func moduleExam() ModuleSeed {
 						"4. Дальше можно готовиться к сертификации CKA — она признаётся работодателями.\n\n" +
 						"Не пытайтесь выучить всё сразу. Возьмите один инструмент и доведите его " +
 						"до уверенного владения. Для первой работы этого достаточно.\n\n" +
+						"### Разбор: `plan` хочет пересоздать базу\n" +
+						"\n" +
+						"Перед `apply` всегда читаем план. Слово `destroy` на проде — повод остановиться.\n" +
+						"\n" +
+						"```bash\n" +
+						"$ terraform plan\n" +
+						"\n" +
+						"  # aws_db_instance.main must be replaced\n" +
+						"-/+ resource \"aws_db_instance\" \"main\" {\n" +
+						"      ~ instance_class = \"db.t3.small\" -> \"db.t3.medium\" # forces replacement\n" +
+						"      ~ id             = \"db-ab12\" -> (known after apply)\n" +
+						"        # (18 unchanged attributes hidden)\n" +
+						"    }\n" +
+						"\n" +
+						"Plan: 1 to add, 0 to change, 1 to destroy.\n" +
+						"```\n" +
+						"\n" +
+						"Знак `-/+` значит «удалить и создать заново», а не «изменить на месте».\n" +
+						"Комментарий `forces replacement` показывает виновный атрибут — смену класса БД.\n" +
+						"На проде это простой и риск потери данных, поэтому сначала разбор, потом `apply`.\n" +
+						"\n" +
+						"\n" +
 						"## Запомнить\n\n" +
 						"1. Порог экзамена — 80%, пересдавать можно сколько угодно раз.\n" +
 						"2. Перед экзаменом перечитайте блоки «Запомнить» в уроках.\n" +
@@ -80,6 +150,16 @@ func moduleExam() ModuleSeed {
 							"title": "Google SRE Book",
 							"url":   "https://sre.google/books/",
 							"note":  "две книги целиком бесплатно — следующий уровень",
+						},
+						{
+							"title": "Pro Git (полная книга)",
+							"url":   "https://git-scm.com/book/en/v2",
+							"note":  "первоисточник по Git целиком бесплатно, для повторения перед экзаменом",
+						},
+						{
+							"title": "The Twelve-Factor App",
+							"url":   "https://12factor.net/",
+							"note":  "принципы конфигов, логов и процессов, на которых стоит весь курс",
 						},
 					},
 				},
@@ -258,6 +338,21 @@ func moduleExam() ModuleSeed {
 							"url":   "https://kubernetes.io/docs/tasks/debug/debug-application/",
 							"note":  "официальный порядок разбора проблем с подами и сервисами",
 						},
+						{
+							"title": "Debug Running Pods",
+							"url":   "https://kubernetes.io/docs/tasks/debug/debug-application/debug-running-pod/",
+							"note":  "как читать статусы, события и логи пода при разборе инцидента",
+						},
+						{
+							"title": "kubectl Cheat Sheet",
+							"url":   "https://kubernetes.io/docs/reference/kubectl/cheatsheet/",
+							"note":  "шпаргалка команд get/describe/logs/rollout для дежурства",
+						},
+						{
+							"title": "curl — manual",
+							"url":   "https://curl.se/docs/manpage.html",
+							"note":  "флаги -I и -v: проверка заголовков, кодов ответа и TLS-рукопожатия",
+						},
 					},
 					"intro": "Поступила жалоба: часть запросов к API завершается ошибкой. Проведите разбор целиком — от внешней проверки до логов и кластера.",
 					"shell": "student@devops",
@@ -330,6 +425,21 @@ func moduleExam() ModuleSeed {
 							"title": "Конфигурация подов: securityContext",
 							"url":   "https://kubernetes.io/docs/tasks/configure-pod-container/security-context/",
 							"note":  "runAsNonRoot, readOnlyRootFilesystem и другие ограничения",
+						},
+						{
+							"title": "Kubernetes: Deployment",
+							"url":   "https://kubernetes.io/docs/concepts/workloads/controllers/deployment/",
+							"note":  "поля replicas, selector, template и стратегия обновления",
+						},
+						{
+							"title": "Liveness, Readiness and Startup Probes",
+							"url":   "https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/",
+							"note":  "как задать пробы и initialDelaySeconds в манифесте",
+						},
+						{
+							"title": "Managing Resources for Containers",
+							"url":   "https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/",
+							"note":  "requests и limits для CPU и памяти, единицы m и Mi",
 						},
 					},
 					"language": "yaml",

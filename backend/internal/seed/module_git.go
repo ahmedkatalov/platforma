@@ -83,6 +83,35 @@ func moduleGit() ModuleSeed {
 						"- **Коммитят всё подряд командой `git add .` не глядя.** Сначала `git status`.\n" +
 						"- **Сообщения вроде «правки».** Никто потом не поймёт, что там было.\n" +
 						"- **Боятся сделать лишний коммит.** Не бойтесь: много маленьких коммитов лучше одного огромного.\n\n" +
+						"## Как выглядит реальная сессия\n" +
+						"\n" +
+						"Обычный цикл, но с типичной заминкой — push отклонён:\n" +
+						"\n" +
+						"```bash\n" +
+						"$ git status\n" +
+						"On branch main\n" +
+						"Changes not staged for commit:\n" +
+						"  modified:   app.py\n" +
+						"\n" +
+						"$ git add app.py\n" +
+						"$ git commit -m \"fix: обработка пустого заказа\"\n" +
+						"[main a1b2c3d] fix: обработка пустого заказа\n" +
+						" 1 file changed, 4 insertions(+)\n" +
+						"\n" +
+						"$ git push\n" +
+						" ! [rejected]        main -> main (fetch first)\n" +
+						"error: failed to push some refs\n" +
+						"hint: Updates were rejected because the remote contains work that\n" +
+						"hint: you do not have locally.\n" +
+						"\n" +
+						"$ git pull --rebase\n" +
+						"$ git push\n" +
+						"   9f8e7d6..a1b2c3d  main -> main\n" +
+						"```\n" +
+						"\n" +
+						"`rejected ... fetch first` значит: на сервере есть чужие коммиты, которых нет у вас.\n" +
+						"`git pull --rebase` подтягивает их и кладёт ваш коммит сверху, затем push проходит.\n" +
+						"\n" +
 						"## Запомнить\n\n" +
 						"1. Правки → `git add` → `git commit` → `git push`.\n" +
 						"2. `git status` — самая полезная команда, набирайте её чаще.\n" +
@@ -97,6 +126,16 @@ func moduleGit() ModuleSeed {
 							"title": "Learn Git Branching — тренажёр в браузере",
 							"url":   "https://learngitbranching.js.org/?locale=ru_RU",
 							"note":  "наглядно показывает, что происходит с ветками",
+						},
+						{
+							"title": "Atlassian — учебник по Git",
+							"url":   "https://www.atlassian.com/git/tutorials",
+							"note":  "пошаговые статьи с картинками: от первого коммита до веток",
+						},
+						{
+							"title": "git-scm — описание git commit",
+							"url":   "https://git-scm.com/docs/git-commit",
+							"note":  "официальный справочник по коммитам и их флагам",
 						},
 					},
 				},
@@ -231,6 +270,37 @@ func moduleGit() ModuleSeed {
 						"- **Работают прямо в `main`.** Заведите ветку — это одна команда.\n" +
 						"- **Делают `git push --force` в общую ветку.** Так можно стереть работу коллег.\n" +
 						"- **Копят изменения неделю в одной ветке.** Чем крупнее ветка, тем больнее конфликты.\n\n" +
+						"## Разбор конфликта на практике\n" +
+						"\n" +
+						"Слили ветку, а Git не смог объединить одну строку:\n" +
+						"\n" +
+						"```bash\n" +
+						"$ git merge feature/login\n" +
+						"Auto-merging app.py\n" +
+						"CONFLICT (content): Merge conflict in app.py\n" +
+						"Automatic merge failed; fix conflicts and then commit the result.\n" +
+						"```\n" +
+						"\n" +
+						"Открываем app.py — Git пометил спорное место:\n" +
+						"\n" +
+						"```\n" +
+						"<<<<<<< HEAD\n" +
+						"timeout = 30\n" +
+						"=======\n" +
+						"timeout = 60\n" +
+						">>>>>>> feature/login\n" +
+						"```\n" +
+						"\n" +
+						"Оставляем нужную строку, удаляем маркеры, затем:\n" +
+						"\n" +
+						"```bash\n" +
+						"$ git add app.py\n" +
+						"$ git commit\n" +
+						"[main 7c2e5f9] Merge feature/login\n" +
+						"```\n" +
+						"\n" +
+						"Конфликт — это не поломка, а вопрос Git: чей вариант оставить.\n" +
+						"\n" +
 						"## Запомнить\n\n" +
 						"1. Новая задача — новая ветка.\n" +
 						"2. В `main` попадает только проверенный код, через pull request.\n" +
@@ -245,6 +315,16 @@ func moduleGit() ModuleSeed {
 							"title": "Oh Shit, Git!?! — выход из типичных ситуаций",
 							"url":   "https://ohshitgit.com/ru",
 							"note":  "короткие рецепты на случай «я всё сломал»",
+						},
+						{
+							"title": "Atlassian — конфликты слияния",
+							"url":   "https://www.atlassian.com/git/tutorials/using-branches/merge-conflicts",
+							"note":  "разбор, откуда берётся конфликт и как его закрыть",
+						},
+						{
+							"title": "GitHub — разрешение конфликта в командной строке",
+							"url":   "https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/addressing-merge-conflicts/resolving-a-merge-conflict-using-the-command-line",
+							"note":  "официальная инструкция по шагам",
 						},
 					},
 				},

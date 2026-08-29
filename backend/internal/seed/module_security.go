@@ -61,6 +61,30 @@ func moduleSecurity() ModuleSeed {
 						"chmod 600 ~/.ssh/id_ed25519   # ключ читает только владелец\n" +
 						"```\n\n" +
 						"Если права шире, ssh просто откажется работать с таким ключом. Это защита, а не придирка.\n\n" +
+						"Классическая ошибка на практике: у приватного ключа широкие права, и ssh его игнорирует.\n" +
+						"\n" +
+						"```bash\n" +
+						"$ ssh -i ~/.ssh/id_ed25519 deploy@10.0.0.5\n" +
+						"@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n" +
+						"@  WARNING: UNPROTECTED PRIVATE KEY FILE!  @\n" +
+						"@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n" +
+						"Permissions 0644 for '/home/student/.ssh/id_ed25519' are too open.\n" +
+						"This private key will be ignored.\n" +
+						"deploy@10.0.0.5: Permission denied (publickey).\n" +
+						"\n" +
+						"$ ls -l ~/.ssh/id_ed25519\n" +
+						"-rw-r--r-- 1 student student 411 Aug 30 10:12 /home/student/.ssh/id_ed25519\n" +
+						"\n" +
+						"$ chmod 600 ~/.ssh/id_ed25519\n" +
+						"$ ssh -i ~/.ssh/id_ed25519 deploy@10.0.0.5\n" +
+						"Welcome to Ubuntu 22.04.4 LTS\n" +
+						"deploy@prod-1:~$\n" +
+						"```\n" +
+						"\n" +
+						"Строка `too open` значит: ключ доступен другим, поэтому ssh отказал.\n" +
+						"\n" +
+						"После `chmod 600` права стали `-rw-------`, и вход прошёл.\n" +
+						"\n" +
 						"## Что торчит наружу\n\n" +
 						"В интернет обычно смотрят только порты 80 и 443. Всё остальное — база, панель " +
 						"мониторинга, административные адреса — во внутренней сети.\n\n" +
@@ -71,6 +95,27 @@ func moduleSecurity() ModuleSeed {
 						"- **Коммитят `.env` с паролями.** Проверьте `.gitignore` до первого коммита.\n" +
 						"- **Один пароль на все окружения.** Утёк с тестового — открыт и прод.\n" +
 						"- **Раздают всем полный доступ «чтобы не мешало».** Мешает как раз потом.\n\n" +
+						"Удалить файл мало: секрет остаётся в истории и виден любому, у кого есть репозиторий.\n" +
+						"\n" +
+						"```bash\n" +
+						"$ git rm --cached .env && git commit -m \"remove .env\"\n" +
+						"rm '.env'\n" +
+						"[main 4d5e6f7] remove .env\n" +
+						"\n" +
+						"$ git log --oneline -- .env\n" +
+						"4d5e6f7 remove .env\n" +
+						"9f8e7d6 add config        # секрет добавили здесь\n" +
+						"\n" +
+						"$ git show 9f8e7d6:.env\n" +
+						"API_TOKEN=ghp_R3alSecretValue...\n" +
+						"\n" +
+						"$ # токен читается из старого коммита — значит он скомпрометирован\n" +
+						"```\n" +
+						"\n" +
+						"`git show` достаёт файл из любого коммита прошлого.\n" +
+						"\n" +
+						"Раз токен виден — его отзывают и выпускают заново, а не «подчищают» историю.\n" +
+						"\n" +
 						"## Запомнить\n\n" +
 						"1. Секрет в Git = скомпрометированный секрет. Отзывать, а не удалять.\n" +
 						"2. Пароли — в хранилище секретов, в коде их нет.\n" +
@@ -85,6 +130,21 @@ func moduleSecurity() ModuleSeed {
 							"title": "OWASP Top 10 — основные риски",
 							"url":   "https://owasp.org/www-project-top-ten/",
 							"note":  "список, который спрашивают на собеседованиях",
+						},
+						{
+							"title": "Kubernetes — Secrets",
+							"url":   "https://kubernetes.io/docs/concepts/configuration/secret/",
+							"note":  "как приложение в кластере получает пароли из Secret",
+						},
+						{
+							"title": "OWASP — Secrets Management Cheat Sheet",
+							"url":   "https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html",
+							"note":  "практики хранения, ротации и отзыва секретов",
+						},
+						{
+							"title": "Git — документация по .gitignore",
+							"url":   "https://git-scm.com/docs/gitignore",
+							"note":  "синтаксис файла: как не отслеживать .env и *.key",
 						},
 					},
 				},
@@ -221,6 +281,25 @@ func moduleSecurity() ModuleSeed {
 						"\n" +
 						"Он покажет известные уязвимости в библиотеках и подскажет, до какой версии обновиться. " +
 						"Обычно такую проверку встраивают в конвейер сборки.\n\n" +
+						"В конвейере сканер запускают с `--exit-code 1`: критичная уязвимость должна ронять сборку.\n" +
+						"\n" +
+						"```bash\n" +
+						"$ trivy image --severity HIGH,CRITICAL --exit-code 1 myapp:1.4.2\n" +
+						"myapp:1.4.2 (alpine 3.20.1)\n" +
+						"Total: 1 (HIGH: 0, CRITICAL: 1)\n" +
+						"\n" +
+						"libcrypto3  CVE-2024-XXXXX  CRITICAL  3.3.0-r0  fixed in 3.3.1-r0\n" +
+						"\n" +
+						"$ echo $?\n" +
+						"1\n" +
+						"\n" +
+						"$ # ненулевой код останавливает pipeline — образ в прод не уедет\n" +
+						"```\n" +
+						"\n" +
+						"`echo $?` показал `1`: шаг упал специально, а не сломался.\n" +
+						"\n" +
+						"Чиним так: обновляем `libcrypto3` до `3.3.1-r0` и запускаем скан снова.\n" +
+						"\n" +
 						"## Два слова, которые встретятся в вакансиях\n\n" +
 						"**SBOM** — список всего, что попало в сборку. Как состав на упаковке продукта. " +
 						"Когда находят уязвимость в популярной библиотеке, по SBOM за минуты понятно, " +
@@ -236,6 +315,24 @@ func moduleSecurity() ModuleSeed {
 						"Регулярное обновление зависимостей закрывает больше рисков, чем сложные меры защиты.\n\n" +
 						"Обновления удобно автоматизировать: боты вроде Dependabot или Renovate сами открывают " +
 						"pull request с новой версией библиотеки.\n\n" +
+						"Секрет, заданный через `ENV`, остаётся в слоях образа даже если файл потом удалить.\n" +
+						"\n" +
+						"```bash\n" +
+						"$ docker history myapp:1.4.2\n" +
+						"IMAGE          CREATED       CREATED BY                       SIZE\n" +
+						"a1b2c3d4e5f6   2 hours ago   CMD [\"/app\"]                     0B\n" +
+						"<missing>      2 hours ago   ENV DB_PASSWORD=supersecret      0B\n" +
+						"<missing>      2 hours ago   COPY . . # buildkit              12MB\n" +
+						"<missing>      3 hours ago   FROM alpine:3.20                 7MB\n" +
+						"\n" +
+						"$ docker history --no-trunc myapp:1.4.2 | grep -i pass\n" +
+						"<missing>      ENV DB_PASSWORD=supersecret\n" +
+						"```\n" +
+						"\n" +
+						"`grep` нашёл пароль прямо в слое.\n" +
+						"\n" +
+						"Файл можно удалить, но слой останется — образ пересобирают заново, без секрета в сборке.\n" +
+						"\n" +
 						"## Частые ошибки новичка\n\n" +
 						"- **`latest` в образе.** Сборка перестаёт быть воспроизводимой.\n" +
 						"- **Игнорируют отчёты сканера.** Через полгода их становится триста, и на них машут рукой.\n" +
@@ -259,6 +356,21 @@ func moduleSecurity() ModuleSeed {
 							"title": "Безопасность Docker",
 							"url":   "https://docs.docker.com/engine/security/",
 							"note":  "изоляция, права и rootless-режим",
+						},
+						{
+							"title": "Docker — рекомендации по сборке образов",
+							"url":   "https://docs.docker.com/build/building/best-practices/",
+							"note":  "фиксация версий, не-root, многоэтапная сборка",
+						},
+						{
+							"title": "SLSA — безопасность цепочки поставки",
+							"url":   "https://slsa.dev/",
+							"note":  "уровни защиты артефактов и происхождение сборки",
+						},
+						{
+							"title": "CycloneDX — формат SBOM",
+							"url":   "https://cyclonedx.org/",
+							"note":  "стандарт описания состава образа для поиска уязвимостей",
 						},
 					},
 				},

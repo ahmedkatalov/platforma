@@ -63,6 +63,24 @@ func moduleLinux() ModuleSeed {
 						"\n" +
 						"После `cd` приглашение стало `~/projects` — оно всегда показывает, где вы сейчас.\n" +
 						"\n" +
+						"Реальная сессия почти всегда начинается с пары ошибок. Вот как они выглядят и читаются:\n" +
+						"\n" +
+						"```\n" +
+						"student@devops:~$ cd /var/logs\n" +
+						"-bash: cd: /var/logs: No such file or directory\n" +
+						"student@devops:~$ cd /var/log\n" +
+						"student@devops:/var/log$ cat app.log\n" +
+						"cat: app.log: Permission denied\n" +
+						"student@devops:/var/log$ ls -l app.log\n" +
+						"-rw-r----- 1 root adm 48213 Aug 29 09:14 app.log\n" +
+						"```\n" +
+						"\n" +
+						"Две ошибки подряд. Первая: `/var/logs` не существует — опечатка, папка называется `/var/log`.\n" +
+						"\n" +
+						"Вторая: `Permission denied`. Файл принадлежит `root`, группе `adm`, а мы не в ней.\n" +
+						"\n" +
+						"`ls -l` это подтверждает: у «остальных» нет даже `r`. Прочитать лог сможет только владелец или root.\n" +
+						"\n" +
 						"## Частые ошибки новичка\n\n" +
 						"- **Забыли, где находитесь.** Наберите `pwd` — это ничего не сломает.\n" +
 						"- **Команда не найдена.** Проверьте раскладку и опечатки: Linux различает большие и маленькие буквы.\n" +
@@ -81,6 +99,21 @@ func moduleLinux() ModuleSeed {
 							"title": "ExplainShell — разбор команды по частям",
 							"url":   "https://explainshell.com/",
 							"note":  "вставьте непонятную команду и увидите, что делает каждый флаг",
+						},
+						{
+							"title": "GNU Coreutils — руководство",
+							"url":   "https://www.gnu.org/software/coreutils/manual/coreutils.html",
+							"note":  "официальные описания pwd, ls, cat и других базовых команд",
+						},
+						{
+							"title": "Filesystem Hierarchy Standard (FHS 3.0)",
+							"url":   "https://refspecs.linuxfoundation.org/FHS_3.0/fhs/index.html",
+							"note":  "стандарт, объясняющий назначение /etc, /var, /tmp, /usr",
+						},
+						{
+							"title": "ls — официальное описание",
+							"url":   "https://man7.org/linux/man-pages/man1/ls.1.html",
+							"note":  "все флаги ls, включая -l и -a",
 						},
 					},
 				},
@@ -301,10 +334,44 @@ func moduleLinux() ModuleSeed {
 						"| `600` | приватные ключи, файлы с паролями |\n" +
 						"| `644` | обычные файлы и конфиги |\n" +
 						"| `755` | скрипты и папки |\n\n" +
+						"Классика, на которой спотыкаются все: ssh отказывается брать ключ со слишком широкими правами.\n" +
+						"\n" +
+						"```\n" +
+						"student@devops:~$ ssh -i id_rsa deploy@10.0.0.5\n" +
+						"@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n" +
+						"@    WARNING: UNPROTECTED PRIVATE KEY FILE!        @\n" +
+						"@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n" +
+						"Permissions 0644 for 'id_rsa' are too open.\n" +
+						"This private key will be ignored.\n" +
+						"student@devops:~$ chmod 600 id_rsa\n" +
+						"student@devops:~$ ssh -i id_rsa deploy@10.0.0.5\n" +
+						"deploy@web-1:~$\n" +
+						"```\n" +
+						"\n" +
+						"Ключ читался всеми (`0644`), и ssh его проигнорировал — это защита, а не сбой.\n" +
+						"\n" +
+						"После `chmod 600` файл виден только владельцу, и вход проходит. Отсюда правило `600` для ключей.\n" +
+						"\n" +
 						"## Частые ошибки новичка\n\n" +
 						"- **Ставят 777 при любой ошибке доступа.** Это не решение, а дыра в безопасности.\n" +
 						"- **Забывают про x у папок.** Без `x` в папку нельзя войти, даже если есть `r`.\n" +
 						"- **Правят права вместо владельца.** Иногда нужен `chown`, а не `chmod`.\n\n" +
+						"Ещё одна частая ловушка — папка без права `x`. Внутрь не войти, хотя `r` на месте.\n" +
+						"\n" +
+						"```\n" +
+						"student@devops:~$ ls -ld backups\n" +
+						"drw-r--r-- 2 student student 4096 Aug 29 10:00 backups\n" +
+						"student@devops:~$ cd backups\n" +
+						"-bash: cd: backups: Permission denied\n" +
+						"student@devops:~$ chmod 755 backups\n" +
+						"student@devops:~$ cd backups\n" +
+						"student@devops:~/backups$\n" +
+						"```\n" +
+						"\n" +
+						"У папки права `rw-` без `x`. Первый символ `d` — это каталог, а не файл.\n" +
+						"\n" +
+						"`chmod 755` добавляет `x`, и `cd` срабатывает. Для папок `x` означает «можно войти внутрь».\n" +
+						"\n" +
 						"## Запомнить\n\n" +
 						"1. Читать 4, писать 2, запускать 1 — складываем и получаем цифру.\n" +
 						"2. Три цифры: владелец, группа, остальные.\n" +
@@ -314,6 +381,21 @@ func moduleLinux() ModuleSeed {
 							"title": "chmod — официальное описание",
 							"url":   "https://man7.org/linux/man-pages/man1/chmod.1.html",
 							"note":  "числовые и буквенные режимы, если понадобятся тонкости",
+						},
+						{
+							"title": "chown — смена владельца файла",
+							"url":   "https://man7.org/linux/man-pages/man1/chown.1.html",
+							"note":  "когда вместо chmod правильнее поменять владельца",
+						},
+						{
+							"title": "GNU Coreutils — права на файлы",
+							"url":   "https://www.gnu.org/software/coreutils/manual/html_node/File-permissions.html",
+							"note":  "числовая и буквенная запись режимов рядом",
+						},
+						{
+							"title": "Arch Wiki — права и атрибуты файлов",
+							"url":   "https://wiki.archlinux.org/title/File_permissions_and_attributes",
+							"note":  "подробный разбор rwx, прав на папки и особых битов",
 						},
 					},
 				},
@@ -458,6 +540,28 @@ func moduleLinux() ModuleSeed {
 						"uptime     # сколько работает сервер и какая нагрузка\n" +
 						"```\n\n" +
 						"Флаг `-h` означает «human readable» — покажет гигабайты вместо длинных чисел.\n\n" +
+						"Вот как выглядит разбор упавшей службы: от статуса к журналу и к настоящей причине.\n" +
+						"\n" +
+						"```\n" +
+						"student@devops:~$ systemctl status app\n" +
+						"● app.service - Payment API\n" +
+						"     Loaded: loaded (/etc/systemd/system/app.service; enabled)\n" +
+						"     Active: failed (Result: exit-code) since Sat 2026-08-29 11:02:53; 20s ago\n" +
+						"   Main PID: 2841 (code=exited, status=1/FAILURE)\n" +
+						"student@devops:~$ journalctl -u app -n 3 --no-pager\n" +
+						"Aug 29 11:02:53 devops app[2841]: Error: ENOENT: no such file or directory, open '/etc/app/config.yml'\n" +
+						"Aug 29 11:02:53 devops systemd[1]: app.service: Main process exited, code=exited, status=1/FAILURE\n" +
+						"Aug 29 11:02:53 devops systemd[1]: app.service: Failed with result 'exit-code'.\n" +
+						"student@devops:~$ ls -l /etc/app/\n" +
+						"total 0\n" +
+						"```\n" +
+						"\n" +
+						"`Active: failed` и `status=1/FAILURE` — служба стартовала и тут же упала.\n" +
+						"\n" +
+						"`journalctl` показывает причину: `ENOENT` — программа не нашла файл `/etc/app/config.yml`.\n" +
+						"\n" +
+						"`ls` это подтверждает: папка `/etc/app` пустая. Чинить нужно конфиг, а не службу.\n" +
+						"\n" +
 						"## Порядок разбора сбоя\n\n" +
 						"Запомните эту последовательность — она закрывает большинство случаев:\n\n" +
 						"1. Служба вообще запущена? → `systemctl status`\n" +
@@ -470,6 +574,23 @@ func moduleLinux() ModuleSeed {
 						"- **Сразу `kill -9`.** Программа не успевает закрыть файлы, данные теряются.\n" +
 						"- **Читают начало лога вместо конца.** Свежие записи внизу: `tail`, а не `head`.\n" +
 						"- **Проверяют всё, кроме диска.** `df -h` — первое, что стоит посмотреть.\n\n" +
+						"И самая недооценённая причина поломок — забитый диск. Проверяется в две команды.\n" +
+						"\n" +
+						"```\n" +
+						"student@devops:~$ df -h\n" +
+						"Filesystem      Size  Used Avail Use% Mounted on\n" +
+						"/dev/root        20G   20G  0.2G  99% /\n" +
+						"tmpfs           2.0G  1.1M  2.0G   1% /run\n" +
+						"student@devops:~$ du -sh /var/log/* | sort -h | tail -3\n" +
+						"120M  /var/log/journal\n" +
+						"1.8G  /var/log/nginx\n" +
+						"8.9G  /var/log/app.log\n" +
+						"```\n" +
+						"\n" +
+						"`Use% 99%` и `Avail 0.2G` — корневой раздел почти полон, писать уже некуда.\n" +
+						"\n" +
+						"`du` с сортировкой находит виновника: `app.log` разросся до `8.9G`. Его и чистим первым.\n" +
+						"\n" +
 						"## Запомнить\n\n" +
 						"1. `ps aux` — что запущено, `systemctl status` — как чувствует себя служба.\n" +
 						"2. Логи читают с конца: `tail`, `journalctl -n`.\n" +
@@ -484,6 +605,21 @@ func moduleLinux() ModuleSeed {
 							"title": "Метод USE — быстрый поиск узкого места",
 							"url":   "https://www.brendangregg.com/usemethod.html",
 							"note":  "когда захочется разбираться в производительности глубже",
+						},
+						{
+							"title": "journalctl — чтение системного журнала",
+							"url":   "https://www.freedesktop.org/software/systemd/man/latest/journalctl.html",
+							"note":  "фильтры -u, -n, -f и выборка по времени",
+						},
+						{
+							"title": "ps — список процессов",
+							"url":   "https://man7.org/linux/man-pages/man1/ps.1.html",
+							"note":  "форматы вывода и что означают колонки ps aux",
+						},
+						{
+							"title": "signal — сигналы процессам",
+							"url":   "https://man7.org/linux/man-pages/man7/signal.7.html",
+							"note":  "разница между SIGTERM (kill) и SIGKILL (kill -9)",
 						},
 					},
 				},

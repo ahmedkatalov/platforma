@@ -91,10 +91,65 @@ func moduleNetwork() ModuleSeed {
 						"dig +short example.com           # какой адрес у домена\n" +
 						"ss -tulpn                        # какие порты открыты\n" +
 						"```\n\n" +
+						"## Разбор боевого 502\n" +
+						"\n" +
+						"Сайт отдаёт 502. Пройдём путь запроса сверху вниз и найдём причину.\n" +
+						"\n" +
+						"```bash\n" +
+						"$ curl -I https://app.example.com/\n" +
+						"HTTP/1.1 502 Bad Gateway\n" +
+						"Server: nginx/1.24.0\n" +
+						"\n" +
+						"# Прокси жив, но ответа от приложения нет. Слушает ли оно порт 8080?\n" +
+						"$ ss -tulpn | grep 8080\n" +
+						"$\n" +
+						"\n" +
+						"# Пусто — на 8080 никто не слушает. Смотрим службу приложения.\n" +
+						"$ systemctl status app\n" +
+						"● app.service - Orders API\n" +
+						"     Loaded: loaded (/etc/systemd/system/app.service; enabled)\n" +
+						"     Active: failed (Result: exit-code) since Sat 2026-08-29 10:12:03 UTC\n" +
+						"    Process: 4821 ExecStart=/usr/bin/app (code=exited, status=1/FAILURE)\n" +
+						"\n" +
+						"# Служба упала. Читаем последние строки журнала.\n" +
+						"$ journalctl -u app -n 5 --no-pager\n" +
+						"app[4821]: panic: dial tcp 10.0.0.5:5432: connect: connection refused\n" +
+						"app[4821]: goroutine 1 [running]:\n" +
+						"app[4821]: main.main()\n" +
+						"```\n" +
+						"\n" +
+						"Приложение не достучалось до базы на 5432 и упало. 502 был симптомом, а не причиной.\n" +
+						"\n" +
+						"Вывод: не лезьте сразу в конфиг nginx — идите по цепочке до реального источника.\n" +
+						"\n" +
+						"\n" +
 						"## Частые ошибки новичка\n\n" +
 						"- **Видят 502 и лезут в настройки nginx.** Чаще всего дело в упавшей программе.\n" +
 						"- **Перезагружают nginx без проверки.** Одна опечатка — и сайт лежит.\n" +
 						"- **Открывают наружу лишние порты.** База данных не должна смотреть в интернет.\n\n" +
+						"## Как выглядит провал nginx -t\n" +
+						"\n" +
+						"Проверка ловит опечатку до перезагрузки — иначе сайт ляжет целиком.\n" +
+						"\n" +
+						"```bash\n" +
+						"$ nginx -t\n" +
+						"nginx: [emerg] unknown directive \"proxy_passs\" in /etc/nginx/conf.d/app.conf:14\n" +
+						"nginx: configuration file /etc/nginx/nginx.conf test failed\n" +
+						"```\n" +
+						"\n" +
+						"nginx назвал файл и строку 14 — там лишняя `s` в `proxy_pass`. Правим и проверяем снова.\n" +
+						"\n" +
+						"```bash\n" +
+						"$ nginx -t\n" +
+						"nginx: the configuration file /etc/nginx/nginx.conf syntax is ok\n" +
+						"nginx: configuration file /etc/nginx/nginx.conf test is successful\n" +
+						"\n" +
+						"$ nginx -s reload\n" +
+						"```\n" +
+						"\n" +
+						"Перезагрузка безопасна только после строки «test is successful».\n" +
+						"\n" +
+						"\n" +
 						"## Запомнить\n\n" +
 						"1. 500 — программа ответила ошибкой, 502 — не ответила вовсе.\n" +
 						"2. `nginx -t` перед каждой перезагрузкой.\n" +
@@ -109,6 +164,21 @@ func moduleNetwork() ModuleSeed {
 							"title": "nginx — руководство для начинающих",
 							"url":   "https://nginx.org/ru/docs/beginners_guide.html",
 							"note":  "структура файла настроек на русском",
+						},
+						{
+							"title": "RFC 9110 — семантика HTTP и коды ответов",
+							"url":   "https://www.rfc-editor.org/rfc/rfc9110.html",
+							"note":  "первоисточник: что официально означает каждый код (200, 404, 500, 502)",
+						},
+						{
+							"title": "man ss(8) — сокеты и открытые порты",
+							"url":   "https://man7.org/linux/man-pages/man8/ss.8.html",
+							"note":  "точное значение флагов -tulpn и как читать столбцы вывода",
+						},
+						{
+							"title": "Cloudflare Learning — What is DNS?",
+							"url":   "https://www.cloudflare.com/learning/dns/what-is-dns/",
+							"note":  "наглядно про разрешение имени в IP и цепочку DNS-запросов",
 						},
 					},
 				},
@@ -254,6 +324,35 @@ func moduleNetwork() ModuleSeed {
 						"по обычному HTTP. Это называется «терминировать TLS».\n\n" +
 						"Так делают, чтобы приложение не занималось шифрованием. Главное, чтобы участок " +
 						"от nginx до приложения был во внутренней сети, а не в интернете.\n\n" +
+						"## TLS-рукопожатие вживую\n" +
+						"\n" +
+						"Флаг `-v` у curl показывает обмен сертификатами. Так виден момент обрыва.\n" +
+						"\n" +
+						"```bash\n" +
+						"$ curl -v https://expired.example.com/ 2>&1 | head -n 10\n" +
+						"*   Trying 93.184.216.34:443...\n" +
+						"* Connected to expired.example.com (93.184.216.34) port 443\n" +
+						"* TLSv1.3 (OUT), TLS handshake, Client hello (1):\n" +
+						"* TLSv1.3 (IN), TLS handshake, Server hello (2):\n" +
+						"* TLSv1.3 (IN), TLS handshake, Certificate (11):\n" +
+						"* SSL certificate problem: certificate has expired\n" +
+						"* Closing connection\n" +
+						"curl: (60) SSL certificate problem: certificate has expired\n" +
+						"```\n" +
+						"\n" +
+						"Соединение оборвалось на шаге Certificate. Код curl `(60)` — это ошибка проверки сертификата.\n" +
+						"\n" +
+						"Проверяем срок напрямую, не доверяя браузеру.\n" +
+						"\n" +
+						"```bash\n" +
+						"$ echo | openssl s_client -connect expired.example.com:443 2>/dev/null \\\n" +
+						"    | openssl x509 -noout -enddate\n" +
+						"notAfter=Jul 15 12:00:00 2026 GMT\n" +
+						"```\n" +
+						"\n" +
+						"Дата в прошлом — сертификат просрочен. Лечится продлением: `certbot renew`.\n" +
+						"\n" +
+						"\n" +
 						"## Частые ошибки новичка\n\n" +
 						"- **Забывают про продление.** Поставьте автопродление сразу, не «потом».\n" +
 						"- **Кладут приватный ключ в репозиторий.** Это утечка, ключ придётся перевыпускать.\n" +
@@ -272,6 +371,21 @@ func moduleNetwork() ModuleSeed {
 							"title": "Генератор конфигурации TLS от Mozilla",
 							"url":   "https://ssl-config.mozilla.org/",
 							"note":  "готовые настройки для nginx — не подбирайте шифры вручную",
+						},
+						{
+							"title": "certbot — установка и автопродление",
+							"url":   "https://eff-certbot.readthedocs.io/en/stable/using.html",
+							"note":  "как настроить certbot renew, чтобы сертификат не протух молча",
+						},
+						{
+							"title": "RFC 8446 — протокол TLS 1.3",
+							"url":   "https://www.rfc-editor.org/rfc/rfc8446.html",
+							"note":  "первоисточник о том, как устроено TLS-рукопожатие и обмен сертификатами",
+						},
+						{
+							"title": "Qualys SSL Labs — тест сервера",
+							"url":   "https://www.ssllabs.com/ssltest/",
+							"note":  "онлайн проверяет цепочку сертификатов и настройки TLS, ставит оценку",
 						},
 					},
 				},

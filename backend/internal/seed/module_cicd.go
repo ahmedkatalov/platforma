@@ -81,12 +81,50 @@ func moduleCICD() ModuleSeed {
 						"```\n\n" +
 						"Современный подход — вообще без паролей: CI получает временный токен на несколько минут " +
 						"по протоколу OIDC. Украсть такой токен бесполезно, он истечёт.\n\n" +
+						"Когда пайплайн краснеет, необязательно открывать браузер. Упавший шаг видно из терминала через `gh`:\n" +
+						"\n" +
+						"```bash\n" +
+						"$ gh run list --limit 3\n" +
+						"STATUS  TITLE      WORKFLOW  BRANCH  EVENT  ID          ELAPSED\n" +
+						"X       api 1.4.3  ci        main    push   9823471021  1m12s\n" +
+						"✓       fix logs   ci        main    push   9821203344  1m40s\n" +
+						"✓       bump deps  ci        main    push   9820556610  1m38s\n" +
+						"\n" +
+						"$ gh run view 9823471021 --log-failed\n" +
+						"build  Test  --- FAIL: TestCharge (0.00s)\n" +
+						"build  Test      charge_test.go:41: want 1200, got 0\n" +
+						"build  Test  FAIL  api/internal/billing  0.28s\n" +
+						"build  Test  Error: Process completed with exit code 1\n" +
+						"```\n" +
+						"\n" +
+						"`X` — упавший запуск. `--log-failed` печатает только красный шаг: тест `TestCharge` ждал 1200, а получил 0.\n" +
+						"\n" +
 						"## Как выкатывают, чтобы не уронить прод\n\n" +
 						"- **По очереди.** Обновляем сервер за сервером, старые пока работают.\n" +
 						"- **Две среды.** Поднимаем новую версию рядом и переключаем трафик целиком.\n" +
 						"- **Понемногу (canary).** Пускаем на новую версию 5% пользователей, смотрим ошибки, потом остальных.\n\n" +
 						"И главное правило: **план отката должен быть всегда.** Если откатиться нельзя, " +
 						"это не доставка, а лотерея.\n\n" +
+						"Сборка образа падает на конкретном слое. По выводу видно, какие слои взялись из кэша, а какой упал:\n" +
+						"\n" +
+						"```bash\n" +
+						"$ docker build -t api:1.4.3 .\n" +
+						"[+] Building 8.2s (10/12)\n" +
+						" => [1/6] FROM golang:1.25                        0.0s\n" +
+						" => CACHED [2/6] WORKDIR /src                      0.0s\n" +
+						" => CACHED [3/6] COPY go.mod go.sum ./             0.0s\n" +
+						" => CACHED [4/6] RUN go mod download               0.0s\n" +
+						" => [5/6] COPY . .                                 0.3s\n" +
+						" => ERROR [6/6] RUN go build -o /api ./cmd/api     6.1s\n" +
+						"------\n" +
+						" > [6/6] RUN go build -o /api ./cmd/api:\n" +
+						"0.412 cmd/api/main.go:12:2: undefined: startServer\n" +
+						"------\n" +
+						"ERROR: failed to solve: process \"/bin/sh -c go build -o /api ./cmd/api\" did not complete successfully: exit code: 1\n" +
+						"```\n" +
+						"\n" +
+						"`CACHED` — слой не пересобирали, взяли из кэша. Упал слой 6: код не компилируется, `undefined: startServer`. Правим код и собираем заново.\n" +
+						"\n" +
 						"## Частые ошибки новичка\n\n" +
 						"- **Пароль прямо в файле конвейера.** Он попадёт в историю Git навсегда.\n" +
 						"- **Выкат сразу на прод, минуя stage.** Проверять на пользователях — дорого.\n" +
@@ -105,6 +143,21 @@ func moduleCICD() ModuleSeed {
 							"title": "Доступ без паролей: OIDC в Actions",
 							"url":   "https://docs.github.com/en/actions/security-for-github-actions/security-hardening-your-deployments/about-security-hardening-with-openid-connect",
 							"note":  "как выдать конвейеру короткоживущий токен вместо вечного ключа",
+						},
+						{
+							"title": "Continuous Integration — статья Мартина Фаулера",
+							"url":   "https://martinfowler.com/articles/continuousIntegration.html",
+							"note":  "классическое определение CI и почему поломку ловят за минуты",
+						},
+						{
+							"title": "Continuous Delivery — Мартин Фаулер",
+							"url":   "https://martinfowler.com/bliki/ContinuousDelivery.html",
+							"note":  "чем Delivery отличается от Deployment: наличие ручного шага выката",
+						},
+						{
+							"title": "Стратегии выката приложений — Google Cloud",
+							"url":   "https://cloud.google.com/architecture/application-deployment-and-testing-strategies",
+							"note":  "rolling, blue-green и canary: когда что применять",
 						},
 					},
 				},
@@ -238,6 +291,28 @@ func moduleCICD() ModuleSeed {
 						"\n" +
 						"Больше ничего делать не нужно: агент сам подтянет новую версию.\n" +
 						"\n" +
+						"Агент постоянно сравнивает Git с кластером. Если прод поправили руками, приложение становится OutOfSync:\n" +
+						"\n" +
+						"```bash\n" +
+						"$ argocd app get api\n" +
+						"Name:           api\n" +
+						"Project:        default\n" +
+						"Sync Status:    OutOfSync from main (7d1f9a2)\n" +
+						"Health Status:  Healthy\n" +
+						"\n" +
+						"GROUP  KIND        NAMESPACE  NAME  STATUS     HEALTH\n" +
+						"apps   Deployment  prod       api   OutOfSync  Healthy\n" +
+						"\n" +
+						"$ argocd app diff api\n" +
+						"===== /Deployment prod/api ======\n" +
+						"27c27\n" +
+						"<         image: registry.example.com/api:1.4.3\n" +
+						"---\n" +
+						">         image: registry.example.com/api:1.4.2\n" +
+						"```\n" +
+						"\n" +
+						"`<` — как записано в Git (нужно 1.4.3), `>` — как сейчас в кластере (кто-то откатил на 1.4.2). Агент сам вернёт 1.4.3.\n" +
+						"\n" +
 						"## Разница на практике\n\n" +
 						"| | Ручной выкат | GitOps |\n" +
 						"|---|---|---|\n" +
@@ -245,6 +320,23 @@ func moduleCICD() ModuleSeed {
 						"| Кто имеет доступ к проду | все инженеры | только агент |\n" +
 						"| Как откатить | вспомнить прошлую версию | `git revert` |\n" +
 						"| Видно ли, что менялось | иногда | всегда |\n\n" +
+						"Выкат 1.4.3 оказался плохим. Откат в GitOps — это не паника, а один коммит:\n" +
+						"\n" +
+						"```bash\n" +
+						"$ git log --oneline -3\n" +
+						"7d1f9a2 (HEAD -> main) api 1.4.3\n" +
+						"a1b2c3d api 1.4.2\n" +
+						"5e8c0b1 tune limits\n" +
+						"\n" +
+						"$ git revert --no-edit 7d1f9a2\n" +
+						"[main 3c4d5e6] Revert \"api 1.4.3\"\n" +
+						" 1 file changed, 1 insertion(+), 1 deletion(-)\n" +
+						"\n" +
+						"$ git push\n" +
+						"```\n" +
+						"\n" +
+						"`revert` создаёт новый коммит, который отменяет прошлый. Агент увидит его и вернёт прод на 1.4.2.\n" +
+						"\n" +
 						"## Частые ошибки новичка\n\n" +
 						"- **Правят кластер руками при живом GitOps.** Агент вернёт как было — и это правильно.\n" +
 						"- **Кладут секреты в репозиторий описаний.** Секреты подключают отдельно, через хранилище.\n" +
@@ -263,6 +355,21 @@ func moduleCICD() ModuleSeed {
 							"title": "Argo CD — документация",
 							"url":   "https://argo-cd.readthedocs.io/",
 							"note":  "самый распространённый агент: установка и первое приложение",
+						},
+						{
+							"title": "Flux — GitOps-агент (CNCF)",
+							"url":   "https://fluxcd.io/flux/",
+							"note":  "второй по популярности агент после Argo CD, принципы GitOps",
+						},
+						{
+							"title": "git revert — документация Git",
+							"url":   "https://git-scm.com/docs/git-revert",
+							"note":  "как откат оформляется отдельным коммитом, без переписывания истории",
+						},
+						{
+							"title": "Argo CD — основные понятия",
+							"url":   "https://argo-cd.readthedocs.io/en/stable/core_concepts/",
+							"note":  "что такое sync и drift, как агент приводит кластер к описанию",
 						},
 					},
 				},

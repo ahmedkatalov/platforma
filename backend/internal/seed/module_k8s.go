@@ -103,11 +103,54 @@ func moduleKubernetes() ModuleSeed {
 						"| `CrashLoopBackOff` | падает при старте, кластер пытается снова |\n" +
 						"| `ImagePullBackOff` | не может скачать образ: опечатка в имени или нет доступа |\n\n" +
 						"При `CrashLoopBackOff` смотрите `kubectl logs` — причина почти всегда там.\n\n" +
+						"Ещё одно частое состояние — `Pending`. Под создан, но планировщик не нашёл узел с нужными ресурсами. Причина видна в событиях:\n" +
+						"\n" +
+						"```bash\n" +
+						"kubectl get pods\n" +
+						"NAME            READY   STATUS    RESTARTS   AGE\n" +
+						"web-5c8d-h2k9   0/1     Pending   0          45s\n" +
+						"\n" +
+						"kubectl describe pod web-5c8d-h2k9\n" +
+						"...\n" +
+						"Events:\n" +
+						"  Type     Reason            Age   From               Message\n" +
+						"  ----     ------            ----  ----               -------\n" +
+						"  Warning  FailedScheduling  40s   default-scheduler  0/3 nodes are available: 3 Insufficient cpu.\n" +
+						"```\n" +
+						"\n" +
+						"Читаем последнюю строку: `Insufficient cpu` — ни на одном из трёх узлов нет свободного CPU под `requests` пода. Лечится снижением `requests` или добавлением узлов, а не правкой кода.\n" +
+						"\n" +
 						"## Частые ошибки новичка\n\n" +
 						"- **Нет проб.** Обновление даёт всплеск ошибок у пользователей.\n" +
 						"- **Нет `limits`.** Один сервис с утечкой памяти роняет соседей.\n" +
 						"- **`latest` в образе.** Кластер не поймёт, что версия изменилась.\n" +
 						"- **Правят прод через `kubectl edit`.** Изменение потеряется при следующем применении файла.\n\n" +
+						"А так выглядит разбор `ImagePullBackOff`. Сам список подов только называет проблему — настоящая причина в конце `describe`, в разделе Events:\n" +
+						"\n" +
+						"```bash\n" +
+						"kubectl get pods\n" +
+						"NAME            READY   STATUS             RESTARTS   AGE\n" +
+						"api-7d9f-qp3z   0/1     ImagePullBackOff   0          90s\n" +
+						"\n" +
+						"kubectl describe pod api-7d9f-qp3z\n" +
+						"Name:    api-7d9f-qp3z\n" +
+						"Status:  Pending\n" +
+						"Containers:\n" +
+						"  api:\n" +
+						"    Image:   registry.example.com/api:1.4.2\n" +
+						"    State:   Waiting\n" +
+						"      Reason:  ImagePullBackOff\n" +
+						"Events:\n" +
+						"  Type     Reason     Age                From     Message\n" +
+						"  ----     ------     ----               ----     -------\n" +
+						"  Normal   Pulling    88s (x3 over 90s)  kubelet  Pulling image \"registry.example.com/api:1.4.2\"\n" +
+						"  Warning  Failed     86s (x3 over 90s)  kubelet  Failed to pull image \"registry.example.com/api:1.4.2\": manifest unknown\n" +
+						"  Warning  Failed     86s (x3 over 90s)  kubelet  Error: ErrImagePull\n" +
+						"  Normal   BackOff    60s (x5 over 90s)  kubelet  Back-off pulling image \"registry.example.com/api:1.4.2\"\n" +
+						"```\n" +
+						"\n" +
+						"Строка `manifest unknown` означает: такого тега нет в реестре. Частая причина — опечатка в версии образа. Если бы было `unauthorized`, дело в доступе к приватному реестру.\n" +
+						"\n" +
 						"## Запомнить\n\n" +
 						"1. Вы описываете желаемое состояние, кластер его поддерживает.\n" +
 						"2. Pod живёт недолго, Service даёт постоянный адрес.\n" +
@@ -127,6 +170,21 @@ func moduleKubernetes() ModuleSeed {
 							"title": "Диагностика приложений в кластере",
 							"url":   "https://kubernetes.io/docs/tasks/debug/debug-application/",
 							"note":  "официальный порядок разбора: под не стартует, падает, недоступен",
+						},
+						{
+							"title": "Pod — концепция",
+							"url":   "https://kubernetes.io/docs/concepts/workloads/pods/",
+							"note":  "что такое под, почему он одноразовый и когда пересоздаётся",
+						},
+						{
+							"title": "Deployment — управление репликами",
+							"url":   "https://kubernetes.io/docs/concepts/workloads/controllers/deployment/",
+							"note":  "желаемое состояние, количество реплик и обновления",
+						},
+						{
+							"title": "Service — постоянный адрес для подов",
+							"url":   "https://kubernetes.io/docs/concepts/services-networking/service/",
+							"note":  "как Service находит поды по меткам и балансирует трафик",
 						},
 					},
 				},
@@ -289,6 +347,33 @@ func moduleKubernetes() ModuleSeed {
 						"- **Одна реплика на проде.** Любое обновление — простой.\n" +
 						"- **Слишком агрессивная livenessProbe.** Приложение перезапускается под нагрузкой.\n" +
 						"- **Разбираются в причинах вместо отката.** Сначала вернуть работу пользователям.\n\n" +
+						"Как выглядит зависший выкат целиком. Катим новую версию, но новый под падает, а старые продолжают держать трафик:\n" +
+						"\n" +
+						"```bash\n" +
+						"kubectl set image deploy/api api=registry.example.com/api:1.5.0\n" +
+						"deployment.apps/api image updated\n" +
+						"\n" +
+						"kubectl rollout status deploy/api\n" +
+						"Waiting for deployment \"api\" rollout to finish: 1 out of 3 new replicas have been updated...\n" +
+						"\n" +
+						"kubectl get pods\n" +
+						"NAME            READY   STATUS             RESTARTS   AGE\n" +
+						"api-6b4c-abcd   1/1     Running            0          30m\n" +
+						"api-6b4c-efgh   1/1     Running            0          30m\n" +
+						"api-9f2d-ijkl   0/1     CrashLoopBackOff   3          80s\n" +
+						"\n" +
+						"kubectl logs api-9f2d-ijkl\n" +
+						"2026/08/30 10:14:02 starting api v1.5.0\n" +
+						"2026/08/30 10:14:02 fatal: DB_PASSWORD is not set\n" +
+						"```\n" +
+						"\n" +
+						"Читаем вывод: старые поды (`AGE 30m`) остались `Running` — благодаря `maxUnavailable: 0` простоя нет. Новый упал: в новой версии забыли переменную. Сначала откат, разбор потом:\n" +
+						"\n" +
+						"```bash\n" +
+						"kubectl rollout undo deploy/api\n" +
+						"deployment.apps/api rolled back\n" +
+						"```\n" +
+						"\n" +
 						"## Запомнить\n\n" +
 						"1. readinessProbe решает, идёт ли трафик в под. Без неё релизы ломают сайт.\n" +
 						"2. Реплик должно быть минимум две.\n" +
@@ -303,6 +388,16 @@ func moduleKubernetes() ModuleSeed {
 							"title": "Стратегии обновления Deployment",
 							"url":   "https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#strategy",
 							"note":  "maxSurge, maxUnavailable и откат",
+						},
+						{
+							"title": "Обновление приложения — учебник",
+							"url":   "https://kubernetes.io/docs/tutorials/kubernetes-basics/update/update-intro/",
+							"note":  "rolling update по шагам в интерактивном тренажёре",
+						},
+						{
+							"title": "Нарушения работы подов (Disruptions)",
+							"url":   "https://kubernetes.io/docs/concepts/workloads/pods/disruptions/",
+							"note":  "PodDisruptionBudget: сколько подов можно ронять при обслуживании узлов",
 						},
 					},
 				},
@@ -393,6 +488,11 @@ func moduleKubernetes() ModuleSeed {
 							"title": "Диагностика приложений в кластере",
 							"url":   "https://kubernetes.io/docs/tasks/debug/debug-application/",
 							"note":  "официальный порядок разбора: под не стартует, падает, недоступен",
+						},
+						{
+							"title": "Отладка запущенного пода",
+							"url":   "https://kubernetes.io/docs/tasks/debug/debug-application/debug-running-pod/",
+							"note":  "kubectl exec, ephemeral-контейнеры и чтение логов внутри пода",
 						},
 					},
 					"intro": "В кластере развёрнут деплоймент api. Разберитесь с его состоянием.",
