@@ -34,9 +34,9 @@ func DevOpsCourse() CourseSeed {
 	return CourseSeed{
 		Slug:     "devops-engineer",
 		Title:    "DevOps с нуля до практики",
-		Subtitle: "С нуля до практики: Linux, Git, сети, Docker, CI/CD, Kubernetes, IaC, мониторинг и безопасность",
+		Subtitle: "С нуля до практики: Linux, Git, сети, Docker, CI/CD, IaC, Kubernetes, облако, мониторинг, безопасность и надёжность",
 		Description: "Курс для начинающих: предварительных знаний не требуется. Начинаем с первых команд " +
-			"в терминале и доходим до Kubernetes, мониторинга и безопасности. Каждая тема объясняется " +
+			"в терминале и доходим до Kubernetes, мониторинга, безопасности, облака и надёжности. Каждая тема объясняется " +
 			"простыми словами, с примерами и разбором частых ошибок новичка. " +
 			"В каждом модуле: теория со ссылками на первоисточники, тренажёр терминала прямо в браузере, " +
 			"практика с настоящими конфигурациями и квиз с проверкой на сервере. " +
@@ -55,8 +55,10 @@ func DevOpsCourse() CourseSeed {
 			moduleCICD(),
 			moduleIaC(),
 			moduleKubernetes(),
+			moduleCloud(),
 			moduleObservability(),
 			moduleSecurity(),
+			moduleReliability(),
 			moduleExam(),
 		},
 	}
