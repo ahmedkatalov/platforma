@@ -68,6 +68,17 @@ export const coursesApi = baseApi.injectEndpoints({
       query: (id) => ({ url: `/admin/courses/${id}`, method: "DELETE" }),
       invalidatesTags: ["Courses", "Overview"],
     }),
+    importCourse: builder.mutation<
+      { course: Course; modules: number; lessons: number; message: string },
+      { pkg: unknown; replace: boolean }
+    >({
+      query: ({ pkg, replace }) => ({
+        url: `/admin/courses/import${replace ? "?replace=true" : ""}`,
+        method: "POST",
+        body: pkg,
+      }),
+      invalidatesTags: ["Courses", "Overview"],
+    }),
 
     createModule: builder.mutation<Module, { courseId: string } & ModulePayload>({
       query: ({ courseId, ...body }) => ({
@@ -121,6 +132,7 @@ export const {
   useCreateCourseMutation,
   useUpdateCourseMutation,
   useDeleteCourseMutation,
+  useImportCourseMutation,
   useCreateModuleMutation,
   useUpdateModuleMutation,
   useDeleteModuleMutation,

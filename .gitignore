@@ -9,3 +9,4 @@ backend/tmp/
 # загруженные картинки уроков
 backend/uploads/
 backend/.env.production
+*.course.json

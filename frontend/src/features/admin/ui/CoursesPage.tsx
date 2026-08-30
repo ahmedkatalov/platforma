@@ -1,13 +1,15 @@
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 
 import {
   useCreateCourseMutation,
   useDeleteCourseMutation,
   useGetAdminCoursesQuery,
+  useImportCourseMutation,
   type CoursePayload,
 } from "@/features/admin/api/coursesApi";
 import { apiErrorMessage } from "@/shared/api/baseApi";
+import { tokenStorage } from "@/shared/api/tokenStorage";
 import type { Course, CourseLevel, CourseStatus } from "@/shared/types";
 import {
   Badge,
@@ -22,7 +24,7 @@ import {
   Spinner,
   Textarea,
 } from "@/shared/ui";
-import { IconBook, IconEdit, IconPlus, IconTrash } from "@/shared/ui/icons";
+import { IconBook, IconChevron, IconEdit, IconPlus, IconTrash } from "@/shared/ui/icons";
 import { useToast } from "@/shared/ui/ToastProvider";
 
 const STATUS_LABEL: Record<CourseStatus, string> = {
@@ -70,7 +72,9 @@ export function slugify(value: string): string {
 export default function CoursesPage() {
   const { data: courses = [], isLoading } = useGetAdminCoursesQuery();
   const [deleteCourse] = useDeleteCourseMutation();
+  const [importCourse, { isLoading: importing }] = useImportCourseMutation();
   const [createOpen, setCreateOpen] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
   const toast = useToast();
 
   const remove = async (course: Course) => {
@@ -83,15 +87,88 @@ export default function CoursesPage() {
     }
   };
 
+  // Загрузка курса из JSON-пакета: читаем файл, отправляем на сервер.
+  const onFile = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = ""; // сброс — чтобы можно было выбрать тот же файл снова
+    if (!file) return;
+
+    let pkg: unknown;
+    try {
+      pkg = JSON.parse(await file.text());
+    } catch {
+      toast.error("Файл не читается как JSON-пакет курса");
+      return;
+    }
+
+    const runImport = async (replace: boolean) => {
+      const res = await importCourse({ pkg, replace }).unwrap();
+      toast.success(`Загружено: ${res.modules} глав, ${res.lessons} уроков (черновик)`);
+    };
+
+    try {
+      await runImport(false);
+    } catch (err) {
+      if ((err as { status?: number }).status === 409) {
+        if (window.confirm(`${apiErrorMessage(err)}\n\nЗаменить существующий курс новым из файла?`)) {
+          try {
+            await runImport(true);
+          } catch (err2) {
+            toast.error(apiErrorMessage(err2, "Не удалось заменить курс"));
+          }
+        }
+        return;
+      }
+      toast.error(apiErrorMessage(err, "Не удалось загрузить курс"));
+    }
+  };
+
+  // Скачивание курса файлом: авторизованный запрос + сохранение blob.
+  const exportCourse = async (course: Course) => {
+    try {
+      const res = await fetch(`/api/admin/courses/${course.id}/export`, {
+        headers: { Authorization: `Bearer ${tokenStorage.access() ?? ""}` },
+      });
+      if (!res.ok) throw new Error();
+      const url = URL.createObjectURL(await res.blob());
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${course.slug}.course.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.error("Не удалось скачать курс");
+    }
+  };
+
   return (
     <>
+      <input
+        ref={fileRef}
+        type="file"
+        accept=".json,application/json"
+        className="hidden"
+        onChange={onFile}
+      />
       <PageHeader
         title="Курсы"
         subtitle="Программа обучения, модули и уроки"
         actions={
-          <Button variant="primary" icon={<IconPlus size={18} />} onClick={() => setCreateOpen(true)}>
-            Новый курс
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="secondary"
+              icon={<IconBook size={18} />}
+              loading={importing}
+              onClick={() => fileRef.current?.click()}
+            >
+              Загрузить из файла
+            </Button>
+            <Button variant="primary" icon={<IconPlus size={18} />} onClick={() => setCreateOpen(true)}>
+              Новый курс
+            </Button>
+          </div>
         }
       />
 
@@ -166,6 +243,13 @@ export default function CoursesPage() {
                 >
                   <IconBook size={16} />
                 </Link>
+                <Button
+                  variant="ghost"
+                  onClick={() => exportCourse(course)}
+                  title="Скачать курс файлом (для загрузки в другом месте)"
+                >
+                  <IconChevron size={16} className="rotate-90" />
+                </Button>
                 <Button
                   variant="ghost"
                   className="text-danger"

@@ -44,6 +44,8 @@ func (h *CourseHandler) AdminRoutes() http.Handler {
 	r := chi.NewRouter()
 	r.Get("/", h.listAll)
 	r.Post("/", h.createCourse)
+	r.Post("/import", h.importCourse)
+	r.Get("/{id}/export", h.exportCourse)
 	r.Get("/{id}", h.getFull)
 	r.Put("/{id}", h.updateCourse)
 	r.Delete("/{id}", h.deleteCourse)
