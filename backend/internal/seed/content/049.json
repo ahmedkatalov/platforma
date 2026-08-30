@@ -1,0 +1,1150 @@
+{
+ "title": "Базовые объекты: Pod, Deployment и Service",
+ "summary": "Осваиваем главные строительные блоки: минимальную единицу Pod, контроллеры ReplicaSet и Deployment, метки для связывания объектов, изоляцию через Namespace и сетевой доступ через Service и Ingress.",
+ "lessons": [
+  {
+   "title": "Что такое Pod и почему это не контейнер",
+   "kind": "text",
+   "summary": "Разбираемся, что Pod — это наименьшая единица развёртывания в Kubernetes, а не просто другое название контейнера.",
+   "durationMin": 12,
+   "content": {
+    "body": "## Зачем это нужно\n\nВ Kubernetes (сокращённо **k8s**) вы не запускаете контейнеры напрямую.\nВместо этого вы описываете **Pod** (по-русски «под», «стручок»).\nЭто самая маленькая единица, которой умеет управлять Kubernetes.\nЕсли путать Pod и контейнер, дальше всё будет казаться нелогичным.\nПоэтому этот урок — фундамент всей главы.\n\n## Что это простыми словами\n\nПредставьте стручок гороха.\nСам стручок — это Pod.\nГорошины внутри — это контейнеры.\nЧаще всего горошина одна, но их может быть несколько.\nВсе горошины в одном стручке живут вместе: рождаются и умирают разом.\nОни делят общую «оболочку»: сеть и хранилище.\n\n**Контейнер** — это запакованное приложение (например, веб-сервер nginx).\n**Pod** — это обёртка вокруг одного или нескольких контейнеров.\nKubernetes планирует, перезапускает и считает именно Pod, а не контейнеры по отдельности.\n\n## Как это работает\n\nВсе контейнеры внутри одного Pod получают:\n\n- **общий сетевой адрес (IP)** — они видят друг друга по `localhost`;\n- **общее пространство портов** — два контейнера не могут занять один и тот же порт;\n- **общие тома (volumes)** — папки, которые можно смонтировать в оба контейнера.\n\nPod всегда целиком запускается на одном узле (node).\nЕго нельзя «размазать» по двум серверам.\nЕсли Pod падает — Kubernetes не чинит его, а создаёт новый.\nПоэтому у Pod нет постоянного «здоровья»: он одноразовый.\n\nВот как выглядит текстовая схема:\n\n```\nУзел (node)\n └── Pod \"web\"                (общий IP 10.1.0.5)\n      ├── контейнер nginx     слушает :80\n      └── контейнер log-agent читает те же логи\n```\n\nОба контейнера здесь общаются через `localhost` и общий том с логами.\n\n## Пример\n\nСамый частый случай — **один контейнер в Pod**.\nНапример, Pod с одним nginx, который отдаёт сайт.\nЭто нормально и встречается в 90% случаев.\n\nВторой пример — **паттерн «прицеп» (sidecar)**.\nРядом с основным приложением кладут второй контейнер-помощник.\nОн, например, собирает логи и шлёт их в хранилище.\nОни в одном Pod, потому что должны жить вместе и делить файлы.\n\n## Как бывает неправильно\n\nНовичок думает: «Pod — это просто модное слово для контейнера».\nИз-за этого он пытается положить в один Pod базу данных и веб-сервер.\nЭто провал: они масштабируются по-разному.\nВеб-серверов нужно много, база — обычно одна.\nА в одном Pod все контейнеры масштабируются только вместе.\nПравильно — по одному приложению на Pod, если нет причины иначе.\n\n## ❓ Проверьте себя\n\nЕсли в Pod два контейнера, сколько у них общих IP-адресов?\n\n*Ответ: один — все контейнеры Pod делят общий сетевой адрес и общаются через localhost.*\n\n## Частые ошибки новичка\n\n- Считать, что Pod и контейнер — синонимы.\n- Складывать несвязанные приложения в один Pod «чтобы рядом».\n- Ждать, что упавший Pod «вылечится»; на деле создаётся новый.\n- Думать, что Pod может занимать сразу два узла.\n\n## Запомнить\n\n- **Pod — наименьшая единица развёртывания** в Kubernetes, а не контейнер.\n- В Pod один или несколько контейнеров с **общими сетью и хранилищем**.\n- Pod **одноразовый**: падение лечится созданием нового Pod.\n- По умолчанию — **один контейнер на Pod**, sidecar добавляют осознанно.",
+    "resources": [
+     {
+      "title": "Kubernetes: Pods",
+      "url": "https://kubernetes.io/docs/concepts/workloads/pods/",
+      "note": "Официальное описание концепции Pod."
+     },
+     {
+      "title": "Kubernetes: Pod Lifecycle",
+      "url": "https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/",
+      "note": "Как Pod рождается, живёт и завершается."
+     }
+    ]
+   }
+  },
+  {
+   "title": "Пишем первый манифест Pod",
+   "kind": "code",
+   "summary": "Создаём YAML-манифест одного Pod и разбираем его обязательные поля: apiVersion, kind, metadata, spec.",
+   "durationMin": 14,
+   "content": {
+    "language": "yaml",
+    "task": "Опишите Pod в файле pod.yaml. Требования:\n1) apiVersion: v1\n2) kind: Pod\n3) в metadata задайте name: web и метку app: web\n4) в spec опишите один контейнер с именем nginx\n5) образ (image) — nginx:1.27\n6) откройте порт контейнера 80 (containerPort: 80)\n\nЭто декларативный подход: вы описываете, КАКИМ должно быть состояние, а Kubernetes сам его создаёт.",
+    "starter": "# Версия API Kubernetes. Для Pod это v1\napiVersion: \n# Тип объекта\nkind: \nmetadata:\n  # имя Pod внутри namespace\n  name: \n  labels:\n    # метка-ярлык, по ней Pod потом найдут\n    app: \nspec:\n  containers:\n    # список контейнеров Pod (здесь один)\n    - name: \n      image: \n      ports:\n        - containerPort: ",
+    "hint": "apiVersion: v1 и kind: Pod пишутся именно так. Отступы в YAML — только пробелы, не табы. containerPort: 80 — число без кавычек.",
+    "checks": [
+     {
+      "type": "contains",
+      "value": "apiVersion: v1",
+      "message": "Нужна строка apiVersion: v1"
+     },
+     {
+      "type": "contains",
+      "value": "kind: Pod",
+      "message": "Тип объекта должен быть kind: Pod"
+     },
+     {
+      "type": "contains",
+      "value": "name: web",
+      "message": "Задайте имя Pod: name: web"
+     },
+     {
+      "type": "contains",
+      "value": "app: web",
+      "message": "Добавьте метку app: web в labels"
+     },
+     {
+      "type": "regex",
+      "value": "image:\\s*nginx:1\\.27",
+      "message": "Образ должен быть nginx:1.27"
+     },
+     {
+      "type": "regex",
+      "value": "containerPort:\\s*80",
+      "message": "Откройте containerPort: 80"
+     },
+     {
+      "type": "notContains",
+      "value": "\\t",
+      "message": "В YAML нельзя использовать табы, только пробелы"
+     }
+    ],
+    "solution": "apiVersion: v1\nkind: Pod\nmetadata:\n  name: web\n  labels:\n    app: web\nspec:\n  containers:\n    - name: nginx\n      image: nginx:1.27\n      ports:\n        - containerPort: 80",
+    "resources": [
+     {
+      "title": "Kubernetes: объект Pod",
+      "url": "https://kubernetes.io/docs/concepts/workloads/pods/",
+      "note": "Из чего состоит манифест Pod."
+     },
+     {
+      "title": "Kubernetes: управление объектами через манифесты",
+      "url": "https://kubernetes.io/docs/concepts/overview/working-with-objects/kubernetes-objects/",
+      "note": "Поля apiVersion, kind, metadata, spec."
+     }
+    ]
+   }
+  },
+  {
+   "title": "Запускаем и осматриваем Pod",
+   "kind": "terminal",
+   "summary": "Тренируемся применять манифест и читать состояние Pod через kubectl apply, get, describe и delete.",
+   "durationMin": 12,
+   "content": {
+    "intro": "У вас в текущей папке лежит файл pod.yaml из прошлого урока. Примените его в кластер, осмотрите Pod и удалите. Все команды начинаются со слова kubectl — это инструмент управления Kubernetes из терминала.",
+    "shell": "student@devops",
+    "tasks": [
+     {
+      "id": "t1",
+      "prompt": "Примените манифест pod.yaml в кластер (создать Pod из описания в файле).",
+      "expected": [
+       "kubectl apply -f pod.yaml"
+      ],
+      "hint": "apply создаёт или обновляет объект, флаг -f указывает на файл.",
+      "success": "Готово — Kubernetes принял описание и начал создавать Pod."
+     },
+     {
+      "id": "t2",
+      "prompt": "Покажите список всех Pod, чтобы увидеть статус (Pending или Running).",
+      "expected": [
+       "kubectl get pods",
+       "kubectl get pod"
+      ],
+      "hint": "get выводит объекты выбранного типа. Тип — pods.",
+      "success": "Виден список Pod и колонка STATUS."
+     },
+     {
+      "id": "t3",
+      "prompt": "Посмотрите подробности Pod с именем web (события, образ, узел).",
+      "expected": [
+       "kubectl describe pod web"
+      ],
+      "hint": "describe показывает детали одного объекта: describe <тип> <имя>.",
+      "success": "Виден подробный вывод с секцией Events."
+     },
+     {
+      "id": "t4",
+      "prompt": "Удалите Pod web, когда он больше не нужен.",
+      "expected": [
+       "kubectl delete pod web"
+      ],
+      "hint": "delete <тип> <имя> удаляет объект.",
+      "success": "Pod помечен на удаление и вскоре исчезнет из списка."
+     }
+    ],
+    "resources": [
+     {
+      "title": "kubectl: справочник команд",
+      "url": "https://kubernetes.io/docs/reference/kubectl/",
+      "note": "apply, get, describe, delete и другие."
+     },
+     {
+      "title": "kubectl Cheat Sheet",
+      "url": "https://kubernetes.io/docs/reference/kubectl/cheatsheet/",
+      "note": "Частые команды под рукой."
+     }
+    ]
+   }
+  },
+  {
+   "title": "Labels, selectors и annotations",
+   "kind": "text",
+   "summary": "Учимся вешать на объекты метки-ярлыки, находить их селекторами и хранить служебные данные в аннотациях.",
+   "durationMin": 13,
+   "content": {
+    "body": "## Зачем это нужно\n\nВ кластере быстро появляются десятки Pod.\nКак сказать «дай мне все Pod фронтенда»?\nПо именам — неудобно, они у всех разные.\nОтвет Kubernetes: **метки (labels)** и **селекторы (selectors)**.\nНа этой паре держится вся связь между объектами.\nБез неё Service не найдёт свои Pod (это увидим позже в главе).\n\n## Что это простыми словами\n\n**Label (метка)** — это ярлык-наклейка вида `ключ: значение`.\nНапример, `app: web` или `env: prod`.\nВы клеите такие наклейки на объекты.\n\n**Selector (селектор)** — это фильтр по наклейкам.\nОн говорит: «возьми всё, у чего наклейка `app: web`».\nТак объекты находят друг друга, не зная имён.\n\n**Annotation (аннотация)** — тоже `ключ: значение`, но для служебных данных.\nПо аннотациям нельзя искать и фильтровать.\nВ них кладут описания, версии, ссылки, настройки инструментов.\n\nКоротко: по меткам ищут, в аннотациях просто хранят.\n\n## Как это работает\n\nМетки живут в разделе `metadata.labels` манифеста.\nСелектор — это условие, которое сопоставляет метки.\nЕсли метки объекта подходят под селектор, объект попадает в выборку.\n\nРазберём фрагмент манифеста построчно:\n\n```yaml\nmetadata:\n  labels:\n    app: web        # ярлык: приложение web\n    env: prod       # ярлык: окружение prod\n  annotations:\n    owner: team-shop # служебная пометка, по ней не ищут\n```\n\n- `labels:` — начало списка меток;\n- `app: web` — метка с ключом `app` и значением `web`;\n- `env: prod` — вторая метка, окружение;\n- `annotations:` — начало служебных данных;\n- `owner: team-shop` — кто владелец; полезно людям, не для поиска.\n\nА так по меткам ищут в терминале:\n\n```\nkubectl get pods -l app=web\n```\n\n- `-l` — это и есть селектор (label selector);\n- `app=web` — условие: только Pod с такой меткой.\n\n## Пример\n\nПервый пример: у вас три Pod веб-сервера.\nНа каждом метка `app: web`.\nОдной командой `-l app=web` вы берёте все три сразу.\n\nВторой пример: аннотация с версией сборки.\nВы кладёте `annotations: {build: \"2026-08-30-17\"}`.\nЭто удобно для отладки, но фильтровать по ней Kubernetes не будет.\n\n## Как бывает неправильно\n\nНовичок пишет описание приложения в **label**, а не в annotation.\nНапример, `label: описание=очень важный сервис с пробелами`.\nЭто провал: в значениях меток нельзя пробелы и длинный текст.\nМетки должны быть короткими и пригодными для фильтра.\nДлинный текст и произвольные данные — место для аннотаций.\n\n## ❓ Проверьте себя\n\nПо чему можно отфильтровать Pod командой `kubectl get pods -l ...` — по label или по annotation?\n\n*Ответ: только по label; аннотации для поиска и селекторов не используются.*\n\n## Частые ошибки новичка\n\n- Путать labels (для поиска) и annotations (для хранения).\n- Класть в метки длинный текст или пробелы.\n- Забыть метку на Pod — тогда селектор его не найдёт.\n- Дублировать смысл: одна и та же вещь и в label, и в annotation.\n\n## Запомнить\n\n- **Label** — короткий ярлык `ключ: значение`, по нему **ищут**.\n- **Selector** — фильтр по меткам, так объекты **находят друг друга**.\n- **Annotation** — служебные данные, по ним **не фильтруют**.\n- Флаг `-l app=web` в kubectl — это селектор по метке.",
+    "resources": [
+     {
+      "title": "Kubernetes: Labels and Selectors",
+      "url": "https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/",
+      "note": "Как устроены метки и селекторы."
+     },
+     {
+      "title": "Kubernetes: Annotations",
+      "url": "https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations/",
+      "note": "Чем аннотации отличаются от меток."
+     }
+    ]
+   }
+  },
+  {
+   "title": "Микроквиз: Pod, метки и селекторы",
+   "kind": "quiz",
+   "summary": "Короткая проверка: что такое Pod, чем label отличается от annotation и как селектор находит нужные Pod.",
+   "durationMin": 9,
+   "content": {
+    "intro": "Проверьте, что усвоили из первых уроков главы: суть Pod, общая сеть контейнеров, разница меток и аннотаций, работа селектора.",
+    "passScore": 70,
+    "questions": [
+     {
+      "id": "q1",
+      "text": "Что такое Pod в Kubernetes?",
+      "options": [
+       {
+        "id": "a",
+        "text": "Наименьшая единица развёртывания — обёртка вокруг одного или нескольких контейнеров",
+        "correct": true
+       },
+       {
+        "id": "b",
+        "text": "Другое название для одного контейнера",
+        "correct": false
+       },
+       {
+        "id": "c",
+        "text": "Физический сервер в кластере",
+        "correct": false
+       },
+       {
+        "id": "d",
+        "text": "Инструмент командной строки для управления кластером",
+        "correct": false
+       }
+      ],
+      "explanation": "Pod — самая маленькая единица, которой управляет Kubernetes. Это обёртка над контейнерами, а не сам контейнер и не сервер."
+     },
+     {
+      "id": "q2",
+      "text": "Верно или нет: контейнеры внутри одного Pod делят общий сетевой адрес и общаются через localhost.",
+      "options": [
+       {
+        "id": "a",
+        "text": "Верно",
+        "correct": true
+       },
+       {
+        "id": "b",
+        "text": "Неверно",
+        "correct": false
+       }
+      ],
+      "explanation": "У всех контейнеров одного Pod общий IP и пространство портов, поэтому они видят друг друга по localhost."
+     },
+     {
+      "id": "q3",
+      "text": "Что из перечисленного является ОБЩИМ для контейнеров внутри одного Pod?",
+      "multiple": true,
+      "options": [
+       {
+        "id": "a",
+        "text": "Сетевой адрес (IP)",
+        "correct": true
+       },
+       {
+        "id": "b",
+        "text": "Тома (volumes)",
+        "correct": true
+       },
+       {
+        "id": "c",
+        "text": "Отдельный физический сервер для каждого контейнера",
+        "correct": false
+       },
+       {
+        "id": "d",
+        "text": "Пространство портов",
+        "correct": true
+       }
+      ],
+      "explanation": "Контейнеры Pod делят IP, порты и тома. А вот на разные серверы их не разнести: Pod целиком живёт на одном узле."
+     },
+     {
+      "id": "q4",
+      "text": "Сопоставьте понятие и его роль:",
+      "type": "match",
+      "pairs": [
+       {
+        "id": "p1",
+        "left": "label",
+        "right": "ярлык для поиска и фильтрации"
+       },
+       {
+        "id": "p2",
+        "left": "selector",
+        "right": "фильтр, находящий объекты по меткам"
+       },
+       {
+        "id": "p3",
+        "left": "annotation",
+        "right": "служебные данные, по ним не ищут"
+       }
+      ],
+      "explanation": "По меткам (label) ищут селектором (selector). Аннотации (annotation) хранят служебную информацию и в фильтрах не участвуют."
+     },
+     {
+      "id": "q5",
+      "text": "Впишите флаг команды kubectl, который выбирает Pod по метке app=web (только сам флаг с условием, например -l ключ=значение).",
+      "type": "blank",
+      "accept": [
+       "-l app=web",
+       "--selector app=web",
+       "-l app=web ",
+       "-lapp=web"
+      ],
+      "hint": "Короткая форма — одна буква после дефиса.",
+      "explanation": "Селектор задаётся флагом -l (или --selector): kubectl get pods -l app=web вернёт только Pod с меткой app=web."
+     },
+     {
+      "id": "q6",
+      "text": "Расставьте разделы манифеста Pod в правильном порядке сверху вниз:",
+      "type": "order",
+      "items": [
+       {
+        "id": "s1",
+        "text": "apiVersion"
+       },
+       {
+        "id": "s2",
+        "text": "kind"
+       },
+       {
+        "id": "s3",
+        "text": "metadata"
+       },
+       {
+        "id": "s4",
+        "text": "spec"
+       }
+      ],
+      "explanation": "Стандартный порядок манифеста: сначала apiVersion и kind (что это), затем metadata (имя и метки), затем spec (что именно запустить)."
+     }
+    ],
+    "resources": [
+     {
+      "title": "Kubernetes: Pods",
+      "url": "https://kubernetes.io/docs/concepts/workloads/pods/",
+      "note": "Повторить суть Pod."
+     },
+     {
+      "title": "Kubernetes: Labels and Selectors",
+      "url": "https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/",
+      "note": "Повторить метки и селекторы."
+     }
+    ]
+   }
+  },
+  {
+   "title": "ReplicaSet: зачем держать несколько копий",
+   "kind": "text",
+   "summary": "Разбираемся, как ReplicaSet поддерживает заданное число одинаковых Pod и находит их по меткам.",
+   "durationMin": 11,
+   "content": {
+    "body": "## Зачем это нужно\n\nОдин Pod — это один экземпляр приложения. Если узел с этим Pod упадёт, приложение станет недоступно.\n\nСам по себе Pod никто не поднимет обратно. Он «смертен» и не самовосстанавливается.\n\nНам нужен надзиратель, который следит за числом живых копий и восстанавливает их. Эту роль играет ReplicaSet.\n\n## Что это простыми словами\n\nReplicaSet — это контролёр численности. Он держит ровно столько одинаковых Pod, сколько вы заказали.\n\nАналогия: сменный мастер в цехе. Ему сказали: «на линии всегда должно работать 3 человека».\n\nУшёл один на обед — мастер сразу ставит нового. Стало 4 по ошибке — лишнего уводит.\n\nReplicaSet работает так же: держит заданное число Pod, не больше и не меньше.\n\n## Как это работает\n\nReplicaSet постоянно сравнивает желаемое состояние (`replicas: 3`) с фактическим числом живых Pod.\n\nСвои Pod он находит по меткам через селектор. Меток мы касались в уроке про labels и selectors.\n\nЕсли живых Pod меньше нормы — ReplicaSet создаёт новые по шаблону. Если больше — лишние удаляет.\n\nРазберём манифест построчно.\n\n```yaml\napiVersion: apps/v1        # группа API, где живут контроллеры\nkind: ReplicaSet            # тип объекта\nmetadata:\n  name: web-rs             # имя ReplicaSet\nspec:\n  replicas: 3             # сколько копий держать\n  selector:\n    matchLabels:\n      app: web            # по каким меткам находить свои Pod\n  template:               # шаблон нового Pod\n    metadata:\n      labels:\n        app: web          # метки, которые вешаются на каждый Pod\n    spec:\n      containers:\n        - name: nginx\n          image: nginx:1.27\n```\n\nРазбор ключевых частей:\n\n- `replicas: 3` — целевое число копий.\n- `selector.matchLabels` — по каким меткам ReplicaSet узнаёт свои Pod.\n- `template` — заготовка, из которой рождается каждый новый Pod.\n- `template.metadata.labels` — метки на Pod. Они обязаны совпадать с `selector`.\n\n## Пример\n\nУпал узел с одним из трёх Pod. ReplicaSet видит: живых 2, надо 3.\n\nОн создаёт новый Pod на здоровом узле. Через несколько секунд снова 3 копии.\n\nВторой пример. Вы вручную удалили Pod командой `kubectl delete pod`.\n\nReplicaSet не оставит нехватку — он тут же создаст замену. «Отдохнуть» удалённому Pod не дадут.\n\n## Как бывает неправильно\n\nМетки в `selector` и в `template` не совпадают:\n\n```yaml\n  selector:\n    matchLabels:\n      app: web\n  template:\n    metadata:\n      labels:\n        app: frontend    # НЕ совпадает с selector\n```\n\nKubernetes отклонит такой манифест ещё на этапе проверки.\n\nПричина простая: ReplicaSet не смог бы «узнать» свои Pod по селектору, поэтому такая связка запрещена.\n\n## ❓ Проверьте себя\n\nВы удалили один Pod из ReplicaSet с `replicas: 3`. Что произойдёт дальше?\n\n*Ответ: ReplicaSet заметит нехватку и создаст новый Pod, снова станет 3 копии.*\n\n## Частые ошибки новичка\n\n- Менять `image` прямо в ReplicaSet и ждать обновления — уже запущенные Pod сами не пересоздаются.\n- Забыть, что `selector` нельзя изменить после создания объекта.\n- Делать метки в шаблоне слишком общими и случайно «захватить» чужие Pod.\n\n## Запомнить\n\n- ReplicaSet держит заданное число одинаковых Pod.\n- Свои Pod он находит по меткам через `selector`.\n- Метки в `selector` и в `template` обязаны совпадать.\n- Напрямую ReplicaSet почти не создают — им управляет Deployment (следующий урок).",
+    "resources": [
+     {
+      "title": "Kubernetes: ReplicaSet",
+      "url": "https://kubernetes.io/docs/concepts/workloads/controllers/replicaset/",
+      "note": "Официальная документация с примерами манифеста и селекторов."
+     },
+     {
+      "title": "Kubernetes: метки и селекторы",
+      "url": "https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/",
+      "note": "Как selector связывает контроллер с его Pod."
+     }
+    ]
+   }
+  },
+  {
+   "title": "Deployment: удобное управление приложением",
+   "kind": "text",
+   "summary": "Знакомимся с Deployment — стандартным способом запускать и плавно обновлять приложения без простоя.",
+   "durationMin": 12,
+   "content": {
+    "body": "## Зачем это нужно\n\nReplicaSet умеет держать число копий, но не умеет удобно обновлять приложение.\n\nПоменяли версию образа — а как выкатить её без простоя? И как откатиться, если новая версия сломалась?\n\nДля этого есть Deployment. Это верхний слой управления над ReplicaSet.\n\n## Что это простыми словами\n\nDeployment — это менеджер релизов над ReplicaSet.\n\nАналогия: прораб. Сам он кирпичи не кладёт, а руководит бригадами (это ReplicaSet).\n\nНужна новая версия дома — прораб набирает новую бригаду и потихоньку переводит работу на неё. Старую распускает.\n\nЧто-то пошло не так — прораб возвращает прежнюю бригаду. Ровно так работает откат в Deployment.\n\n## Как это работает\n\nВы описываете желаемое состояние в Deployment. Он создаёт ReplicaSet, а тот — Pod.\n\nИерархия получается такой:\n\n```\nDeployment  →  ReplicaSet  →  Pod (несколько копий)\n```\n\nПри изменении шаблона (например, новый образ) Deployment создаёт НОВЫЙ ReplicaSet.\n\nЗатем он плавно переключает нагрузку: поднимает новые Pod и по одному гасит старые.\n\nТакое обновление «накатом» называется rolling update — прокатка без остановки сервиса.\n\nРазберём манифест построчно.\n\n```yaml\napiVersion: apps/v1\nkind: Deployment            # тип объекта\nmetadata:\n  name: web\nspec:\n  replicas: 3             # сколько Pod держать\n  selector:\n    matchLabels:\n      app: web            # как контроллер находит свои Pod\n  template:\n    metadata:\n      labels:\n        app: web          # метки Pod, совпадают с selector\n    spec:\n      containers:\n        - name: nginx\n          image: nginx:1.27  # версия приложения\n```\n\nСамая важная строка для обновлений — `image`. Меняем её и применяем манифест — запускается выкат.\n\n## Пример\n\nМеняем `image` с `nginx:1.27` на `nginx:1.28` и выполняем `kubectl apply`.\n\nDeployment создаёт новый ReplicaSet, поднимает новые Pod и глушит старые по одному. Простоя пользователи не замечают.\n\nВторой пример. Обновление сломалось: новый образ не стартует.\n\nКоманда `kubectl rollout undo` вернёт прошлый ReplicaSet. Это быстрый откат к рабочей версии.\n\n## Как бывает неправильно\n\nПравить Pod напрямую, когда им управляет Deployment:\n\n```\nkubectl edit pod web-7d9f-xxatr\n```\n\nПравка потеряет смысл. Deployment пересоздаст Pod из своего шаблона, и ваши изменения исчезнут.\n\nМенять надо сам Deployment, а не отдельный Pod под ним.\n\n## ❓ Проверьте себя\n\nЧто создаёт Deployment, чтобы в итоге появились Pod?\n\n*Ответ: Deployment создаёт ReplicaSet, а ReplicaSet уже создаёт Pod.*\n\n## Частые ошибки новичка\n\n- Создавать ReplicaSet вручную вместо Deployment.\n- Забыть применить манифест командой `kubectl apply` и ждать обновления.\n- Путать `replicas` (сколько копий) и revision (номер версии выката).\n\n## Запомнить\n\n- Deployment — стандартный способ запускать приложения без состояния.\n- Иерархия: Deployment → ReplicaSet → Pod.\n- Изменение шаблона запускает rolling update без простоя.\n- Откат делается одной командой `kubectl rollout undo`.",
+    "resources": [
+     {
+      "title": "Kubernetes: Deployments",
+      "url": "https://kubernetes.io/docs/concepts/workloads/controllers/deployment/",
+      "note": "Полное описание Deployment, rolling update и отката."
+     },
+     {
+      "title": "kubectl rollout",
+      "url": "https://kubernetes.io/docs/reference/kubectl/generated/kubectl_rollout/",
+      "note": "Команды управления выкатом: status, undo, history."
+     }
+    ]
+   }
+  },
+  {
+   "title": "Пишем манифест Deployment",
+   "kind": "code",
+   "summary": "Практика: описать Deployment на 3 реплики с контейнером nginx и открытым портом 80.",
+   "durationMin": 12,
+   "content": {
+    "language": "yaml",
+    "task": "Напишите манифест Deployment по пунктам:\n1) apiVersion: apps/v1, kind: Deployment;\n2) имя объекта api;\n3) 3 реплики (replicas);\n4) selector с matchLabels app: api;\n5) template с такими же метками app: api;\n6) один контейнер с именем web, образ nginx:1.27, открытый порт 80 (containerPort).",
+    "starter": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: api\nspec:\n  # укажите число реплик\n  replicas: \n  selector:\n    matchLabels:\n      app: api\n  template:\n    metadata:\n      labels:\n        # метки Pod должны совпадать с selector выше\n        app: \n    spec:\n      containers:\n        - name: web\n          image: \n          ports:\n            - containerPort: \n",
+    "hint": "Метки в selector.matchLabels и в template.metadata.labels обязаны совпадать (app: api). Порт указывается как containerPort: 80.",
+    "checks": [
+     {
+      "type": "contains",
+      "value": "apiVersion: apps/v1",
+      "message": "Нужна строка apiVersion: apps/v1."
+     },
+     {
+      "type": "contains",
+      "value": "kind: Deployment",
+      "message": "kind должен быть Deployment."
+     },
+     {
+      "type": "regex",
+      "value": "replicas:\\s*3",
+      "message": "Укажите replicas: 3."
+     },
+     {
+      "type": "contains",
+      "value": "matchLabels",
+      "message": "Нужен selector.matchLabels."
+     },
+     {
+      "type": "contains",
+      "value": "app: api",
+      "message": "Метка app: api должна быть в selector и в template."
+     },
+     {
+      "type": "contains",
+      "value": "image: nginx:1.27",
+      "message": "Укажите образ image: nginx:1.27."
+     },
+     {
+      "type": "regex",
+      "value": "containerPort:\\s*80",
+      "message": "Откройте порт containerPort: 80."
+     }
+    ],
+    "solution": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: api\nspec:\n  replicas: 3\n  selector:\n    matchLabels:\n      app: api\n  template:\n    metadata:\n      labels:\n        app: api\n    spec:\n      containers:\n        - name: web\n          image: nginx:1.27\n          ports:\n            - containerPort: 80\n",
+    "resources": [
+     {
+      "title": "Kubernetes: Deployments",
+      "url": "https://kubernetes.io/docs/concepts/workloads/controllers/deployment/",
+      "note": "Пример полного манифеста Deployment."
+     },
+     {
+      "title": "Container ports",
+      "url": "https://kubernetes.io/docs/concepts/services-networking/service/",
+      "note": "Как указывается порт контейнера и зачем он нужен."
+     }
+    ]
+   }
+  },
+  {
+   "title": "Масштабирование и обновление Deployment",
+   "kind": "terminal",
+   "summary": "Тренируемся менять число реплик, обновлять образ, следить за выкатом и откатывать его командами kubectl.",
+   "durationMin": 12,
+   "content": {
+    "intro": "У вас есть Deployment с именем web и контейнером nginx. Научимся смотреть его состояние, масштабировать, обновлять образ и откатывать выкат. Вводите команды по одной.",
+    "shell": "student@devops",
+    "tasks": [
+     {
+      "id": "t1",
+      "prompt": "Показать список всех Deployment в текущем пространстве имён.",
+      "expected": [
+       "kubectl get deployments",
+       "kubectl get deployment",
+       "kubectl get deploy"
+      ],
+      "hint": "kubectl get + тип объекта (deployments).",
+      "success": "Видно колонки READY, UP-TO-DATE, AVAILABLE."
+     },
+     {
+      "id": "t2",
+      "prompt": "Увеличить число реплик Deployment web до 5.",
+      "expected": [
+       "kubectl scale deployment web --replicas=5",
+       "kubectl scale deployment/web --replicas=5"
+      ],
+      "hint": "Команда scale и флаг --replicas=5.",
+      "success": "Deployment масштабирован до 5 копий."
+     },
+     {
+      "id": "t3",
+      "prompt": "Обновить образ контейнера nginx в Deployment web на nginx:1.28.",
+      "expected": [
+       "kubectl set image deployment/web nginx=nginx:1.28"
+      ],
+      "hint": "kubectl set image deployment/web ИМЯ_КОНТЕЙНЕРА=НОВЫЙ_ОБРАЗ.",
+      "success": "Запущен rolling update на новый образ."
+     },
+     {
+      "id": "t4",
+      "prompt": "Посмотреть статус текущего выката Deployment web.",
+      "expected": [
+       "kubectl rollout status deployment/web",
+       "kubectl rollout status deployment web"
+      ],
+      "hint": "kubectl rollout status ...",
+      "success": "Видно, что выкат успешно завершён."
+     },
+     {
+      "id": "t5",
+      "prompt": "Откатить Deployment web к предыдущей версии.",
+      "expected": [
+       "kubectl rollout undo deployment/web",
+       "kubectl rollout undo deployment web"
+      ],
+      "hint": "kubectl rollout undo ...",
+      "success": "Deployment вернулся к прошлой ревизии."
+     }
+    ],
+    "resources": [
+     {
+      "title": "kubectl scale",
+      "url": "https://kubernetes.io/docs/reference/kubectl/generated/kubectl_scale/",
+      "note": "Изменение числа реплик из командной строки."
+     },
+     {
+      "title": "kubectl rollout",
+      "url": "https://kubernetes.io/docs/reference/kubectl/generated/kubectl_rollout/",
+      "note": "status, undo и history для управления выкатом."
+     }
+    ]
+   }
+  },
+  {
+   "title": "Сравнение: Pod vs ReplicaSet vs Deployment",
+   "kind": "quiz",
+   "summary": "Проверяем, что вы различаете Pod, ReplicaSet и Deployment и знаете команды управления выкатом.",
+   "durationMin": 9,
+   "content": {
+    "intro": "Короткий квиз на различие трёх объектов и команды масштабирования и обновления.",
+    "passScore": 70,
+    "questions": [
+     {
+      "id": "q1",
+      "text": "Что главное делает ReplicaSet?",
+      "options": [
+       {
+        "id": "a",
+        "text": "Поддерживает заданное число одинаковых Pod",
+        "correct": true
+       },
+       {
+        "id": "b",
+        "text": "Даёт приложению сетевой адрес и балансирует трафик",
+        "correct": false
+       },
+       {
+        "id": "c",
+        "text": "Хранит настройки и секреты приложения",
+        "correct": false
+       }
+      ],
+      "explanation": "ReplicaSet сравнивает желаемое число реплик с фактическим и создаёт или удаляет Pod, чтобы их было ровно столько, сколько заказано."
+     },
+     {
+      "id": "q2",
+      "type": "order",
+      "text": "Расставьте объекты по иерархии сверху вниз — кто кем управляет:",
+      "items": [
+       {
+        "id": "s1",
+        "text": "Deployment"
+       },
+       {
+        "id": "s2",
+        "text": "ReplicaSet"
+       },
+       {
+        "id": "s3",
+        "text": "Pod"
+       }
+      ],
+      "explanation": "Deployment создаёт ReplicaSet, а ReplicaSet создаёт и держит нужное число Pod: Deployment → ReplicaSet → Pod."
+     },
+     {
+      "id": "q3",
+      "text": "Верно или нет: если удалить Pod, которым управляет Deployment, он останется удалённым.",
+      "options": [
+       {
+        "id": "a",
+        "text": "Верно",
+        "correct": false
+       },
+       {
+        "id": "b",
+        "text": "Неверно",
+        "correct": true
+       }
+      ],
+      "explanation": "Неверно. За Deployment стоит ReplicaSet, который заметит нехватку и создаст новый Pod вместо удалённого."
+     },
+     {
+      "id": "q4",
+      "type": "match",
+      "text": "Сопоставьте команду kubectl с её действием:",
+      "pairs": [
+       {
+        "id": "p1",
+        "left": "kubectl scale",
+        "right": "изменить число реплик"
+       },
+       {
+        "id": "p2",
+        "left": "kubectl set image",
+        "right": "сменить версию образа"
+       },
+       {
+        "id": "p3",
+        "left": "kubectl rollout undo",
+        "right": "откатить выкат назад"
+       },
+       {
+        "id": "p4",
+        "left": "kubectl apply",
+        "right": "применить манифест из файла"
+       }
+      ],
+      "explanation": "scale меняет количество копий, set image запускает обновление на новый образ, rollout undo откатывает к прошлой ревизии, apply применяет описанное в манифесте состояние."
+     },
+     {
+      "id": "q5",
+      "type": "blank",
+      "text": "Впишите команду, которая откатит Deployment web к предыдущей версии.",
+      "accept": [
+       "kubectl rollout undo deployment/web",
+       "kubectl rollout undo deployment web"
+      ],
+      "hint": "kubectl rollout undo ...",
+      "explanation": "kubectl rollout undo deployment/web возвращает Deployment к предыдущему ReplicaSet — это быстрый откат сломанного выката."
+     },
+     {
+      "id": "q6",
+      "multiple": true,
+      "text": "Какие утверждения про Deployment верны? (несколько ответов)",
+      "options": [
+       {
+        "id": "a",
+        "text": "Он умеет обновлять приложение накатом без простоя (rolling update)",
+        "correct": true
+       },
+       {
+        "id": "b",
+        "text": "Он позволяет откатиться к прошлой версии одной командой",
+        "correct": true
+       },
+       {
+        "id": "c",
+        "text": "Он сам является контейнером с приложением",
+        "correct": false
+       },
+       {
+        "id": "d",
+        "text": "Метки в selector и template должны совпадать",
+        "correct": true
+       }
+      ],
+      "explanation": "Deployment управляет выкатом и откатом и требует совпадения меток selector и template. Сам он не контейнер — контейнеры живут внутри Pod."
+     }
+    ],
+    "resources": [
+     {
+      "title": "Kubernetes: Deployments",
+      "url": "https://kubernetes.io/docs/concepts/workloads/controllers/deployment/",
+      "note": "Различия Deployment и ReplicaSet, выкат и откат."
+     },
+     {
+      "title": "Kubernetes: Pods",
+      "url": "https://kubernetes.io/docs/concepts/workloads/pods/",
+      "note": "Что такое Pod и почему он смертен."
+     }
+    ]
+   }
+  },
+  {
+   "title": "Namespace: разделяем кластер на отсеки",
+   "kind": "text",
+   "summary": "Namespace изолирует объекты в кластере: разводит dev и prod, команды и служебные компоненты по отдельным отсекам.",
+   "durationMin": 9,
+   "content": {
+    "body": "## Зачем это нужно\n\nКластер Kubernetes — это общий дом. В нём живут приложения dev и prod. Там же работают несколько команд. Без разделения имена и ресурсы перемешаются. Namespace даёт каждому свой отсек.\n\n## Что это простыми словами\n\nАналогия: большой офис open-space. Namespace — это перегородки между отделами. У бухгалтерии свой угол, у разработки свой. Папка «Отчёт» в одном отделе не конфликтует с «Отчётом» в другом.\n\n## Как это работает\n\nNamespace (пространство имён) — логический раздел кластера. Внутри одного namespace имена объектов уникальны. В разных namespace можно держать два Pod с именем `web`. Без указания kubectl работает в namespace `default`.\n\nСтартовые namespace в любом кластере:\n\n- `default` — сюда попадают объекты без явного указания.\n- `kube-system` — служебные компоненты самого Kubernetes.\n- `kube-public` — общедоступные данные.\n- `kube-node-lease` — служебная информация об узлах.\n\nРазбор команды `kubectl get pods -n dev`:\n\n- `kubectl` — клиент управления кластером.\n- `get` — показать объекты.\n- `pods` — тип объекта, который смотрим.\n- `-n dev` — namespace `dev` (полная форма флага `--namespace`).\n\nСоздать namespace можно командой или манифестом:\n\n```yaml\napiVersion: v1\nkind: Namespace\nmetadata:\n  name: dev\n```\n\nБыстрый вариант тем же результатом: `kubectl create namespace dev`.\n\n## Пример\n\nКоманда держит `dev` и `prod`. В `dev` — тестовая база. В `prod` — боевая. Манифесты почти одинаковые, но namespace разные. Ошибка в `dev` не заденет `prod`.\n\nВторой пример: две команды на одном кластере. Team A живёт в namespace `team-a`, Team B — в `team-b`. Квоты ресурсов ставятся на namespace. Никто не съест все ресурсы соседа.\n\n## Как бывает неправильно\n\nНовичок применяет объект без `-n`. Он ждёт его в `prod`, а объект лёг в `default`. Команда `kubectl get pods -n prod` показывает пусто. Причина простая: `default` — это не `prod`. Объект есть, просто в другом отсеке.\n\n## ❓ Проверьте себя\n\nВ какой namespace попадёт Pod, если запустить `kubectl apply -f pod.yaml` без флага `-n` и без поля `metadata.namespace`?\n\n*Ответ: в `default` — это namespace по умолчанию.*\n\n## Частые ошибки новичка\n\n- Забывают `-n` и ищут объект не в том отсеке.\n- Удаляют namespace целиком — вместе с ним удаляются все объекты внутри.\n- Думают, что namespace изолирует сеть. По умолчанию Pod из разных namespace всё равно видят друг друга по сети.\n\n## Запомнить\n\n- Namespace — отсек кластера для изоляции имён и ресурсов.\n- Без указания объект уходит в `default`.\n- Служебные компоненты живут в `kube-system`.\n- Удаление namespace уносит всё, что было внутри.",
+    "resources": [
+     {
+      "title": "Kubernetes: Namespaces",
+      "url": "https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/",
+      "note": "Официальное описание пространств имён и стартовых namespace."
+     },
+     {
+      "title": "kubectl: работа с namespace",
+      "url": "https://kubernetes.io/docs/tasks/administer-cluster/namespaces/",
+      "note": "Как создавать и переключать namespace на практике."
+     }
+    ]
+   }
+  },
+  {
+   "title": "Service: зачем нужен и какие бывают типы",
+   "kind": "text",
+   "summary": "Service даёт Pod'ам стабильный адрес и балансировку; разбираем типы ClusterIP, NodePort и LoadBalancer.",
+   "durationMin": 11,
+   "content": {
+    "body": "## Зачем это нужно\n\nPod смертен. При перезапуске он получает новый IP-адрес. Клиент, запомнивший старый IP, стучится в пустоту. Нужен стабильный адрес, который не меняется. Это и есть Service.\n\n## Что это простыми словами\n\nАналогия: колл-центр. Операторы (Pod) меняются: одни уходят, другие приходят. Но номер телефона колл-центра один и тот же. Service — это тот самый постоянный номер. Звонок попадёт к любому свободному оператору.\n\n## Как это работает\n\nService (сервис) — объект с постоянным именем и виртуальным IP. Он находит Pod'ы по меткам (selector). Затем раскидывает трафик между ними. Список живых Pod'ов Service ведёт сам.\n\nСвязь идёт через метки. У Service есть selector `app: web`. Все Pod с меткой `app: web` попадают в его пул. Pod умер — выпал из пула. Родился новый с той же меткой — снова попал в пул.\n\nЕсть три основных типа Service:\n\n```\nClusterIP    → доступ ТОЛЬКО внутри кластера (тип по умолчанию)\nNodePort     → открывает порт на каждом узле, доступ снаружи\nLoadBalancer → внешний балансировщик от облака, боевой вход снаружи\n```\n\nТекстовая схема трафика для NodePort:\n\n```\nклиент → IP_узла:30080 → Service → Pod:8080\n```\n\nClusterIP — сервис A зовёт сервис B внутри кластера. NodePort — быстрый доступ снаружи для теста или демо. LoadBalancer — продакшн, публичный IP выдаёт облако.\n\nРазбор команды `kubectl get svc -n dev`:\n\n- `svc` — короткое имя для `services`.\n- `-n dev` — смотрим в namespace `dev`.\n\n## Пример\n\nFrontend зовёт backend по имени `backend`, а не по IP. DNS кластера превращает имя в ClusterIP. Backend-Pod'ы перезапускаются, а имя не меняется.\n\nВторой пример: демо для заказчика. Ставим NodePort на 30080. Заказчик открывает `IP_узла:30080` в браузере. Облачный балансировщик тут не нужен.\n\n## Как бывает неправильно\n\nSelector у Service не совпадает с метками Pod. У Pod метка `app: web`, а в Service написано `app: webs`. Пул пустой. Service отвечает, но трафику некуда идти — клиент видит «connection refused».\n\n## ❓ Проверьте себя\n\nКакой тип Service выбрать, чтобы два приложения ВНУТРИ кластера общались между собой?\n\n*Ответ: ClusterIP — он и так по умолчанию, доступ только внутри.*\n\n## Частые ошибки новичка\n\n- Путают selector в Service и метки Pod — трафик не идёт.\n- Ставят LoadBalancer на локальном кластере без облака — внешний IP висит в состоянии pending.\n- Думают, что Service хранит данные. Он только маршрутизирует трафик.\n\n## Запомнить\n\n- Service — стабильный адрес поверх меняющихся Pod.\n- Он находит Pod по меткам и балансирует нагрузку.\n- ClusterIP — внутри, NodePort — порт на узлах, LoadBalancer — облачный вход.\n- Метки Pod обязаны совпадать с selector Service.",
+    "resources": [
+     {
+      "title": "Kubernetes: Service",
+      "url": "https://kubernetes.io/docs/concepts/services-networking/service/",
+      "note": "Что такое Service и как работают его типы."
+     },
+     {
+      "title": "Kubernetes: DNS для сервисов",
+      "url": "https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/",
+      "note": "Как имя сервиса превращается в адрес внутри кластера."
+     }
+    ]
+   }
+  },
+  {
+   "title": "Пишем манифест Service",
+   "kind": "code",
+   "summary": "Практика: описываем Service типа ClusterIP, который по меткам связывает трафик с Pod'ами приложения web.",
+   "durationMin": 12,
+   "content": {
+    "language": "yaml",
+    "task": "Опишите Service типа ClusterIP для приложения web.\n\n1. apiVersion — v1, kind — Service.\n2. Имя сервиса web, namespace dev.\n3. Тип ClusterIP (доступ только внутри кластера).\n4. selector: связать с Pod'ами по метке app: web.\n5. ports: принимать на порту 80 и перенаправлять в контейнер на targetPort 8080.",
+    "starter": "apiVersion: v1\nkind: Service\nmetadata:\n  # имя сервиса и namespace\n  name: web\n  namespace: dev\nspec:\n  # тип: доступ только внутри кластера\n  type: \n  # по каким меткам искать Pod'ы\n  selector:\n    app: \n  ports:\n    # порт сервиса и порт контейнера\n    - port: \n      targetPort: ",
+    "hint": "type — ClusterIP. selector.app должен точно совпасть с меткой Pod: app: web. port: 80 — вход в Service, targetPort: 8080 — порт внутри контейнера.",
+    "checks": [
+     {
+      "type": "contains",
+      "value": "apiVersion: v1",
+      "message": "Укажите apiVersion: v1."
+     },
+     {
+      "type": "contains",
+      "value": "kind: Service",
+      "message": "kind должен быть Service."
+     },
+     {
+      "type": "contains",
+      "value": "type: ClusterIP",
+      "message": "Тип сервиса должен быть ClusterIP."
+     },
+     {
+      "type": "contains",
+      "value": "selector:",
+      "message": "Добавьте блок selector."
+     },
+     {
+      "type": "contains",
+      "value": "app: web",
+      "message": "selector должен искать Pod по метке app: web."
+     },
+     {
+      "type": "regex",
+      "value": "port:\\s*80\\b",
+      "message": "Service должен слушать на порту 80."
+     },
+     {
+      "type": "regex",
+      "value": "targetPort:\\s*8080\\b",
+      "message": "targetPort должен указывать на порт контейнера 8080."
+     }
+    ],
+    "solution": "apiVersion: v1\nkind: Service\nmetadata:\n  name: web\n  namespace: dev\nspec:\n  type: ClusterIP\n  selector:\n    app: web\n  ports:\n    - port: 80\n      targetPort: 8080",
+    "resources": [
+     {
+      "title": "Kubernetes: определение Service",
+      "url": "https://kubernetes.io/docs/concepts/services-networking/service/#defining-a-service",
+      "note": "Пример манифеста Service с selector и ports."
+     }
+    ]
+   }
+  },
+  {
+   "title": "Сравнение типов Service: ClusterIP, NodePort, LoadBalancer",
+   "kind": "quiz",
+   "summary": "Проверяем, какой тип Service для чего: внутри кластера, для теста снаружи и для продакшна.",
+   "durationMin": 8,
+   "content": {
+    "intro": "Разберём типичную путаницу новичков вокруг типов Service. Вопросы разных форматов — выбирайте внимательно.",
+    "passScore": 70,
+    "questions": [
+     {
+      "id": "q1",
+      "text": "Два приложения работают ВНУТРИ одного кластера и должны общаться между собой. Какой тип Service подойдёт?",
+      "options": [
+       {
+        "id": "a",
+        "text": "ClusterIP",
+        "correct": true
+       },
+       {
+        "id": "b",
+        "text": "NodePort",
+        "correct": false
+       },
+       {
+        "id": "c",
+        "text": "LoadBalancer",
+        "correct": false
+       }
+      ],
+      "explanation": "ClusterIP — тип по умолчанию, он даёт адрес, доступный только внутри кластера. Для внутреннего общения этого достаточно, наружу открывать порт не нужно."
+     },
+     {
+      "id": "q2",
+      "type": "match",
+      "text": "Сопоставьте тип Service с его поведением:",
+      "pairs": [
+       {
+        "id": "p1",
+        "left": "ClusterIP",
+        "right": "доступ только внутри кластера"
+       },
+       {
+        "id": "p2",
+        "left": "NodePort",
+        "right": "открывает один порт на каждом узле"
+       },
+       {
+        "id": "p3",
+        "left": "LoadBalancer",
+        "right": "внешний IP от облачного провайдера"
+       }
+      ],
+      "explanation": "ClusterIP скрыт внутри кластера. NodePort вешает порт на все узлы, и по IP узла сервис доступен снаружи. LoadBalancer просит у облака отдельный внешний балансировщик с публичным IP."
+     },
+     {
+      "id": "q3",
+      "text": "Верно или нет: если создать Service типа LoadBalancer на локальном кластере без облачного провайдера, он сразу получит внешний IP.",
+      "options": [
+       {
+        "id": "a",
+        "text": "Верно",
+        "correct": false
+       },
+       {
+        "id": "b",
+        "text": "Неверно",
+        "correct": true
+       }
+      ],
+      "explanation": "Неверно. Внешний IP для LoadBalancer выдаёт облако. Без провайдера внешний адрес остаётся в состоянии pending. Локально для доступа снаружи обычно берут NodePort."
+     },
+     {
+      "id": "q4",
+      "type": "order",
+      "text": "Расставьте путь запроса при использовании NodePort по порядку:",
+      "items": [
+       {
+        "id": "s1",
+        "text": "Клиент из внешней сети"
+       },
+       {
+        "id": "s2",
+        "text": "IP узла и открытый порт (например 30080)"
+       },
+       {
+        "id": "s3",
+        "text": "Service"
+       },
+       {
+        "id": "s4",
+        "text": "Нужный Pod с приложением"
+       }
+      ],
+      "explanation": "Клиент стучится на IP узла и NodePort. Порт на узле передаёт запрос в Service. Service по меткам выбирает живой Pod и отправляет трафик туда."
+     },
+     {
+      "id": "q5",
+      "type": "blank",
+      "text": "Впишите команду, которая коротко покажет список сервисов в namespace dev (используйте сокращение для services).",
+      "accept": [
+       "kubectl get svc -n dev",
+       "kubectl get services -n dev"
+      ],
+      "hint": "kubectl get + короткое имя сервисов + флаг namespace.",
+      "explanation": "svc — стандартное сокращение для services. Флаг -n dev ограничивает вывод пространством имён dev."
+     },
+     {
+      "id": "q6",
+      "multiple": true,
+      "text": "Какие типы Service дают доступ к приложению СНАРУЖИ кластера? (выберите все подходящие)",
+      "options": [
+       {
+        "id": "a",
+        "text": "NodePort",
+        "correct": true
+       },
+       {
+        "id": "b",
+        "text": "LoadBalancer",
+        "correct": true
+       },
+       {
+        "id": "c",
+        "text": "ClusterIP",
+        "correct": false
+       }
+      ],
+      "explanation": "NodePort открывает порт на узлах, а LoadBalancer даёт публичный IP — оба доступны снаружи. ClusterIP виден только внутри кластера, наружу трафик не пускает."
+     }
+    ],
+    "resources": [
+     {
+      "title": "Kubernetes: типы Service",
+      "url": "https://kubernetes.io/docs/concepts/services-networking/service/#publishing-services-service-types",
+      "note": "Официальное сравнение ClusterIP, NodePort и LoadBalancer."
+     }
+    ]
+   }
+  },
+  {
+   "title": "Ingress: один вход для HTTP-трафика",
+   "kind": "text",
+   "summary": "Ingress маршрутизирует HTTP и HTTPS по доменам и путям через один вход, экономя на балансировщиках.",
+   "durationMin": 12,
+   "content": {
+    "body": "## Зачем это нужно\n\nLoadBalancer на каждый сервис — дорого. У облака под каждый свой IP и своя цена. Десять сервисов — десять балансировщиков. Ingress даёт один вход на всех.\n\n## Что это простыми словами\n\nАналогия: администратор на ресепшене бизнес-центра. Вход в здание один. Посетитель говорит, к кому он пришёл. Администратор направляет: «shop.example.com — второй этаж», «путь /api — кабинет 5». Ingress — такой администратор для HTTP.\n\n## Как это работает\n\nIngress (входной маршрутизатор) — это набор правил для HTTP и HTTPS. Он смотрит на хост (домен) и на путь URL. По ним отправляет запрос нужному Service. Сам Ingress — только правила.\n\nРаботу выполняет Ingress Controller (контроллер входа). Это программа, которая читает правила и реально принимает трафик. Популярный вариант — ingress-nginx. Без контроллера правила Ingress не работают.\n\nРазбор манифеста Ingress:\n\n```yaml\napiVersion: networking.k8s.io/v1\nkind: Ingress\nmetadata:\n  name: site\nspec:\n  rules:\n    - host: shop.example.com\n      http:\n        paths:\n          - path: /\n            pathType: Prefix\n            backend:\n              service:\n                name: web\n                port:\n                  number: 80\n```\n\n- `host` — для какого домена действует правило.\n- `path: /` и `pathType: Prefix` — все пути этого домена.\n- `backend.service.name: web` — куда слать трафик, это Service `web`.\n- `port.number: 80` — на какой порт сервиса.\n\nHTTPS (шифрование) настраивается в блоке `spec.tls`. Ingress завершает HTTPS и отдаёт сертификат клиенту.\n\n## Пример\n\nОдин домен, два пути. `/shop` ведёт в Service shop. `/api` — в Service api. Один Ingress, одно правило host, два path. Один внешний IP на оба сервиса.\n\nВторой пример: два домена. `shop.example.com` и `blog.example.com`. Разные host в правилах, разные Service. Всё это проходит через один Ingress Controller.\n\n## Чем отличается от LoadBalancer\n\nService типа LoadBalancer работает на уровне портов. У него один внешний IP на один сервис. Ingress работает на уровне HTTP. Он понимает домены, пути и TLS. Один вход маршрутизирует на множество сервисов.\n\n## Как бывает неправильно\n\nПишут Ingress, но не ставят Ingress Controller. Правила есть, а трафик не идёт. Причина: читать и исполнять правила некому. Контроллер обязателен.\n\n## ❓ Проверьте себя\n\nЗаработает ли Ingress, если в кластере нет ни одного Ingress Controller?\n\n*Ответ: нет. Ingress — это только правила; исполняет их контроллер.*\n\n## Частые ошибки новичка\n\n- Забывают установить Ingress Controller.\n- Путают host и path — трафик уходит не туда.\n- Ждут от Ingress балансировки обычного TCP — он про HTTP и HTTPS.\n\n## Запомнить\n\n- Ingress — один вход для HTTP, маршрутизация по домену и пути.\n- Правила исполняет Ingress Controller (например, ingress-nginx).\n- Ingress умеет TLS/HTTPS и экономит на балансировщиках.\n- Отличие от LoadBalancer: уровень HTTP, а не просто порт.",
+    "resources": [
+     {
+      "title": "Kubernetes: Ingress",
+      "url": "https://kubernetes.io/docs/concepts/services-networking/ingress/",
+      "note": "Правила маршрутизации, host, path и TLS."
+     },
+     {
+      "title": "Kubernetes: Ingress Controllers",
+      "url": "https://kubernetes.io/docs/concepts/services-networking/ingress-controllers/",
+      "note": "Зачем нужен контроллер и какие бывают."
+     }
+    ]
+   }
+  },
+  {
+   "title": "Квиз главы: базовые объекты и сеть",
+   "kind": "quiz",
+   "summary": "Проверяем понимание Pod, ReplicaSet, Deployment, меток, Namespace, типов Service и Ingress.",
+   "durationMin": 12,
+   "content": {
+    "intro": "Итоговый квиз по главе. Здесь собраны вопросы про все базовые объекты Kubernetes: минимальную единицу Pod, контроллеры ReplicaSet и Deployment, метки и селекторы, пространства имён Namespace, а также про сетевой доступ через Service и Ingress. Отвечайте спокойно, у каждого вопроса есть разбор. Проходной балл — 70%.",
+    "passScore": 70,
+    "questions": [
+     {
+      "id": "q1",
+      "text": "Что такое Pod в Kubernetes?",
+      "options": [
+       {
+        "id": "a",
+        "text": "Минимальная единица запуска: обёртка вокруг одного или нескольких контейнеров с общей сетью",
+        "correct": true
+       },
+       {
+        "id": "b",
+        "text": "Другое название для Docker-контейнера, просто термин Kubernetes",
+        "correct": false
+       },
+       {
+        "id": "c",
+        "text": "Физический сервер, на котором работает кластер",
+        "correct": false
+       },
+       {
+        "id": "d",
+        "text": "Файл конфигурации в формате YAML",
+        "correct": false
+       }
+      ],
+      "explanation": "Pod — это наименьшая единица, которой управляет Kubernetes. Внутри него живут один или несколько контейнеров, которые делят один IP-адрес и сетевое пространство. Pod не равен контейнеру: это обёртка над ним. Физический или виртуальный сервер называется Node, а YAML — это манифест, который описывает Pod."
+     },
+     {
+      "id": "q2",
+      "text": "Зачем нужен ReplicaSet?",
+      "options": [
+       {
+        "id": "a",
+        "text": "Он поддерживает заданное число одинаковых Pod, пересоздавая упавшие",
+        "correct": true
+       },
+       {
+        "id": "b",
+        "text": "Он раздаёт трафик между Pod по HTTP-путям",
+        "correct": false
+       },
+       {
+        "id": "c",
+        "text": "Он хранит секреты и пароли приложения",
+        "correct": false
+       },
+       {
+        "id": "d",
+        "text": "Он изолирует объекты друг от друга внутри кластера",
+        "correct": false
+       }
+      ],
+      "explanation": "ReplicaSet — контроллер, который следит за количеством копий Pod. Если задано 3 реплики, а один Pod упал, ReplicaSet тут же создаёт новый. Раздачей HTTP-трафика по путям занимается Ingress, хранением секретов — объект Secret, а изоляцией — Namespace."
+     },
+     {
+      "id": "q3",
+      "text": "Верно или нет: на практике вы обычно создаёте ReplicaSet вручную, а не через Deployment.",
+      "options": [
+       {
+        "id": "a",
+        "text": "Верно",
+        "correct": false
+       },
+       {
+        "id": "b",
+        "text": "Неверно",
+        "correct": true
+       }
+      ],
+      "explanation": "Неверно. Обычно вы описываете Deployment, а он сам создаёт и управляет ReplicaSet. Deployment добавляет удобные обновления версий и откаты. Создавать ReplicaSet напрямую почти никогда не нужно."
+     },
+     {
+      "id": "q4",
+      "type": "match",
+      "text": "Сопоставьте тип Service с тем, что он даёт:",
+      "pairs": [
+       {
+        "id": "p1",
+        "left": "ClusterIP",
+        "right": "Доступ только внутри кластера по внутреннему IP"
+       },
+       {
+        "id": "p2",
+        "left": "NodePort",
+        "right": "Открывает порт на каждом узле кластера наружу"
+       },
+       {
+        "id": "p3",
+        "left": "LoadBalancer",
+        "right": "Просит у облака внешний балансировщик с публичным IP"
+       }
+      ],
+      "explanation": "ClusterIP — тип по умолчанию, доступ только внутри кластера. NodePort открывает один и тот же порт на всех узлах, чтобы попасть снаружи. LoadBalancer заказывает у облачного провайдера настоящий внешний балансировщик с публичным адресом."
+     },
+     {
+      "id": "q5",
+      "type": "blank",
+      "text": "Впишите поле в spec Service, которое по меткам выбирает, к каким Pod направлять трафик:",
+      "accept": [
+       "selector",
+       "selector:",
+       ".spec.selector"
+      ],
+      "hint": "То же слово, что и «отбор по меткам»; в манифесте оно идёт под spec.",
+      "explanation": "Service находит свои Pod через поле selector. Оно перечисляет метки (labels), и трафик идёт только на Pod с такими метками. Именно связка labels на Pod и selector на Service соединяет объекты между собой."
+     },
+     {
+      "id": "q6",
+      "type": "order",
+      "text": "Расставьте по порядку путь HTTP-запроса от пользователя из интернета до контейнера:",
+      "items": [
+       {
+        "id": "s1",
+        "text": "Пользователь шлёт запрос на доменное имя"
+       },
+       {
+        "id": "s2",
+        "text": "Ingress по правилу host/path выбирает нужный Service"
+       },
+       {
+        "id": "s3",
+        "text": "Service по selector находит подходящие Pod"
+       },
+       {
+        "id": "s4",
+        "text": "Запрос попадает в контейнер внутри Pod"
+       }
+      ],
+      "explanation": "Ingress — единая точка входа для HTTP. Он смотрит на домен и путь и направляет запрос в нужный Service. Service по меткам выбирает живые Pod и раздаёт им трафик. В самом конце запрос доходит до контейнера внутри Pod."
+     },
+     {
+      "id": "q7",
+      "text": "Что из перечисленного делает Deployment, а ReplicaSet сам по себе — нет?",
+      "multiple": true,
+      "options": [
+       {
+        "id": "a",
+        "text": "Плавно обновляет версию приложения (rolling update)",
+        "correct": true
+       },
+       {
+        "id": "b",
+        "text": "Позволяет откатиться на прошлую версию",
+        "correct": true
+       },
+       {
+        "id": "c",
+        "text": "Поддерживает заданное число реплик Pod",
+        "correct": false
+       },
+       {
+        "id": "d",
+        "text": "Хранит историю выкатов (revision)",
+        "correct": true
+       }
+      ],
+      "explanation": "Поддержание числа реплик — это как раз работа ReplicaSet, и Deployment делает это его руками. А вот плавные обновления версий, откаты на прошлую ревизию и история выкатов — это то, что добавляет именно Deployment поверх ReplicaSet."
+     },
+     {
+      "id": "q8",
+      "text": "Для чего нужен Namespace?",
+      "options": [
+       {
+        "id": "a",
+        "text": "Логически делит один кластер на изолированные отсеки (например, dev и prod)",
+        "correct": true
+       },
+       {
+        "id": "b",
+        "text": "Ускоряет запуск контейнеров за счёт кеша образов",
+        "correct": false
+       },
+       {
+        "id": "c",
+        "text": "Шифрует сетевой трафик между Pod",
+        "correct": false
+       },
+       {
+        "id": "d",
+        "text": "Автоматически масштабирует приложение по нагрузке",
+        "correct": false
+       }
+      ],
+      "explanation": "Namespace — это отсек внутри одного кластера. В разных Namespace могут жить объекты с одинаковыми именами, не мешая друг другу. Так удобно разделять окружения (dev, staging, prod) или команды. С кешем образов, шифрованием и автомасштабированием это не связано."
+     },
+     {
+      "id": "q9",
+      "text": "Верно или нет: если удалить один Pod, которым управляет Deployment, приложение навсегда останется с меньшим числом копий.",
+      "options": [
+       {
+        "id": "a",
+        "text": "Верно",
+        "correct": false
+       },
+       {
+        "id": "b",
+        "text": "Неверно",
+        "correct": true
+       }
+      ],
+      "explanation": "Неверно. Deployment через свой ReplicaSet постоянно сравнивает желаемое число реплик с реальным. Удалили Pod — контроллер тут же создаст новый, чтобы вернуть заданное количество. В этом и смысл контроллеров: держать состояние в норме."
+     }
+    ],
+    "resources": [
+     {
+      "title": "Kubernetes: Pods",
+      "url": "https://kubernetes.io/docs/concepts/workloads/pods/",
+      "note": "Что такое Pod и как он устроен"
+     },
+     {
+      "title": "Kubernetes: Deployments",
+      "url": "https://kubernetes.io/docs/concepts/workloads/controllers/deployment/",
+      "note": "Deployment и ReplicaSet, обновления и откаты"
+     },
+     {
+      "title": "Kubernetes: Service",
+      "url": "https://kubernetes.io/docs/concepts/services-networking/service/",
+      "note": "Типы Service и селекторы"
+     },
+     {
+      "title": "Kubernetes: Ingress",
+      "url": "https://kubernetes.io/docs/concepts/services-networking/ingress/",
+      "note": "Единый вход для HTTP-трафика"
+     }
+    ]
+   }
+  }
+ ]
+}

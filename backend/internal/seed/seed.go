@@ -46,21 +46,6 @@ func DevOpsCourse() CourseSeed {
 			"devops", "linux", "git", "docker", "ci-cd",
 			"kubernetes", "terraform", "monitoring", "security",
 		},
-		Modules: []ModuleSeed{
-			moduleIntro(),
-			moduleLinux(),
-			moduleGit(),
-			moduleNetwork(),
-			moduleDocker(),
-			moduleCICD(),
-			moduleIaC(),
-			moduleKubernetes(),
-			moduleCheckpoint(),
-			moduleCloud(),
-			moduleObservability(),
-			moduleSecurity(),
-			moduleReliability(),
-			moduleExam(),
-		},
+		Modules: loadModules(),
 	}
 }

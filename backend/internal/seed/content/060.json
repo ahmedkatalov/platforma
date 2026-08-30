@@ -1,0 +1,977 @@
+{
+ "title": "Проекты по нарастанию: от ручного деплоя до Kubernetes",
+ "summary": "Серия практических проектов, где каждый следующий добавляет один новый инструмент поверх предыдущего: ручной деплой → Docker → многоконтейнерное окружение → CI/CD → облачная ВМ → Terraform → Ansible → Kubernetes → мониторинг → безопасность.",
+ "lessons": [
+  {
+   "title": "Как устроены проекты и принцип нарастания",
+   "kind": "text",
+   "summary": "Разбираем логику «одна проблема — один новый инструмент» и почему проекты идут именно в таком порядке.",
+   "durationMin": 10,
+   "content": {
+    "body": "## Зачем это нужно\n\nВ DevOps легко утонуть в инструментах. Docker, CI/CD, Terraform, Kubernetes — всё сразу.\n\nНовичок хватает всё подряд и не понимает, зачем каждый инструмент нужен.\n\nЭта глава решает боль иначе. Мы строим один сквозной путь доставки приложения.\n\nКаждый следующий проект добавляет ровно **один** новый инструмент поверх предыдущего.\n\nТак ты видишь не список технологий, а цепочку причин. Инструмент появляется тогда, когда старый способ перестаёт справляться.\n\n## Что это простыми словами\n\nПредставь, что ты строишь дом. Сначала ставишь одну стену.\n\nПотом крышу. Потом проводишь воду. Каждый шаг решает новую проблему.\n\nТы не начинаешь с умного дома и голосового помощника. Сначала — базовые вещи.\n\nНаши проекты устроены так же. Сначала выкатываем приложение руками.\n\nЭто больно и долго. Именно эта боль объясняет, зачем нужен следующий инструмент.\n\n## Как это работает\n\nВот порядок проектов. Читай его как историю одной команды, которой всё время чего-то не хватает.\n\n```\nПроект 1  Ручной деплой        → боль: долго, ошибки руками\nПроект 2  Docker               → боль: «у меня работает, а на сервере нет»\nПроект 3  docker-compose       → боль: приложению нужны БД и прокси рядом\nПроект 4  CI/CD пайплайн       → боль: деплой руками на каждый коммит\nПроект 5  Облачная ВМ          → боль: некуда выкатывать\nПроект 6  Terraform            → боль: сервер настроен кликами, не повторить\nПроект 7  Ansible              → боль: настройка ОС руками\nПроект 8  Kubernetes           → боль: масштабирование и самовосстановление\nПроект 9  Мониторинг и логи    → боль: не видно, что сломалось\nПроект 10 Безопасность         → боль: открыто лишнее, секреты на виду\n```\n\nОбрати внимание: каждая строка начинается со слова «боль». Это ключ ко всей главе.\n\nНовый инструмент — это не мода. Это ответ на конкретную проблему прошлого шага.\n\n## Пример\n\nПосле проекта 1 ты выкатишь приложение руками. Скопируешь файлы, запустишь, настроишь автозапуск.\n\nЗатем поменяешь одну строчку в коде — и повторишь весь ритуал заново. Это утомляет.\n\nВот тут появляется Docker. Он упаковывает приложение так, что запуск становится одной командой.\n\nВторой пример из жизни команды. Приложению нужна база данных рядом.\n\nЗапускать её руками отдельно — неудобно. Так рождается потребность в docker-compose из проекта 3.\n\n## Как бывает неправильно\n\nЧастая ошибка — прыгнуть сразу на Kubernetes. «Все же так делают».\n\nПочему это проваливается: без понимания Docker и деплоя ты не поймёшь, что Kubernetes вообще решает.\n\nТы будешь копировать чужие манифесты и не понимать ни строчки. Любая ошибка станет тупиком.\n\nПравильный путь — снизу вверх. Сначала боль, потом инструмент, который её лечит.\n\n## ❓ Проверьте себя\n\nПочему в этой главе Docker идёт раньше, чем Kubernetes?\n\n*Ответ: Kubernetes управляет контейнерами, а контейнеры создаёт Docker. Без понимания контейнера нечем управлять — поэтому сначала Docker.*\n\n## Частые ошибки новичка\n\n- Учить инструменты списком, не понимая, какую боль каждый решает.\n- Пропускать ручной деплой: «зачем мне это, есть же автоматика».\n- Ставить сразу самый сложный инструмент и застревать в чужих конфигах.\n- Не доводить проект до рабочего состояния и переходить к следующему.\n\n## Запомнить\n\n- Принцип главы: одна проблема — один новый инструмент.\n- Порядок проектов не случаен: каждый шаг лечит боль предыдущего.\n- Сначала прочувствуй боль руками, потом внедряй инструмент.\n- Двигайся снизу вверх: ручной деплой → Docker → compose → и дальше.",
+    "resources": [
+     {
+      "title": "DevOps Roadmap",
+      "url": "https://roadmap.sh/devops",
+      "note": "Визуальная карта инструментов DevOps и порядок их изучения."
+     },
+     {
+      "title": "Docker overview",
+      "url": "https://docs.docker.com/get-started/docker-overview/",
+      "note": "Официальное введение: зачем нужны контейнеры."
+     }
+    ]
+   }
+  },
+  {
+   "title": "Проект 1: ручной деплой приложения",
+   "kind": "code",
+   "summary": "Пишем bash-скрипт, который вручную выкатывает приложение на сервер и перезапускает его через systemd.",
+   "durationMin": 14,
+   "content": {
+    "language": "bash",
+    "task": "Напиши скрипт deploy.sh, который выкатывает приложение на сервер вручную. По пунктам:\n1. Первой строкой поставь shebang: #!/usr/bin/env bash\n2. Включи строгий режим: set -euo pipefail (падать на любой ошибке).\n3. Задай переменные APP_DIR и SERVICE (куда копировать и как называется сервис).\n4. Скопируй код на сервер командой rsync.\n5. Перезапусти сервис на сервере: ssh ... sudo systemctl restart $SERVICE.\n6. Проверь, что сервис жив: systemctl is-active $SERVICE.\n\nЦель — прочувствовать, сколько ручных шагов нужно для одного деплоя.",
+    "starter": "#!/usr/bin/env bash\n# 1) строгий режим — скрипт падает на первой же ошибке\n# set -euo pipefail\n\n# 2) переменные: папка приложения на сервере и имя systemd-сервиса\n# APP_DIR=...\n# SERVICE=...\n\n# 3) скопировать локальную папку ./app на сервер через rsync\n\n# 4) перезапустить сервис по ssh через systemctl restart\n\n# 5) проверить, что сервис активен: systemctl is-active\n",
+    "hint": "rsync -av ./app/ user@server:$APP_DIR/ копирует файлы. Команды на сервере запускай так: ssh user@server \"sudo systemctl restart $SERVICE\". Переменную в строке подставляй через $SERVICE.",
+    "checks": [
+     {
+      "type": "regex",
+      "value": "^#!/usr/bin/env bash",
+      "message": "Первой строкой должен быть shebang #!/usr/bin/env bash."
+     },
+     {
+      "type": "contains",
+      "value": "set -euo pipefail",
+      "message": "Не включён строгий режим set -euo pipefail."
+     },
+     {
+      "type": "contains",
+      "value": "rsync",
+      "message": "Нет команды rsync для копирования кода на сервер."
+     },
+     {
+      "type": "contains",
+      "value": "systemctl restart",
+      "message": "Сервис не перезапускается через systemctl restart."
+     },
+     {
+      "type": "contains",
+      "value": "is-active",
+      "message": "Нет проверки, что сервис жив (systemctl is-active)."
+     },
+     {
+      "type": "notContains",
+      "value": "docker",
+      "message": "Это ручной деплой без Docker — контейнеры появятся только в проекте 2."
+     }
+    ],
+    "solution": "#!/usr/bin/env bash\nset -euo pipefail\n\n# Куда выкатываем и как называется сервис\nAPP_DIR=/opt/myapp\nSERVICE=myapp\nHOST=deploy@server.example.com\n\n# 1) Скопировать свежий код на сервер\nrsync -av ./app/ \"$HOST:$APP_DIR/\"\n\n# 2) Перезапустить сервис через systemd\nssh \"$HOST\" \"sudo systemctl restart $SERVICE\"\n\n# 3) Убедиться, что сервис поднялся\nssh \"$HOST\" \"systemctl is-active $SERVICE\"\n\necho \"Деплой завершён: $SERVICE\"",
+    "resources": [
+     {
+      "title": "rsync (man7)",
+      "url": "https://man7.org/linux/man-pages/man1/rsync.1.html",
+      "note": "Как копировать файлы на сервер по ssh."
+     },
+     {
+      "title": "systemctl (man7)",
+      "url": "https://man7.org/linux/man-pages/man1/systemctl.1.html",
+      "note": "Управление сервисами: restart, is-active, status."
+     }
+    ]
+   }
+  },
+  {
+   "title": "Проект 2: упаковка приложения в Docker",
+   "kind": "code",
+   "summary": "Пишем Dockerfile, чтобы приложение собиралось в образ и запускалось одинаково везде.",
+   "durationMin": 14,
+   "content": {
+    "language": "dockerfile",
+    "task": "Напиши Dockerfile для Node.js приложения. Он решает боль «у меня работает, а на сервере нет». По пунктам:\n1. Возьми базовый образ node:20-alpine (FROM).\n2. Задай рабочую папку /app (WORKDIR).\n3. Сначала скопируй только package.json и package-lock.json — это отдельный слой (COPY).\n4. Установи зависимости: RUN npm ci --omit=dev.\n5. Скопируй остальной код: COPY . .\n6. Объяви порт 3000 (EXPOSE).\n7. Задай команду запуска: CMD [\"node\", \"server.js\"].\n\nТермины: образ — упакованное приложение; слой — один шаг сборки; тег — имя версии образа.",
+    "starter": "# 1) базовый образ с Node.js 20 на лёгком Alpine Linux\n# FROM ...\n\n# 2) рабочая папка внутри образа\n# WORKDIR ...\n\n# 3) сперва только манифесты зависимостей — чтобы слой кэшировался\n# COPY package.json package-lock.json ./\n\n# 4) установка зависимостей (только прод, без dev)\n# RUN ...\n\n# 5) копируем остальной исходный код\n# COPY . .\n\n# 6) какой порт слушает приложение\n# EXPOSE ...\n\n# 7) команда запуска контейнера\n# CMD [ ... ]\n",
+    "hint": "Строки Dockerfile — это инструкции заглавными буквами. Порядок важен: сначала package.json и npm ci, потом COPY . . — так слой с зависимостями кэшируется и пересобирается реже.",
+    "checks": [
+     {
+      "type": "regex",
+      "value": "^FROM\\s+node:20-alpine",
+      "message": "Первой инструкцией должен быть FROM node:20-alpine."
+     },
+     {
+      "type": "contains",
+      "value": "WORKDIR /app",
+      "message": "Не задана рабочая папка WORKDIR /app."
+     },
+     {
+      "type": "contains",
+      "value": "COPY package.json",
+      "message": "Сначала нужно скопировать package.json отдельным слоем."
+     },
+     {
+      "type": "regex",
+      "value": "RUN\\s+npm\\s+ci",
+      "message": "Зависимости ставятся командой RUN npm ci."
+     },
+     {
+      "type": "contains",
+      "value": "EXPOSE 3000",
+      "message": "Не объявлен порт EXPOSE 3000."
+     },
+     {
+      "type": "regex",
+      "value": "CMD\\s*\\[",
+      "message": "Команда запуска должна быть в exec-форме: CMD [\"node\", \"server.js\"]."
+     }
+    ],
+    "solution": "FROM node:20-alpine\nWORKDIR /app\n\n# Сначала манифесты — слой с зависимостями кэшируется\nCOPY package.json package-lock.json ./\nRUN npm ci --omit=dev\n\n# Затем остальной код приложения\nCOPY . .\n\nEXPOSE 3000\nCMD [\"node\", \"server.js\"]",
+    "resources": [
+     {
+      "title": "Dockerfile reference",
+      "url": "https://docs.docker.com/reference/dockerfile/",
+      "note": "Все инструкции: FROM, WORKDIR, COPY, RUN, EXPOSE, CMD."
+     },
+     {
+      "title": "Build images best practices",
+      "url": "https://docs.docker.com/build/building/best-practices/",
+      "note": "Почему порядок COPY и RUN влияет на кэш слоёв."
+     }
+    ]
+   }
+  },
+  {
+   "title": "Проект 3: многоконтейнерное окружение",
+   "kind": "code",
+   "summary": "Собираем приложение, базу данных и их связь в одном docker-compose.yml через сервисы, сеть и том.",
+   "durationMin": 15,
+   "content": {
+    "language": "yaml",
+    "task": "Напиши docker-compose.yml, где приложение и база данных работают вместе. По пунктам:\n1. Секция services с двумя сервисами: web и db.\n2. web собирается из локального Dockerfile (build: .) и пробрасывает порт 8080:3000 (ports).\n3. web зависит от db (depends_on).\n4. db использует готовый образ postgres:16 (image).\n5. Задай пароль базы через environment (POSTGRES_PASSWORD).\n6. Данные базы храни в именованном томе (volumes), чтобы они не пропали.\n7. Объедини сервисы в общей сети (networks).\n\nТермины: сервис — один контейнер в compose; том — постоянное хранилище; сеть — как контейнеры видят друг друга; зависимость — порядок запуска.",
+    "starter": "# describe: приложение + база данных одним файлом\nservices:\n  web:\n    # build: собрать из локального Dockerfile\n    # ports: проброс порта 8080 -> 3000\n    # depends_on: web стартует после db\n    # networks: общая сеть\n    build:\n\n  db:\n    # image: готовый образ postgres:16\n    # environment: POSTGRES_PASSWORD\n    # volumes: именованный том для данных\n    # networks: общая сеть\n    image:\n\n# volumes: объявить именованный том\n# networks: объявить сеть\n",
+    "hint": "Проброс порта пишется строкой в кавычках: \"8080:3000\". Именованный том сначала подключают в сервисе (dbdata:/var/lib/postgresql/data), а потом объявляют в секции volumes: верхнего уровня.",
+    "checks": [
+     {
+      "type": "contains",
+      "value": "services:",
+      "message": "Нет секции services с описанием контейнеров."
+     },
+     {
+      "type": "contains",
+      "value": "build: .",
+      "message": "Сервис web должен собираться из локального Dockerfile (build: .)."
+     },
+     {
+      "type": "contains",
+      "value": "8080:3000",
+      "message": "Не проброшен порт 8080:3000 для web."
+     },
+     {
+      "type": "contains",
+      "value": "depends_on:",
+      "message": "web должен зависеть от db через depends_on."
+     },
+     {
+      "type": "regex",
+      "value": "image:\\s*postgres:16",
+      "message": "База должна использовать образ postgres:16."
+     },
+     {
+      "type": "contains",
+      "value": "POSTGRES_PASSWORD",
+      "message": "Не задан пароль базы через environment (POSTGRES_PASSWORD)."
+     },
+     {
+      "type": "contains",
+      "value": "volumes:",
+      "message": "Нет тома для хранения данных базы (volumes)."
+     },
+     {
+      "type": "contains",
+      "value": "networks:",
+      "message": "Сервисы должны быть в общей сети (networks)."
+     }
+    ],
+    "solution": "services:\n  web:\n    build: .\n    ports:\n      - \"8080:3000\"\n    depends_on:\n      - db\n    networks:\n      - appnet\n\n  db:\n    image: postgres:16\n    environment:\n      POSTGRES_PASSWORD: secret\n    volumes:\n      - dbdata:/var/lib/postgresql/data\n    networks:\n      - appnet\n\nvolumes:\n  dbdata:\n\nnetworks:\n  appnet:",
+    "resources": [
+     {
+      "title": "Compose file reference",
+      "url": "https://docs.docker.com/reference/compose-file/",
+      "note": "Секции services, volumes, networks, depends_on."
+     },
+     {
+      "title": "Postgres image (Docker Hub)",
+      "url": "https://hub.docker.com/_/postgres",
+      "note": "Переменные образа, включая POSTGRES_PASSWORD."
+     }
+    ]
+   }
+  },
+  {
+   "title": "Микропроверка: проекты 1-3",
+   "kind": "quiz",
+   "summary": "Проверяем, какую проблему решают Docker и docker-compose по сравнению с ручным деплоем.",
+   "durationMin": 8,
+   "content": {
+    "intro": "Короткий тест по первым трём проектам. Вспомни, какую боль лечит каждый шаг.",
+    "passScore": 70,
+    "questions": [
+     {
+      "id": "q1",
+      "type": "order",
+      "text": "Расставь первые три проекта в правильном порядке нарастания:",
+      "items": [
+       {
+        "id": "s1",
+        "text": "Ручной деплой на сервер"
+       },
+       {
+        "id": "s2",
+        "text": "Упаковка приложения в Docker-образ"
+       },
+       {
+        "id": "s3",
+        "text": "Многоконтейнерное окружение через docker-compose"
+       }
+      ],
+      "explanation": "Сначала выкатываем руками и чувствуем боль. Затем Docker делает запуск одинаковым везде. Потом compose связывает несколько контейнеров (приложение и базу) вместе."
+     },
+     {
+      "id": "q2",
+      "type": "match",
+      "text": "Сопоставь инструмент и проблему, которую он решает:",
+      "pairs": [
+       {
+        "id": "p1",
+        "left": "Ручной деплой (systemd)",
+        "right": "Понять боль повторяющихся шагов вручную"
+       },
+       {
+        "id": "p2",
+        "left": "Dockerfile",
+        "right": "«У меня работает, а на сервере нет»"
+       },
+       {
+        "id": "p3",
+        "left": "docker-compose",
+        "right": "Приложению нужны БД и прокси рядом"
+       }
+      ],
+      "explanation": "Каждый инструмент лечит конкретную боль: ручной деплой показывает проблему, Docker делает окружение одинаковым, compose поднимает несколько связанных контейнеров сразу."
+     },
+     {
+      "id": "q3",
+      "text": "Верно или нет: Docker-образ гарантирует, что приложение запустится одинаково на ноутбуке и на сервере.",
+      "options": [
+       {
+        "id": "a",
+        "text": "Верно",
+        "correct": true
+       },
+       {
+        "id": "b",
+        "text": "Неверно",
+        "correct": false
+       }
+      ],
+      "explanation": "Образ упаковывает приложение вместе с зависимостями и окружением. Поэтому запуск в контейнере одинаков везде, где есть Docker. Это и лечит боль «а у меня по-другому»."
+     },
+     {
+      "id": "q4",
+      "type": "blank",
+      "text": "Впиши команду, которая соберёт образ из Dockerfile в текущей папке с тегом myapp:",
+      "accept": [
+       "docker build -t myapp .",
+       "docker build -t myapp:latest .",
+       "docker build --tag myapp ."
+      ],
+      "hint": "docker build, флаг -t для тега, в конце точка — контекст сборки.",
+      "explanation": "docker build собирает образ. Флаг -t задаёт имя (тег) myapp. Точка в конце — это контекст сборки, текущая папка, где лежит Dockerfile."
+     },
+     {
+      "id": "q5",
+      "multiple": true,
+      "text": "Что docker-compose добавляет поверх одиночного контейнера? Выбери всё верное:",
+      "options": [
+       {
+        "id": "a",
+        "text": "Общую сеть, чтобы контейнеры видели друг друга",
+        "correct": true
+       },
+       {
+        "id": "b",
+        "text": "Именованные тома для постоянного хранения данных",
+        "correct": true
+       },
+       {
+        "id": "c",
+        "text": "Порядок запуска через depends_on",
+        "correct": true
+       },
+       {
+        "id": "d",
+        "text": "Автоматическое масштабирование по нагрузке в кластере",
+        "correct": false
+       }
+      ],
+      "explanation": "compose описывает несколько сервисов, их сеть, тома и зависимости в одном файле. А вот автоматическое масштабирование и самовосстановление по нагрузке — это уже задача Kubernetes из проекта 8."
+     }
+    ],
+    "resources": [
+     {
+      "title": "docker build",
+      "url": "https://docs.docker.com/reference/cli/docker/buildx/build/",
+      "note": "Справка по сборке образа и флагу -t."
+     },
+     {
+      "title": "Compose overview",
+      "url": "https://docs.docker.com/compose/",
+      "note": "Что даёт compose поверх одиночных контейнеров."
+     }
+    ]
+   }
+  },
+  {
+   "title": "Проект 4: пайплайн CI/CD",
+   "kind": "code",
+   "summary": "Написать .gitlab-ci.yml, который на каждый пуш собирает образ, гоняет тесты и деплоит — чтобы не выкатывать вручную.",
+   "durationMin": 16,
+   "content": {
+    "language": "yaml",
+    "task": "В проектах 1-3 вы собирали и запускали приложение руками. Проблема: человек забывает шаги, ошибается, деплоит непроверенный код. CI/CD (Continuous Integration / Continuous Delivery — непрерывная интеграция и доставка) убирает ручной труд: сервер сам всё делает на каждый пуш.\n\nНапишите файл .gitlab-ci.yml с тремя стадиями (stages — этапы конвейера):\n1) build — собрать Docker-образ и отправить его в реестр;\n2) test — установить зависимости и прогнать тесты (pytest);\n3) deploy — зайти по ssh на сервер и запустить новую версию.\n\nВажные правила:\n- Секреты (пароль от реестра, адрес сервера) НЕ пишем в файл. Берём их из переменных пайплайна ($CI_REGISTRY_PASSWORD, $SERVER_HOST) — их задают в настройках проекта.\n- Стадия deploy запускается только для ветки main (блок only), чтобы черновые ветки не выкатывались в бой.\n\nТермины: раннер (runner) — машина, которая выполняет задачи; стадия (stage) — этап; артефакт — результат сборки (здесь это образ в реестре); секрет пайплайна — скрытая переменная.",
+    "starter": "# .gitlab-ci.yml — конвейер сборки, тестов и деплоя.\n# 1) Объявите список стадий в нужном порядке.\nstages:\n  # - build\n  # - test\n  # - deploy\n\n# 2) Общая переменная с именем образа (используйте $CI_* переменные GitLab).\nvariables:\n  IMAGE: \"...\"\n\n# 3) Задача build: собрать и запушить образ.\n#    Логиньтесь в реестр паролем из переменной, НЕ хардкодьте его.\n\n# 4) Задача test: поставить зависимости и запустить pytest.\n\n# 5) Задача deploy: по ssh запустить новую версию. Только для ветки main.\n",
+    "hint": "Каждая задача указывает свою stage. Для доступа к секрету пишите $CI_REGISTRY_PASSWORD в кавычках, а не сам пароль. Чтобы deploy шёл только с main, добавьте в задачу блок only: [ - main ].",
+    "checks": [
+     {
+      "type": "contains",
+      "value": "stages:",
+      "message": "Должен быть блок stages со списком этапов"
+     },
+     {
+      "type": "contains",
+      "value": "build",
+      "message": "Нужна стадия/задача build"
+     },
+     {
+      "type": "contains",
+      "value": "test",
+      "message": "Нужна стадия/задача test"
+     },
+     {
+      "type": "contains",
+      "value": "deploy",
+      "message": "Нужна стадия/задача deploy"
+     },
+     {
+      "type": "contains",
+      "value": "docker build",
+      "message": "В стадии build должна собираться Docker-образ командой docker build"
+     },
+     {
+      "type": "contains",
+      "value": "$CI_REGISTRY_PASSWORD",
+      "message": "Пароль от реестра берётся из переменной, а не хардкодится"
+     },
+     {
+      "type": "notContains",
+      "value": "password123",
+      "message": "Нельзя писать настоящий пароль прямо в файл"
+     }
+    ],
+    "solution": "stages:\n  - build\n  - test\n  - deploy\n\nvariables:\n  IMAGE: \"$CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA\"\n\nbuild:\n  stage: build\n  image: docker:24\n  services:\n    - docker:24-dind\n  script:\n    - docker login -u \"$CI_REGISTRY_USER\" -p \"$CI_REGISTRY_PASSWORD\" \"$CI_REGISTRY\"\n    - docker build -t \"$IMAGE\" .\n    - docker push \"$IMAGE\"\n\ntest:\n  stage: test\n  image: python:3.12\n  script:\n    - pip install -r requirements.txt\n    - pytest -q\n\ndeploy:\n  stage: deploy\n  image: alpine:3.20\n  before_script:\n    - apk add --no-cache openssh-client\n  script:\n    - ssh -o StrictHostKeyChecking=accept-new \"deploy@$SERVER_HOST\" \"docker pull $IMAGE && docker compose -f /opt/app/docker-compose.yml up -d\"\n  only:\n    - main\n",
+    "resources": [
+     {
+      "title": "GitLab CI/CD: .gitlab-ci.yml keyword reference",
+      "url": "https://docs.gitlab.com/ee/ci/yaml/",
+      "note": "Полный справочник по stages, script, only и переменным"
+     },
+     {
+      "title": "GitLab CI/CD variables",
+      "url": "https://docs.gitlab.com/ee/ci/variables/",
+      "note": "Как устроены секретные переменные пайплайна ($CI_REGISTRY_PASSWORD и др.)"
+     }
+    ]
+   }
+  },
+  {
+   "title": "Проект 5: деплой на облачную ВМ",
+   "kind": "code",
+   "summary": "Написать bash-скрипт, который по ssh заходит на облачную виртуальную машину и обновляет там контейнеризованное приложение.",
+   "durationMin": 14,
+   "content": {
+    "language": "bash",
+    "task": "Пайплайн из проекта 4 собрал образ. Теперь его нужно доставить на реальный сервер в облаке — виртуальную машину (ВМ). Проблема: заходить руками по ssh и вводить команды каждый раз — медленно и легко ошибиться. Решение — скрипт, который делает всё сам.\n\nНапишите скрипт deploy.sh, который:\n1) Начинается с shebang #!/usr/bin/env bash и включает строгий режим set -euo pipefail (скрипт падает при первой ошибке, а не молча продолжает).\n2) Задаёт переменные SERVER (пользователь@адрес) и IMAGE (адрес образа в реестре).\n3) Печатает сообщение о начале деплоя.\n4) По ssh выполняет на сервере: docker pull нового образа, docker compose up -d для перезапуска, и docker image prune -f для очистки старых образов.\n5) Печатает сообщение об успехе.\n\nВажно: авторизация на сервере — по ssh-ключу, а не по паролю. Пароль в скрипт не пишем.",
+    "starter": "# 1) shebang и строгий режим.\n#!/usr/bin/env bash\n# set -euo pipefail\n\n# 2) Куда и что деплоим.\nSERVER=\"deploy@...\"\nIMAGE=\"registry.example.com/app:latest\"\n\n# 3) Сообщение о старте.\n\n# 4) Блок ssh: выполнить на сервере pull + compose up -d + очистку.\n#    Подсказка: команды удалённо можно передать через 'bash -s' и here-document (<<'REMOTE' ... REMOTE).\n\n# 5) Сообщение об успехе.\n",
+    "hint": "Строгий режим — ровно set -euo pipefail. Чтобы выполнить несколько команд на удалённой машине, используйте: ssh \"$SERVER\" bash -s <<'REMOTE' ... REMOTE. Ключевые команды внутри: docker pull, docker compose -f ... up -d.",
+    "checks": [
+     {
+      "type": "contains",
+      "value": "#!/usr/bin/env bash",
+      "message": "Скрипт должен начинаться с shebang #!/usr/bin/env bash"
+     },
+     {
+      "type": "contains",
+      "value": "set -euo pipefail",
+      "message": "Включите строгий режim set -euo pipefail"
+     },
+     {
+      "type": "contains",
+      "value": "ssh ",
+      "message": "Нужно подключение к серверу по ssh"
+     },
+     {
+      "type": "contains",
+      "value": "docker pull",
+      "message": "На сервере надо стянуть новый образ через docker pull"
+     },
+     {
+      "type": "contains",
+      "value": "docker compose",
+      "message": "Перезапуск приложения выполняется через docker compose up -d"
+     },
+     {
+      "type": "notContains",
+      "value": "password",
+      "message": "Пароль в скрипт не пишем — вход по ssh-ключу"
+     }
+    ],
+    "solution": "#!/usr/bin/env bash\nset -euo pipefail\n\nSERVER=\"deploy@203.0.113.10\"\nIMAGE=\"registry.example.com/app:latest\"\n\necho \"Подключаемся к серверу и обновляем приложение...\"\n\nssh -o StrictHostKeyChecking=accept-new \"$SERVER\" bash -s <<'REMOTE'\nset -euo pipefail\ndocker pull registry.example.com/app:latest\ndocker compose -f /opt/app/docker-compose.yml up -d\ndocker image prune -f\nREMOTE\n\necho \"Готово: новая версия запущена.\"\n",
+    "resources": [
+     {
+      "title": "ssh(1) manual page",
+      "url": "https://man7.org/linux/man-pages/man1/bash.1.html",
+      "note": "Раздел про set -e/-u/-o pipefail и here-documents в bash"
+     },
+     {
+      "title": "docker compose up",
+      "url": "https://docs.docker.com/reference/cli/docker/compose/up/",
+      "note": "Флаг -d для запуска в фоне и обновления сервисов"
+     }
+    ]
+   }
+  },
+  {
+   "title": "Проект 6: инфраструктура как код на Terraform",
+   "kind": "code",
+   "summary": "Описать ту же ВМ и сеть кодом на HCL, чтобы создавать и уничтожать инфраструктуру одной командой вместо кликов в панели облака.",
+   "durationMin": 16,
+   "content": {
+    "language": "hcl",
+    "task": "В проекте 5 сервер вы создавали руками в веб-панели облака. Проблема: такую ВМ невозможно точно повторить, а через полгода никто не помнит, как её настраивали. Terraform превращает инфраструктуру в код: файл описывает желаемое состояние, а команды terraform plan и terraform apply приводят облако к нему. terraform destroy сносит всё одной командой.\n\nОпишите в файле main.tf:\n1) блок terraform с required_providers — какой провайдер (provider — плагин к конкретному облаку) используем, здесь aws;\n2) блок provider \"aws\" с регионом;\n3) ресурс (resource — единица инфраструктуры) aws_security_group — сетевой экран: разрешить входящие 22 (ssh) и 80 (http), исходящие — любые;\n4) ресурс aws_instance — саму ВМ (ami, instance_type, привязка к security group);\n5) output с публичным IP машины.\n\nТермины: provider — плагин облака; resource — что создаём; state — файл, где Terraform хранит, что уже создано; plan/apply — показать план и применить его.",
+    "starter": "# main.tf — инфраструктура как код.\n# 1) Какой провайдер нужен.\nterraform {\n  required_providers {\n    aws = {\n      source  = \"hashicorp/aws\"\n      version = \"~> 5.0\"\n    }\n  }\n}\n\n# 2) Настройка провайдера (регион).\nprovider \"aws\" {\n  # region = \"...\"\n}\n\n# 3) resource \"aws_security_group\" \"web\" — открыть 22 и 80, исходящие любые.\n\n# 4) resource \"aws_instance\" \"app\" — ami, instance_type, vpc_security_group_ids.\n\n# 5) output \"public_ip\" — публичный адрес ВМ.\n",
+    "hint": "Ресурс объявляется как resource \"<тип>\" \"<имя>\" { ... }. Порты в security group задаются блоками ingress/egress с from_port, to_port, protocol, cidr_blocks. Ссылка на группу из инстанса: aws_security_group.web.id.",
+    "checks": [
+     {
+      "type": "contains",
+      "value": "provider \"aws\"",
+      "message": "Нужен блок provider \"aws\""
+     },
+     {
+      "type": "contains",
+      "value": "resource \"aws_instance\"",
+      "message": "Опишите виртуальную машину ресурсом aws_instance"
+     },
+     {
+      "type": "contains",
+      "value": "resource \"aws_security_group\"",
+      "message": "Опишите сетевой экран ресурсом aws_security_group"
+     },
+     {
+      "type": "contains",
+      "value": "instance_type",
+      "message": "У инстанса должен быть указан instance_type"
+     },
+     {
+      "type": "contains",
+      "value": "output",
+      "message": "Добавьте output с публичным IP машины"
+     }
+    ],
+    "solution": "terraform {\n  required_providers {\n    aws = {\n      source  = \"hashicorp/aws\"\n      version = \"~> 5.0\"\n    }\n  }\n}\n\nprovider \"aws\" {\n  region = \"eu-central-1\"\n}\n\nresource \"aws_security_group\" \"web\" {\n  name        = \"web-sg\"\n  description = \"Allow SSH and HTTP\"\n\n  ingress {\n    from_port   = 22\n    to_port     = 22\n    protocol    = \"tcp\"\n    cidr_blocks = [\"0.0.0.0/0\"]\n  }\n\n  ingress {\n    from_port   = 80\n    to_port     = 80\n    protocol    = \"tcp\"\n    cidr_blocks = [\"0.0.0.0/0\"]\n  }\n\n  egress {\n    from_port   = 0\n    to_port     = 0\n    protocol    = \"-1\"\n    cidr_blocks = [\"0.0.0.0/0\"]\n  }\n}\n\nresource \"aws_instance\" \"app\" {\n  ami                    = \"ami-0abcdef1234567890\"\n  instance_type          = \"t3.micro\"\n  vpc_security_group_ids = [aws_security_group.web.id]\n\n  tags = {\n    Name = \"app-server\"\n  }\n}\n\noutput \"public_ip\" {\n  value = aws_instance.app.public_ip\n}\n",
+    "resources": [
+     {
+      "title": "Terraform: Resources",
+      "url": "https://developer.hashicorp.com/terraform/language/resources",
+      "note": "Синтаксис блока resource и ссылок между ресурсами"
+     },
+     {
+      "title": "Terraform: plan, apply, destroy",
+      "url": "https://developer.hashicorp.com/terraform/tutorials/aws-get-started",
+      "note": "Как работает жизненный цикл plan/apply/destroy и файл state"
+     }
+    ]
+   }
+  },
+  {
+   "title": "Проект 7: настройка серверов через Ansible",
+   "kind": "code",
+   "summary": "Написать плейбук Ansible, который приводит сервер к нужному состоянию: ставит пакеты, создаёт пользователя, кладёт конфиг — идемпотентно.",
+   "durationMin": 14,
+   "content": {
+    "language": "yaml",
+    "task": "Terraform из проекта 6 создал пустую ВМ. Но на ней ещё нет ни nginx, ни пользователя, ни конфигов. Настраивать это руками по ssh — снова ручной труд, который забывается. Ansible описывает нужное СОСТОЯНИЕ сервера в плейбуке (playbook — сценарий) и сам приводит машину к нему.\n\nГлавное свойство — идемпотентность: плейбук можно запускать сколько угодно раз, результат одинаков. Если nginx уже стоит — Ansible ничего не переустанавливает.\n\nНапишите playbook.yml:\n1) один play с name, hosts: web (группа из инвентаря) и become: true (действия от root);\n2) tasks (задачи):\n   - установить nginx и git модулем ansible.builtin.apt (state: present);\n   - создать пользователя deploy модулем ansible.builtin.user;\n   - скопировать конфиг модулем ansible.builtin.copy;\n   - убедиться, что nginx запущен и в автозапуске, модулем ansible.builtin.service.\n\nТермины: инвентарь (inventory) — список серверов и групп; плейбук — сценарий задач; идемпотентность — повторный запуск ничего не ломает.",
+    "starter": "---\n# playbook.yml — приводим сервер к нужному состоянию.\n- name: Настроить веб-сервер\n  hosts: web\n  # become: ...   # действия от root\n\n  tasks:\n    # - установить nginx и git (ansible.builtin.apt, state: present)\n    # - создать пользователя deploy (ansible.builtin.user)\n    # - скопировать конфиг (ansible.builtin.copy)\n    # - запустить nginx и включить автозапуск (ansible.builtin.service)\n",
+    "hint": "Каждая задача — это элемент списка tasks с name и вызовом модуля. Для установки пакетов используйте ansible.builtin.apt с параметрами name (список) и state: present. Права root даёт become: true на уровне play.",
+    "checks": [
+     {
+      "type": "contains",
+      "value": "hosts:",
+      "message": "У play должно быть указано, на каких хостах он выполняется (hosts:)"
+     },
+     {
+      "type": "contains",
+      "value": "become: true",
+      "message": "Для установки пакетов нужны права root — добавьте become: true"
+     },
+     {
+      "type": "contains",
+      "value": "tasks:",
+      "message": "Плейбук должен содержать список задач tasks:"
+     },
+     {
+      "type": "contains",
+      "value": "ansible.builtin.apt",
+      "message": "Установка пакетов выполняется модулем ansible.builtin.apt"
+     },
+     {
+      "type": "contains",
+      "value": "state: present",
+      "message": "Укажите желаемое состояние пакета state: present (идемпотентность)"
+     },
+     {
+      "type": "contains",
+      "value": "ansible.builtin.service",
+      "message": "Запуск и автозапуск nginx — через ansible.builtin.service"
+     }
+    ],
+    "solution": "---\n- name: Настроить веб-сервер\n  hosts: web\n  become: true\n\n  tasks:\n    - name: Установить nginx и git\n      ansible.builtin.apt:\n        name:\n          - nginx\n          - git\n        state: present\n        update_cache: true\n\n    - name: Создать пользователя deploy\n      ansible.builtin.user:\n        name: deploy\n        shell: /bin/bash\n        state: present\n\n    - name: Скопировать конфиг nginx\n      ansible.builtin.copy:\n        src: files/app.conf\n        dest: /etc/nginx/conf.d/app.conf\n        owner: root\n        mode: \"0644\"\n\n    - name: Убедиться, что nginx запущен и добавлен в автозапуск\n      ansible.builtin.service:\n        name: nginx\n        state: started\n        enabled: true\n",
+    "resources": [
+     {
+      "title": "Ansible: Intro to playbooks",
+      "url": "https://docs.ansible.com/ansible/latest/playbook_guide/playbooks_intro.html",
+      "note": "Структура плейбука: play, hosts, tasks, модули"
+     },
+     {
+      "title": "DevOps Roadmap: Configuration Management",
+      "url": "https://roadmap.sh/devops",
+      "note": "Где Ansible стоит в общей картине DevOps"
+     }
+    ]
+   }
+  },
+  {
+   "title": "Проект 8: деплой в Kubernetes",
+   "kind": "code",
+   "summary": "Описать Deployment, Service и Ingress в манифесте и выкатить приложение в кластер с тремя репликами.",
+   "durationMin": 16,
+   "content": {
+    "language": "yaml",
+    "task": "На одной ВМ (проекты 5-7) приложение живёт в единственном экземпляре: упал контейнер — сайт лёг, вырос трафик — некуда масштабировать. Kubernetes (k8s) — оркестратор: он держит нужное число копий приложения на кластере машин, сам перезапускает упавшие и распределяет нагрузку.\n\nОпишите три объекта в одном файле (разделяйте их строкой ---):\n1) Deployment — как запускать приложение: replicas: 3 (три копии = реплики), selector по метке app, шаблон пода (pod — минимальная единица: один или несколько контейнеров) с образом и containerPort: 8080;\n2) Service — стабильный внутренний адрес: направляет трафик с port 80 на targetPort 8080 подов по той же метке;\n3) Ingress — вход снаружи по домену app.example.com на этот Service.\n\nТермины: под (pod) — запущенный контейнер приложения; реплика — одна из копий; манифест — YAML-описание объектов; сервис (Service) — постоянный адрес для набора подов.",
+    "starter": "# app.yaml — три объекта Kubernetes через ---\napiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: app\nspec:\n  # replicas: ...\n  # selector.matchLabels.app: app\n  # template: контейнер с image и containerPort 8080\n---\n# apiVersion: v1 / kind: Service — port 80 -> targetPort 8080\n---\n# apiVersion: networking.k8s.io/v1 / kind: Ingress — host app.example.com -> service app:80\n",
+    "hint": "Три объекта разделяются строкой из трёх дефисов ---. У Deployment selector.matchLabels должен совпадать с labels в template. Service связывается с подами тем же selector: app: app. В Ingress backend указывает service name: app и port number: 80.",
+    "checks": [
+     {
+      "type": "contains",
+      "value": "kind: Deployment",
+      "message": "Нужен объект Deployment"
+     },
+     {
+      "type": "contains",
+      "value": "kind: Service",
+      "message": "Нужен объект Service"
+     },
+     {
+      "type": "contains",
+      "value": "kind: Ingress",
+      "message": "Нужен объект Ingress для входа снаружи"
+     },
+     {
+      "type": "contains",
+      "value": "replicas: 3",
+      "message": "Задайте три реплики: replicas: 3"
+     },
+     {
+      "type": "contains",
+      "value": "containerPort",
+      "message": "У контейнера должен быть указан containerPort"
+     },
+     {
+      "type": "contains",
+      "value": "targetPort",
+      "message": "Service должен направлять трафик на targetPort пода"
+     }
+    ],
+    "solution": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: app\nspec:\n  replicas: 3\n  selector:\n    matchLabels:\n      app: app\n  template:\n    metadata:\n      labels:\n        app: app\n    spec:\n      containers:\n        - name: app\n          image: registry.example.com/app:1.0.0\n          ports:\n            - containerPort: 8080\n---\napiVersion: v1\nkind: Service\nmetadata:\n  name: app\nspec:\n  selector:\n    app: app\n  ports:\n    - port: 80\n      targetPort: 8080\n---\napiVersion: networking.k8s.io/v1\nkind: Ingress\nmetadata:\n  name: app\nspec:\n  rules:\n    - host: app.example.com\n      http:\n        paths:\n          - path: /\n            pathType: Prefix\n            backend:\n              service:\n                name: app\n                port:\n                  number: 80\n",
+    "resources": [
+     {
+      "title": "Kubernetes: Deployments",
+      "url": "https://kubernetes.io/docs/concepts/workloads/controllers/deployment/",
+      "note": "replicas, selector и шаблон пода"
+     },
+     {
+      "title": "Kubernetes: Service",
+      "url": "https://kubernetes.io/docs/concepts/services-networking/service/",
+      "note": "Как Service связывает трафic с подами по метке и targetPort"
+     },
+     {
+      "title": "Kubernetes: Ingress",
+      "url": "https://kubernetes.io/docs/concepts/services-networking/ingress/",
+      "note": "Маршрутизация внешнего трафика по домену на Service"
+     }
+    ]
+   }
+  },
+  {
+   "title": "Проект 9: мониторинг и логи",
+   "kind": "code",
+   "summary": "Поверх работающего приложения добавляем стек наблюдаемости: Prometheus собирает метрики, node-exporter отдаёт данные о сервере, Grafana рисует дашборды, а логи ограничиваем по размеру.",
+   "durationMin": 16,
+   "content": {
+    "language": "yaml",
+    "task": "К нашему приложению из прошлых проектов приложение уже задеплоено и работает. Теперь мы отвечаем на вопрос: как понять, что происходит внутри? Напишите файл `docker-compose.monitoring.yml`, который поднимает три сервиса наблюдаемости рядом с приложением.\n\nПо пунктам:\n1. Сервис `prometheus` на образе `prom/prometheus` с закреплённой версией (не `latest`). Пробросьте порт `9090:9090`. Смонтируйте конфиг `./prometheus.yml` в `/etc/prometheus/prometheus.yml` в режиме только для чтения (`:ro`).\n2. Сервис `node-exporter` на образе `prom/node-exporter` — он отдаёт метрики о самом сервере (CPU, память, диск). Порт `9100:9100`.\n3. Сервис `grafana` на образе `grafana/grafana` — это витрина с графиками. Порт `3000:3000`. Он должен зависеть (`depends_on`) от `prometheus`.\n4. У сервиса `prometheus` настройте логирование драйвером `json-file` с ротацией: `max-size: \"10m\"` и `max-file: \"3\"`, чтобы логи не съели диск.\n5. Всем сервисам добавьте `restart: unless-stopped`.",
+    "starter": "# docker-compose.monitoring.yml — стек наблюдаемости поверх приложения\n# Запуск:  docker compose -f docker-compose.monitoring.yml up -d\n\nservices:\n  prometheus:\n    # image: prom/prometheus:<версия>   ← закрепите версию, не latest\n    # ports:  проброс 9090\n    # volumes: смонтируйте ./prometheus.yml в /etc/prometheus/prometheus.yml:ro\n    # logging: json-file с max-size и max-file\n    # restart: unless-stopped\n\n  node-exporter:\n    # image: prom/node-exporter:<версия>\n    # ports:  проброс 9100\n\n  grafana:\n    # image: grafana/grafana:<версия>\n    # ports:  проброс 3000\n    # depends_on: prometheus\n",
+    "hint": "Метрики — это числа о состоянии системы (сколько памяти занято, сколько запросов в секунду). Prometheus раз в несколько секунд «опрашивает» цели и сохраняет числа. node-exporter — это цель, которая рассказывает о железе сервера. Grafana сама метрики не собирает — она рисует то, что уже лежит в Prometheus. Версию образа пишите через двоеточие: `prom/prometheus:v2.53.0`.",
+    "checks": [
+     {
+      "type": "contains",
+      "value": "prom/prometheus",
+      "message": "Нужен сервис на образе prom/prometheus."
+     },
+     {
+      "type": "contains",
+      "value": "prom/node-exporter",
+      "message": "Добавьте node-exporter — источник метрик о сервере."
+     },
+     {
+      "type": "contains",
+      "value": "grafana/grafana",
+      "message": "Добавьте Grafana для дашбордов."
+     },
+     {
+      "type": "contains",
+      "value": "9090:9090",
+      "message": "Пробросьте порт Prometheus 9090:9090."
+     },
+     {
+      "type": "contains",
+      "value": "9100:9100",
+      "message": "Пробросьте порт node-exporter 9100:9100."
+     },
+     {
+      "type": "contains",
+      "value": "3000:3000",
+      "message": "Пробросьте порт Grafana 3000:3000."
+     },
+     {
+      "type": "contains",
+      "value": "/etc/prometheus/prometheus.yml",
+      "message": "Смонтируйте prometheus.yml внутрь контейнера."
+     },
+     {
+      "type": "contains",
+      "value": "max-size",
+      "message": "Настройте ротацию логов через max-size."
+     },
+     {
+      "type": "contains",
+      "value": "depends_on",
+      "message": "Grafana должна зависеть от Prometheus (depends_on)."
+     },
+     {
+      "type": "notContains",
+      "value": "prometheus:latest",
+      "message": "Не используйте тег latest — закрепляйте версию образа."
+     }
+    ],
+    "solution": "# docker-compose.monitoring.yml — стек наблюдаемости поверх приложения\n# Запуск:  docker compose -f docker-compose.monitoring.yml up -d\n\nservices:\n  prometheus:\n    image: prom/prometheus:v2.53.0\n    container_name: prometheus\n    ports:\n      - \"9090:9090\"\n    volumes:\n      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro\n    logging:\n      driver: json-file\n      options:\n        max-size: \"10m\"\n        max-file: \"3\"\n    restart: unless-stopped\n\n  node-exporter:\n    image: prom/node-exporter:v1.8.1\n    container_name: node-exporter\n    ports:\n      - \"9100:9100\"\n    restart: unless-stopped\n\n  grafana:\n    image: grafana/grafana:11.1.0\n    container_name: grafana\n    ports:\n      - \"3000:3000\"\n    depends_on:\n      - prometheus\n    restart: unless-stopped\n",
+    "resources": [
+     {
+      "title": "Prometheus: первые шаги",
+      "url": "https://prometheus.io/docs/prometheus/latest/getting_started/",
+      "note": "Официальный гайд: как настроить scrape-цели и запустить сбор метрик."
+     },
+     {
+      "title": "node-exporter",
+      "url": "https://prometheus.io/docs/guides/node-exporter/",
+      "note": "Экспортёр метрик о самом сервере: CPU, память, диск, сеть."
+     },
+     {
+      "title": "Grafana: подключение источника данных",
+      "url": "https://grafana.com/docs/grafana/latest/datasources/prometheus/",
+      "note": "Как привязать Grafana к Prometheus и построить первый дашборд."
+     },
+     {
+      "title": "Docker: ротация логов",
+      "url": "https://docs.docker.com/engine/logging/drivers/json-file/",
+      "note": "Опции max-size и max-file, чтобы логи не переполнили диск."
+     }
+    ]
+   }
+  },
+  {
+   "title": "Проект 10: базовая безопасность окружения",
+   "kind": "code",
+   "summary": "Финальный проект: пишем bash-скрипт усиления сервера — firewall через ufw, запрет входа root по SSH, отключение паролей и защита от перебора через fail2ban.",
+   "durationMin": 15,
+   "content": {
+    "language": "bash",
+    "task": "Приложение задеплоено, за ним следит мониторинг. Осталось закрыть сервер от чужих. Напишите скрипт `harden.sh`, который делает базовое усиление безопасности. Запускать его будут от root.\n\nПо пунктам:\n1. Первой строкой — shebang `#!/usr/bin/env bash`.\n2. Включите строгий режим: `set -euo pipefail` (скрипт падает при первой же ошибке, а не идёт дальше вслепую).\n3. Обновите пакеты: `apt-get update` и `apt-get upgrade -y`.\n4. Настройте firewall `ufw`: по умолчанию запретить входящие (`ufw default deny incoming`), разрешить исходящие, открыть порты 22 (SSH), 80 (HTTP) и 443 (HTTPS), затем включить `ufw --force enable`.\n5. В `/etc/ssh/sshd_config` через `sed` выставьте `PermitRootLogin no` и `PasswordAuthentication no`, затем перезапустите `ssh`.\n6. Установите `fail2ban` и включите его через systemctl.",
+    "starter": "#!/usr/bin/env bash\n# harden.sh — базовое усиление безопасности сервера. Запускать от root.\n\n# TODO: включить строгий режим (set -euo pipefail)\n\n# 1. Обновление пакетов\n#    apt-get update ; apt-get upgrade -y\n\n# 2. Firewall (ufw): по умолчанию deny incoming, открыть 22/80/443, включить\n\n# 3. SSH: запретить root-логин и парольную аутентификацию, перезапустить ssh\n\n# 4. fail2ban: установить и включить\n",
+    "hint": "Логика простая: сначала закрываем всё (`default deny incoming`), потом точечно открываем только нужные порты — это принцип «запрещено всё, что не разрешено явно». `sed -i 's/старое/новое/'` меняет строку прямо в файле. Флаг `--force` у ufw нужен, чтобы команда не спрашивала подтверждения в неинтерактивном скрипте. fail2ban читает логи и банит IP, которые слишком часто ошибаются паролем.",
+    "checks": [
+     {
+      "type": "contains",
+      "value": "#!/usr/bin/env bash",
+      "message": "Начните с shebang #!/usr/bin/env bash."
+     },
+     {
+      "type": "contains",
+      "value": "set -euo pipefail",
+      "message": "Включите строгий режим set -euo pipefail."
+     },
+     {
+      "type": "contains",
+      "value": "ufw default deny incoming",
+      "message": "По умолчанию входящие должны быть запрещены."
+     },
+     {
+      "type": "contains",
+      "value": "ufw allow 22/tcp",
+      "message": "Оставьте открытым порт SSH (22/tcp)."
+     },
+     {
+      "type": "contains",
+      "value": "ufw allow 443/tcp",
+      "message": "Откройте HTTPS (443/tcp)."
+     },
+     {
+      "type": "contains",
+      "value": "PermitRootLogin no",
+      "message": "Запретите вход root по SSH."
+     },
+     {
+      "type": "contains",
+      "value": "PasswordAuthentication no",
+      "message": "Отключите вход по паролю (только ключи)."
+     },
+     {
+      "type": "contains",
+      "value": "fail2ban",
+      "message": "Установите fail2ban для защиты от перебора."
+     },
+     {
+      "type": "notContains",
+      "value": "PermitRootLogin yes",
+      "message": "Не оставляйте PermitRootLogin yes — это дыра."
+     }
+    ],
+    "solution": "#!/usr/bin/env bash\n# harden.sh — базовое усиление безопасности сервера. Запускать от root.\nset -euo pipefail\n\n# 1. Обновляем систему\napt-get update\napt-get upgrade -y\n\n# 2. Firewall (ufw): по умолчанию запрещаем входящие, разрешаем исходящие\nufw default deny incoming\nufw default allow outgoing\nufw allow 22/tcp     # SSH\nufw allow 80/tcp     # HTTP\nufw allow 443/tcp    # HTTPS\nufw --force enable\n\n# 3. SSH: запрещаем вход root и вход по паролю (оставляем только ключи)\nsed -i 's/^#\\?PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config\nsed -i 's/^#\\?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config\nsystemctl restart ssh\n\n# 4. fail2ban: защита от перебора паролей\napt-get install -y fail2ban\nsystemctl enable --now fail2ban\n\necho \"Базовое усиление завершено.\"\n",
+    "resources": [
+     {
+      "title": "ufw — простой firewall",
+      "url": "https://help.ubuntu.com/community/UFW",
+      "note": "Правила allow/deny и включение firewall на Ubuntu/Debian."
+     },
+     {
+      "title": "OpenSSH: sshd_config",
+      "url": "https://man7.org/linux/man-pages/man5/sshd_config.5.html",
+      "note": "Опции PermitRootLogin и PasswordAuthentication — что они меняют."
+     },
+     {
+      "title": "fail2ban",
+      "url": "https://github.com/fail2ban/fail2ban",
+      "note": "Как работает бан IP по подозрительным записям в логах."
+     },
+     {
+      "title": "set -euo pipefail (Bash)",
+      "url": "https://www.gnu.org/software/bash/manual/bash.html#The-Set-Builtin",
+      "note": "Строгий режим: скрипт падает при ошибке, а не продолжает вслепую."
+     }
+    ]
+   }
+  },
+  {
+   "title": "Квиз главы: проекты",
+   "kind": "quiz",
+   "summary": "Проверяем, как складывается сквозной путь доставки: порядок проектов, зачем появляется каждый инструмент, роли Prometheus и Grafana, шаги усиления безопасности.",
+   "durationMin": 10,
+   "content": {
+    "intro": "Вся глава — это лестница из 10 проектов, где каждый следующий добавляет ровно один инструмент. Проверим, поняли ли вы, зачем каждый шаг и в каком порядке они идут.",
+    "passScore": 70,
+    "questions": [
+     {
+      "id": "q1",
+      "type": "order",
+      "text": "Расставьте проекты в том порядке, в котором мы их проходили — от самого простого к самому сложному:",
+      "items": [
+       {
+        "id": "s1",
+        "text": "Ручной деплой приложения"
+       },
+       {
+        "id": "s2",
+        "text": "Упаковка приложения в Docker"
+       },
+       {
+        "id": "s3",
+        "text": "Пайплайн CI/CD"
+       },
+       {
+        "id": "s4",
+        "text": "Инфраструктура как код на Terraform"
+       },
+       {
+        "id": "s5",
+        "text": "Деплой в Kubernetes"
+       }
+      ],
+      "explanation": "Логика нарастания: сначала руками (чтобы прочувствовать боль), потом Docker убирает «у меня работало», CI/CD автоматизирует сборку и доставку, Terraform создаёт инфраструктуру кодом, а Kubernetes оркестрирует много контейнеров. Каждый шаг решает проблему предыдущего."
+     },
+     {
+      "id": "q2",
+      "type": "match",
+      "text": "Сопоставьте инструмент из проектов 9-10 с его задачей:",
+      "pairs": [
+       {
+        "id": "p1",
+        "left": "Prometheus",
+        "right": "собирает метрики (числа о состоянии)"
+       },
+       {
+        "id": "p2",
+        "left": "Grafana",
+        "right": "рисует дашборды с графиками"
+       },
+       {
+        "id": "p3",
+        "left": "ufw",
+        "right": "firewall: закрывает лишние порты"
+       },
+       {
+        "id": "p4",
+        "left": "fail2ban",
+        "right": "банит IP за перебор паролей"
+       }
+      ],
+      "explanation": "Prometheus и Grafana работают в паре: один хранит числа, другой их показывает. ufw и fail2ban — про безопасность: firewall не пускает на закрытые порты, а fail2ban отбивает попытки подобрать пароль по SSH."
+     },
+     {
+      "id": "q3",
+      "text": "Почему мониторинг (проект 9) мы добавляем уже после того, как приложение задеплоено?",
+      "options": [
+       {
+        "id": "a",
+        "text": "Потому что сначала должно появиться то, за чем наблюдать, — работающее приложение и сервер",
+        "correct": true
+       },
+       {
+        "id": "b",
+        "text": "Потому что Prometheus нельзя запустить в Docker",
+        "correct": false
+       },
+       {
+        "id": "c",
+        "text": "Потому что мониторинг заменяет собой деплой",
+        "correct": false
+       }
+      ],
+      "explanation": "Наблюдаемость имеет смысл только поверх чего-то работающего: метрики CPU, памяти и запросов появляются, когда есть сервер и приложение. Prometheus прекрасно живёт в Docker, а деплой он не заменяет."
+     },
+     {
+      "id": "q4",
+      "text": "Верно или нет: Prometheus сам рисует красивые дашборды с графиками, поэтому Grafana не нужна.",
+      "options": [
+       {
+        "id": "a",
+        "text": "Верно",
+        "correct": false
+       },
+       {
+        "id": "b",
+        "text": "Неверно",
+        "correct": true
+       }
+      ],
+      "explanation": "Неверно. Prometheus — это хранилище метрик и язык запросов к ним. Красивые дашборды строит именно Grafana, которая берёт данные из Prometheus как из источника."
+     },
+     {
+      "id": "q5",
+      "type": "blank",
+      "text": "Впишите строку конфига SSH, которая запрещает вход суперпользователя root по SSH:",
+      "accept": [
+       "PermitRootLogin no",
+       "PermitRootLogin  no"
+      ],
+      "hint": "Директива про root-логин со значением no.",
+      "explanation": "Строка `PermitRootLogin no` в /etc/ssh/sshd_config закрывает прямой вход под root. Дальше администратор заходит обычным пользователем и повышает права через sudo — так безопаснее и остаётся след, кто что делал."
+     },
+     {
+      "id": "q6",
+      "multiple": true,
+      "text": "Что из перечисленного делает наш скрипт усиления безопасности harden.sh? (несколько верных)",
+      "options": [
+       {
+        "id": "a",
+        "text": "По умолчанию запрещает входящие соединения через ufw",
+        "correct": true
+       },
+       {
+        "id": "b",
+        "text": "Отключает вход по паролю, оставляя только SSH-ключи",
+        "correct": true
+       },
+       {
+        "id": "c",
+        "text": "Устанавливает fail2ban против перебора паролей",
+        "correct": true
+       },
+       {
+        "id": "d",
+        "text": "Удаляет все контейнеры и образы Docker",
+        "correct": false
+       }
+      ],
+      "explanation": "Скрипт закрывает лишние порты (deny incoming), запрещает пароль и root-логин по SSH и ставит fail2ban. Docker он не трогает — задача усиления не в том, чтобы всё снести, а в том, чтобы закрыть двери."
+     },
+     {
+      "id": "q7",
+      "review": true,
+      "text": "Проект 2 упаковывает приложение в Docker. Какую главную проблему это решает?",
+      "options": [
+       {
+        "id": "a",
+        "text": "«У меня на машине работало, а на сервере нет» — образ несёт с собой всё окружение",
+        "correct": true
+       },
+       {
+        "id": "b",
+        "text": "Ускоряет интернет на сервере",
+        "correct": false
+       },
+       {
+        "id": "c",
+        "text": "Делает приложение бесплатным",
+        "correct": false
+       }
+      ],
+      "explanation": "Docker-образ упаковывает код вместе с его зависимостями и окружением. Поэтому он ведёт себя одинаково на ноутбуке и на сервере — исчезает классическое «а у меня работало»."
+     }
+    ],
+    "resources": [
+     {
+      "title": "roadmap.sh: DevOps",
+      "url": "https://roadmap.sh/devops",
+      "note": "Карта навыков: как инструменты из проектов складываются в общий путь."
+     },
+     {
+      "title": "Prometheus: обзор",
+      "url": "https://prometheus.io/docs/introduction/overview/",
+      "note": "Что такое метрики и чем Prometheus отличается от логов."
+     },
+     {
+      "title": "Google SRE Book: Monitoring",
+      "url": "https://sre.google/sre-book/monitoring-distributed-systems/",
+      "note": "Зачем наблюдаемость и какие сигналы важно измерять."
+     }
+    ]
+   }
+  }
+ ]
+}
