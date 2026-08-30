@@ -89,12 +89,25 @@ export default function CoursesPage() {
 
   // Загрузка курса из JSON-пакета: читаем файл, отправляем на сервер.
   const onFile = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    event.target.value = ""; // сброс — чтобы можно было выбрать тот же файл снова
+    const input = event.target;
+    const file = input.files?.[0];
     if (!file) return;
 
-    // Читаем текст, убираем возможный BOM и пробелы. Сам разбор делает сервер.
-    const raw = (await file.text()).replace(/^﻿/, "").trim();
+    // ВАЖНО: читаем файл ДО сброса input.value — иначе ссылка на файл
+    // становится недействительной и браузер бросает NotReadableError.
+    let raw: string;
+    try {
+      raw = (await file.text()).replace(/^﻿/, "").trim();
+    } catch {
+      input.value = "";
+      toast.error(
+        "Не удалось прочитать файл. Если он лежит в облаке (iCloud, Google Drive) — " +
+          "сначала скачайте его на компьютер, затем выберите снова.",
+      );
+      return;
+    }
+    input.value = ""; // теперь можно сбросить — файл уже прочитан
+
     if (!raw.startsWith("{")) {
       toast.error(
         `Это не похоже на пакет курса. Нужен JSON-файл вида «...course.json». Выбран: ${file.name} (${Math.round(
