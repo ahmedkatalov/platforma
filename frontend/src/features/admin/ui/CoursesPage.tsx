@@ -93,16 +93,19 @@ export default function CoursesPage() {
     event.target.value = ""; // сброс — чтобы можно было выбрать тот же файл снова
     if (!file) return;
 
-    let pkg: unknown;
-    try {
-      pkg = JSON.parse(await file.text());
-    } catch {
-      toast.error("Файл не читается как JSON-пакет курса");
+    // Читаем текст, убираем возможный BOM и пробелы. Сам разбор делает сервер.
+    const raw = (await file.text()).replace(/^﻿/, "").trim();
+    if (!raw.startsWith("{")) {
+      toast.error(
+        `Это не похоже на пакет курса. Нужен JSON-файл вида «...course.json». Выбран: ${file.name} (${Math.round(
+          file.size / 1024,
+        )} КБ)`,
+      );
       return;
     }
 
     const runImport = async (replace: boolean) => {
-      const res = await importCourse({ pkg, replace }).unwrap();
+      const res = await importCourse({ raw, replace }).unwrap();
       toast.success(`Загружено: ${res.modules} глав, ${res.lessons} уроков (черновик)`);
     };
 

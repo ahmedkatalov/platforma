@@ -70,12 +70,13 @@ export const coursesApi = baseApi.injectEndpoints({
     }),
     importCourse: builder.mutation<
       { course: Course; modules: number; lessons: number; message: string },
-      { pkg: unknown; replace: boolean }
+      { raw: string; replace: boolean }
     >({
-      query: ({ pkg, replace }) => ({
+      query: ({ raw, replace }) => ({
         url: `/admin/courses/import${replace ? "?replace=true" : ""}`,
         method: "POST",
-        body: pkg,
+        body: raw, // сырой текст файла — разбирает сервер (надёжнее и с точной ошибкой)
+        headers: { "Content-Type": "application/json" },
       }),
       invalidatesTags: ["Courses", "Overview"],
     }),

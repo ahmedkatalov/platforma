@@ -1,7 +1,9 @@
 package handler
 
 import (
+	"bytes"
 	"encoding/json"
+	"io"
 	"net/http"
 	"strings"
 
@@ -55,9 +57,25 @@ const packageVersion = 1
 // POST /api/admin/courses/import?replace=true — если курс с таким slug есть, пересоздать.
 func (h *CourseHandler) importCourse(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, maxPackageSize)
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "Файл слишком большой или не удалось его прочитать")
+		return
+	}
+	// Убираем возможный BOM и пробелы в начале/конце.
+	body = bytes.TrimSpace(bytes.TrimPrefix(body, []byte("\xEF\xBB\xBF")))
+	if len(body) == 0 {
+		writeError(w, http.StatusBadRequest, "Файл пустой")
+		return
+	}
+	if body[0] != '{' {
+		writeError(w, http.StatusBadRequest,
+			"Это не JSON-пакет курса: файл начинается не с «{». Загрузите файл вида «...course.json»")
+		return
+	}
 	var pkg coursePackage
-	if err := json.NewDecoder(r.Body).Decode(&pkg); err != nil {
-		writeError(w, http.StatusBadRequest, "Не удалось прочитать файл курса: проверьте, что это JSON-пакет курса")
+	if err := json.Unmarshal(body, &pkg); err != nil {
+		writeError(w, http.StatusBadRequest, "Не удалось разобрать JSON курса: "+err.Error())
 		return
 	}
 	if pkg.Format != "" && pkg.Format != packageFormat {
