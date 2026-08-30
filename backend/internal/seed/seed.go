@@ -55,6 +55,7 @@ func DevOpsCourse() CourseSeed {
 			moduleCICD(),
 			moduleIaC(),
 			moduleKubernetes(),
+			moduleCheckpoint(),
 			moduleCloud(),
 			moduleObservability(),
 			moduleSecurity(),

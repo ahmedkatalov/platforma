@@ -3,17 +3,27 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useSubmitQuizMutation } from "@/features/learning/api/lessonApi";
 import { apiErrorMessage } from "@/shared/api/baseApi";
 import type {
-  Certificate, LessonProgress, QuizContent, QuizResult } from "@/shared/types";
-import { Badge, Button, Card, Progress } from "@/shared/ui";
-import { IconCheck, IconClose, IconClock } from "@/shared/ui/icons";
+  Certificate,
+  LessonProgress,
+  QuizContent,
+  QuizItem,
+  QuizQuestion,
+  QuizResult,
+} from "@/shared/types";
+import { Badge, Button, Card, Input, Progress } from "@/shared/ui";
+import { IconCheck, IconChevron, IconClose, IconClock } from "@/shared/ui/icons";
 import { useToast } from "@/shared/ui/ToastProvider";
 
 import LessonResources from "./LessonResources";
 import Markdown from "./Markdown";
 
+// Для choice и order храним массив id, для blank — строку.
 type Answers = Record<string, string[]>;
+type Blanks = Record<string, string>;
 
-// Квиз: вопросы по одному, замер времени на каждый, проверка на сервере.
+const kindOf = (q: QuizQuestion) => q.type ?? "choice";
+
+// Квиз с тремя типами вопросов: варианты, порядок шагов и вписать ответ.
 export default function QuizLesson({
   lessonId,
   content,
@@ -30,6 +40,7 @@ export default function QuizLesson({
 
   const [index, setIndex] = useState(0);
   const [answers, setAnswers] = useState<Answers>({});
+  const [blanks, setBlanks] = useState<Blanks>({});
   const [timings, setTimings] = useState<Record<string, number>>({});
   const [result, setResult] = useState<QuizResult | null>(null);
 
@@ -39,17 +50,19 @@ export default function QuizLesson({
   const questionStart = useRef(Date.now());
   const quizStart = useRef(Date.now());
 
-  useEffect(() => {
+  const reset = () => {
     setIndex(0);
     setAnswers({});
+    setBlanks({});
     setTimings({});
     setResult(null);
     questionStart.current = Date.now();
     quizStart.current = Date.now();
-  }, [lessonId]);
+  };
+
+  useEffect(reset, [lessonId]);
 
   const question = questions[index];
-  const answered = Object.keys(answers).length;
 
   const resultByQuestion = useMemo(() => {
     const map = new Map<string, QuizResult["questions"][number]>();
@@ -65,14 +78,32 @@ export default function QuizLesson({
     );
   }
 
-  // Фиксируем время, потраченное на текущий вопрос, и переходим дальше.
+  // Переставляемая последовательность: order — это items, match — правые части.
+  const seqItems = (q: QuizQuestion): QuizItem[] =>
+    kindOf(q) === "match" ? (q.rights ?? []) : (q.items ?? []);
+
+  // Текущий порядок (сохранённый) или исходный (как пришёл с сервера).
+  const orderOf = (q: QuizQuestion): string[] =>
+    answers[q.id] ?? seqItems(q).map((it) => it.id);
+
+  const isAnswered = (q: QuizQuestion): boolean => {
+    switch (kindOf(q)) {
+      case "blank":
+        return (blanks[q.id] ?? "").trim() !== "";
+      case "order":
+      case "match":
+        return true; // всегда есть какой-то порядок
+      default:
+        return (answers[q.id] ?? []).length > 0;
+    }
+  };
+
+  const answered = questions.filter(isAnswered).length;
+
   const rememberTiming = () => {
     if (!question) return;
     const spent = Math.round((Date.now() - questionStart.current) / 1000);
-    setTimings((current) => ({
-      ...current,
-      [question.id]: (current[question.id] ?? 0) + spent,
-    }));
+    setTimings((current) => ({ ...current, [question.id]: (current[question.id] ?? 0) + spent }));
     questionStart.current = Date.now();
   };
 
@@ -92,6 +123,16 @@ export default function QuizLesson({
     });
   };
 
+  const moveItem = (dir: -1 | 1, itemId: string) => {
+    if (!question) return;
+    const order = [...orderOf(question)];
+    const from = order.indexOf(itemId);
+    const to = from + dir;
+    if (to < 0 || to >= order.length) return;
+    [order[from], order[to]] = [order[to], order[from]];
+    setAnswers((current) => ({ ...current, [question.id]: order }));
+  };
+
   const goTo = (next: number) => {
     rememberTiming();
     setIndex(Math.max(0, Math.min(questions.length - 1, next)));
@@ -101,11 +142,18 @@ export default function QuizLesson({
     rememberTiming();
     const totalSeconds = Math.round((Date.now() - quizStart.current) / 1000);
 
-    const payload = questions.map((q) => ({
-      questionId: q.id,
-      optionIds: answers[q.id] ?? [],
-      secondsSpent: timings[q.id] ?? 0,
-    }));
+    const payload = questions.map((q) => {
+      const base = { questionId: q.id, secondsSpent: timings[q.id] ?? 0 };
+      switch (kindOf(q)) {
+        case "order":
+        case "match":
+          return { ...base, order: orderOf(q) };
+        case "blank":
+          return { ...base, text: blanks[q.id] ?? "" };
+        default:
+          return { ...base, optionIds: answers[q.id] ?? [] };
+      }
+    });
 
     try {
       const data = await submitQuiz({ id: lessonId, answers: payload, seconds: totalSeconds }).unwrap();
@@ -119,15 +167,6 @@ export default function QuizLesson({
     } catch (err) {
       toast.error(apiErrorMessage(err));
     }
-  };
-
-  const retry = () => {
-    setResult(null);
-    setAnswers({});
-    setTimings({});
-    setIndex(0);
-    questionStart.current = Date.now();
-    quizStart.current = Date.now();
   };
 
   // --- Экран результата ---
@@ -149,14 +188,11 @@ export default function QuizLesson({
           </div>
 
           <div className="mt-4">
-            <Progress
-              value={result.score}
-              tone={result.passed ? "var(--success)" : "var(--danger)"}
-            />
+            <Progress value={result.score} tone={result.passed ? "var(--success)" : "var(--danger)"} />
           </div>
 
           <div className="mt-4 flex flex-wrap gap-2">
-            <Button onClick={retry}>Пройти заново</Button>
+            <Button onClick={reset}>Пройти заново</Button>
             {result.passed && (
               <Button variant="primary" onClick={() => onDone()}>
                 Дальше
@@ -194,37 +230,60 @@ export default function QuizLesson({
                       </span>
                     )}
                   </p>
-                  <span className="shrink-0 text-xs text-faint">
-                    {timings[q.id] ?? 0} c
-                  </span>
+                  <span className="shrink-0 text-xs text-faint">{timings[q.id] ?? 0} c</span>
                 </div>
 
-                <ul className="space-y-1.5">
-                  {q.options.map((option) => {
-                    const isCorrect = correctIds.has(option.id);
-                    const isChosen = chosenIds.has(option.id);
+                {/* Разбор ответа зависит от типа вопроса */}
+                {kindOf(q) === "choice" && (
+                  <ul className="space-y-1.5">
+                    {(q.options ?? []).map((option) => {
+                      const isCorrect = correctIds.has(option.id);
+                      const isChosen = chosenIds.has(option.id);
+                      return (
+                        <li
+                          key={option.id}
+                          className={`flex items-center gap-2 rounded-[var(--radius-md)] border px-3 py-2 text-sm ${
+                            isCorrect
+                              ? "border-[var(--success)] bg-[var(--success-soft)] text-fg"
+                              : isChosen
+                                ? "border-[var(--danger)] bg-[var(--danger-soft)] text-fg"
+                                : "border-line text-muted"
+                          }`}
+                        >
+                          <span className="flex-1">{option.text}</span>
+                          {isCorrect && <Badge tone="success">верно</Badge>}
+                          {isChosen && !isCorrect && <Badge tone="danger">ваш выбор</Badge>}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
 
-                    return (
-                      <li
-                        key={option.id}
-                        className={`flex items-center gap-2 rounded-[var(--radius-md)] border px-3 py-2 text-sm ${
-                          isCorrect
-                            ? "border-[var(--success)] bg-[var(--success-soft)] text-fg"
-                            : isChosen
-                              ? "border-[var(--danger)] bg-[var(--danger-soft)] text-fg"
-                              : "border-line text-muted"
-                        }`}
-                      >
-                        <span className="flex-1">{option.text}</span>
-                        {isCorrect && <Badge tone="success">верно</Badge>}
-                        {isChosen && !isCorrect && <Badge tone="danger">ваш выбор</Badge>}
-                      </li>
-                    );
-                  })}
-                </ul>
+                {(kindOf(q) === "order" || kindOf(q) === "blank" || kindOf(q) === "match") &&
+                  outcome?.correctText && (
+                  <div
+                    className={`rounded-[var(--radius-md)] border px-3 py-2 text-sm ${
+                      outcome.correct
+                        ? "border-[var(--success)] bg-[var(--success-soft)] text-fg"
+                        : "border-line text-muted"
+                    }`}
+                  >
+                    <span className="text-faint">Правильно: </span>
+                    <span className="font-medium text-fg">{outcome.correctText}</span>
+                  </div>
+                )}
 
                 {outcome?.explanation && (
-                  <div className="mt-3 rounded-[var(--radius-md)] bg-surface-2 px-3 py-2 text-sm text-muted">
+                  <div
+                    className={`mt-3 rounded-[var(--radius-md)] border-l-2 px-3 py-2 text-sm ${
+                      outcome.correct
+                        ? "border-[var(--success)] bg-[var(--success-soft)] text-fg"
+                        : "border-[var(--danger)] bg-surface-2 text-muted"
+                    }`}
+                  >
+                    <span className="font-semibold text-fg">
+                      {outcome.correct ? "Верно. " : "Разбор. "}
+                    </span>
                     {outcome.explanation}
                   </div>
                 )}
@@ -237,7 +296,7 @@ export default function QuizLesson({
   }
 
   // --- Прохождение ---
-  const picked = answers[question.id] ?? [];
+  const kind = kindOf(question);
 
   return (
     <>
@@ -273,36 +332,146 @@ export default function QuizLesson({
         )}
 
         <h2 className="mb-1 text-lg font-bold text-fg">{question.text}</h2>
-        {question.multiple && (
+
+        {kind === "choice" && question.multiple && (
           <p className="mb-3 text-xs text-faint">Можно выбрать несколько вариантов</p>
         )}
+        {kind === "order" && (
+          <p className="mb-3 text-xs text-faint">Расставьте шаги по порядку кнопками ↑↓</p>
+        )}
+        {kind === "blank" && (
+          <p className="mb-3 text-xs text-faint">Впишите ответ (команду или слово)</p>
+        )}
+        {kind === "match" && (
+          <p className="mb-3 text-xs text-faint">
+            Двигайте правые части кнопками ↑↓, чтобы каждая встала напротив своей левой
+          </p>
+        )}
 
-        <ul className="mt-4 space-y-2">
-          {question.options.map((option) => {
-            const active = picked.includes(option.id);
-            return (
-              <li key={option.id}>
-                <button
-                  onClick={() => choose(option.id)}
-                  className={`flex w-full items-center gap-3 rounded-[var(--radius-md)] border p-3 text-left text-sm transition-colors ${
-                    active
-                      ? "border-[var(--accent)] bg-accent-soft text-fg"
-                      : "border-line text-muted hover:bg-surface-2 hover:text-fg"
-                  }`}
-                >
-                  <span
-                    className={`grid h-5 w-5 shrink-0 place-items-center border text-accent ${
-                      question.multiple ? "rounded-[0.3rem]" : "rounded-full"
-                    } ${active ? "border-[var(--accent)] bg-accent-soft" : "border-line"}`}
+        {/* Варианты */}
+        {kind === "choice" && (
+          <ul className="mt-4 space-y-2">
+            {(question.options ?? []).map((option) => {
+              const active = (answers[question.id] ?? []).includes(option.id);
+              return (
+                <li key={option.id}>
+                  <button
+                    onClick={() => choose(option.id)}
+                    className={`flex w-full items-center gap-3 rounded-[var(--radius-md)] border p-3 text-left text-sm transition-colors ${
+                      active
+                        ? "border-[var(--accent)] bg-accent-soft text-fg"
+                        : "border-line text-muted hover:bg-surface-2 hover:text-fg"
+                    }`}
                   >
-                    {active && <IconCheck size={14} />}
+                    <span
+                      className={`grid h-5 w-5 shrink-0 place-items-center border text-accent ${
+                        question.multiple ? "rounded-[0.3rem]" : "rounded-full"
+                      } ${active ? "border-[var(--accent)] bg-accent-soft" : "border-line"}`}
+                    >
+                      {active && <IconCheck size={14} />}
+                    </span>
+                    {option.text}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+
+        {/* Порядок шагов */}
+        {kind === "order" && (
+          <ol className="mt-4 space-y-2">
+            {orderOf(question).map((itemId, pos) => {
+              const item = (question.items ?? []).find((it) => it.id === itemId);
+              if (!item) return null;
+              return (
+                <li
+                  key={itemId}
+                  className="flex items-center gap-3 rounded-[var(--radius-md)] border border-line bg-surface-2 p-3 text-sm"
+                >
+                  <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-accent-soft text-xs font-bold text-accent">
+                    {pos + 1}
                   </span>
-                  {option.text}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
+                  <span className="min-w-0 flex-1 text-fg">{item.text}</span>
+                  <span className="flex shrink-0 gap-1">
+                    <button
+                      className="btn btn-ghost h-7 w-7 !p-0"
+                      onClick={() => moveItem(-1, itemId)}
+                      disabled={pos === 0}
+                      aria-label="Выше"
+                    >
+                      <IconChevron size={14} className="-rotate-90" />
+                    </button>
+                    <button
+                      className="btn btn-ghost h-7 w-7 !p-0"
+                      onClick={() => moveItem(1, itemId)}
+                      disabled={pos === orderOf(question).length - 1}
+                      aria-label="Ниже"
+                    >
+                      <IconChevron size={14} className="rotate-90" />
+                    </button>
+                  </span>
+                </li>
+              );
+            })}
+          </ol>
+        )}
+
+        {/* Сопоставление: левые части фиксированы, правые переставляются */}
+        {kind === "match" && (
+          <ol className="mt-4 space-y-2">
+            {orderOf(question).map((rightId, pos) => {
+              const left = (question.lefts ?? [])[pos];
+              const right = (question.rights ?? []).find((r) => r.id === rightId);
+              if (!right) return null;
+              return (
+                <li key={rightId} className="flex items-stretch gap-2">
+                  <div className="flex min-w-0 flex-1 items-center gap-2 rounded-[var(--radius-md)] border border-line bg-surface-2 p-3 text-sm">
+                    <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-accent-soft text-xs font-bold text-accent">
+                      {pos + 1}
+                    </span>
+                    <span className="min-w-0 flex-1 font-medium text-fg">{left?.text}</span>
+                  </div>
+                  <div className="flex min-w-0 flex-1 items-center gap-2 rounded-[var(--radius-md)] border border-line bg-surface p-3 text-sm">
+                    <span className="min-w-0 flex-1 text-muted">{right.text}</span>
+                    <span className="flex shrink-0 gap-1">
+                      <button
+                        className="btn btn-ghost h-7 w-7 !p-0"
+                        onClick={() => moveItem(-1, rightId)}
+                        disabled={pos === 0}
+                        aria-label="Выше"
+                      >
+                        <IconChevron size={14} className="-rotate-90" />
+                      </button>
+                      <button
+                        className="btn btn-ghost h-7 w-7 !p-0"
+                        onClick={() => moveItem(1, rightId)}
+                        disabled={pos === orderOf(question).length - 1}
+                        aria-label="Ниже"
+                      >
+                        <IconChevron size={14} className="rotate-90" />
+                      </button>
+                    </span>
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+        )}
+
+        {/* Вписать ответ */}
+        {kind === "blank" && (
+          <div className="mt-4 max-w-md">
+            <Input
+              value={blanks[question.id] ?? ""}
+              onChange={(e) => setBlanks((c) => ({ ...c, [question.id]: e.target.value }))}
+              placeholder="Введите ответ…"
+              className="font-mono"
+              autoComplete="off"
+              spellCheck={false}
+            />
+          </div>
+        )}
 
         {question.hint && (
           <p className="mt-4 rounded-[var(--radius-md)] bg-surface-2 px-3 py-2 text-xs text-muted">
@@ -320,7 +489,7 @@ export default function QuizLesson({
           </span>
 
           {index < questions.length - 1 ? (
-            <Button variant="primary" onClick={() => goTo(index + 1)} disabled={picked.length === 0}>
+            <Button variant="primary" onClick={() => goTo(index + 1)} disabled={!isAnswered(question)}>
               Далее
             </Button>
           ) : (

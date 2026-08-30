@@ -193,20 +193,36 @@ func checkLesson(lesson domain.Lesson) lessonReport {
 			}
 		}
 		for _, question := range quiz.Questions {
-			correct := 0
-			for _, option := range question.Options {
-				if option.Correct {
-					correct++
+			switch question.Kind() {
+			case domain.QTypeOrder:
+				if len(question.Items) < 2 {
+					add("вопрос %s (order): меньше двух шагов", question.ID)
 				}
-			}
-			switch {
-			case correct == 0:
-				add("вопрос %s без правильного ответа", question.ID)
-			case correct > 1 && !question.Multiple:
-				add("вопрос %s: несколько верных вариантов без multiple", question.ID)
-			}
-			if len(question.Options) < 3 {
-				add("вопрос %s: меньше трёх вариантов", question.ID)
+			case domain.QTypeBlank:
+				if len(question.Accept) == 0 {
+					add("вопрос %s (blank): нет допустимых ответов", question.ID)
+				}
+			case domain.QTypeMatch:
+				if len(question.Pairs) < 2 {
+					add("вопрос %s (match): меньше двух пар", question.ID)
+				}
+			default:
+				correct := 0
+				for _, option := range question.Options {
+					if option.Correct {
+						correct++
+					}
+				}
+				switch {
+				case correct == 0:
+					add("вопрос %s без правильного ответа", question.ID)
+				case correct > 1 && !question.Multiple:
+					add("вопрос %s: несколько верных вариантов без multiple", question.ID)
+				}
+				// Два варианта допустимы для «верно/неверно», меньше — уже не вопрос.
+				if len(question.Options) < 2 {
+					add("вопрос %s: меньше двух вариантов", question.ID)
+				}
 			}
 			if strings.TrimSpace(question.Explanation) == "" {
 				add("вопрос %s без пояснения", question.ID)
@@ -216,13 +232,28 @@ func checkLesson(lesson domain.Lesson) lessonReport {
 		// Эталонные ответы обязаны проходить порог.
 		answers := make([]domain.QuizAnswer, 0, len(quiz.Questions))
 		for _, question := range quiz.Questions {
-			ids := make([]string, 0, 2)
-			for _, option := range question.Options {
-				if option.Correct {
-					ids = append(ids, option.ID)
+			answer := domain.QuizAnswer{QuestionID: question.ID}
+			switch question.Kind() {
+			case domain.QTypeOrder:
+				for _, item := range question.Items {
+					answer.Order = append(answer.Order, item.ID)
+				}
+			case domain.QTypeBlank:
+				if len(question.Accept) > 0 {
+					answer.Text = question.Accept[0]
+				}
+			case domain.QTypeMatch:
+				for _, p := range question.Pairs {
+					answer.Order = append(answer.Order, "R_"+p.ID)
+				}
+			default:
+				for _, option := range question.Options {
+					if option.Correct {
+						answer.OptionIDs = append(answer.OptionIDs, option.ID)
+					}
 				}
 			}
-			answers = append(answers, domain.QuizAnswer{QuestionID: question.ID, OptionIDs: ids})
+			answers = append(answers, answer)
 		}
 		if result := domain.GradeQuiz(quiz, answers); !result.Passed {
 			add("эталонные ответы не проходят порог (%.0f%%)", result.Score)

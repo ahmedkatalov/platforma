@@ -176,6 +176,7 @@ export type LessonView = {
 
 // Содержимое уроков (правильные ответы вырезаны на сервере).
 export type QuizOption = { id: string; text: string };
+export type QuizItem = { id: string; text: string };
 
 export type QuizQuestion = {
   id: string;
@@ -184,7 +185,12 @@ export type QuizQuestion = {
   multiple?: boolean;
   /** Вопрос на повторение ранее пройденной темы. */
   review?: boolean;
-  options: QuizOption[];
+  /** Тип вопроса: choice (по умолчанию), order (порядок), blank (вписать), match (сопоставить). */
+  type?: "choice" | "order" | "blank" | "match";
+  options?: QuizOption[]; // choice
+  items?: QuizItem[]; // order (приходят перемешанными)
+  lefts?: QuizItem[]; // match: левые части в исходном порядке
+  rights?: QuizItem[]; // match: правые части, приходят перемешанными
 };
 
 export type QuizContent = {
@@ -224,9 +230,11 @@ export type TextContent = { body?: string; resources?: LessonResource[] };
 
 export type QuestionResult = {
   questionId: string;
+  kind?: "choice" | "order" | "blank";
   correct: boolean;
-  correctOptionIds: string[];
-  chosenOptionIds: string[];
+  correctOptionIds?: string[];
+  chosenOptionIds?: string[];
+  correctText?: string;
   explanation?: string;
 };
 

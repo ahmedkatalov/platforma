@@ -9,7 +9,9 @@ import type {
 
 export type QuizAnswerPayload = {
   questionId: string;
-  optionIds: string[];
+  optionIds?: string[]; // choice
+  order?: string[]; // order: id шагов в порядке студента
+  text?: string; // blank: введённый ответ
   secondsSpent: number;
 };
 
