@@ -338,68 +338,6 @@
    }
   },
   {
-   "title": ".gitignore и осмысленные сообщения коммитов",
-   "kind": "code",
-   "summary": "Учимся не пускать мусор и секреты в историю через .gitignore и писать понятные сообщения коммитов по Conventional Commits.",
-   "durationMin": 10,
-   "content": {
-    "language": "bash",
-    "task": "В прошлом уроке ты уже делал add и commit. Теперь наведём порядок. Напиши bash-фрагмент, который:\n\n1. Создаёт файл .gitignore со списком того, что НЕ должно попасть в репозиторий. Обязательно исключи:\n   - папку зависимостей node_modules/\n   - файл секретов .env\n   - все логи по маске *.log\n   - папку сборки dist/\n2. Добавляет только сам .gitignore в индекс командой git add.\n3. Делает коммит с сообщением по стандарту Conventional Commits вида type: краткое описание (например chore: add .gitignore).\n\nПравило: секреты (.env) и артефакты (node_modules, dist) в историю не отправляем — они мешают, раздувают репозиторий и опасны для безопасности.",
-    "starter": "#!/usr/bin/env bash\n\n# 1. Создай .gitignore. Впиши сюда шаблоны того, что игнорируем.\ncat > .gitignore <<'EOF'\n# зависимости\n# ... допиши node_modules/\n# секреты\n# ... допиши .env\n# логи\n# ... допиши *.log\n# сборка\n# ... допиши dist/\nEOF\n\n# 2. Добавь ТОЛЬКО .gitignore в индекс (не 'git add .')\n# git add ...\n\n# 3. Сделай коммит с сообщением по Conventional Commits: 'type: описание'\n# git commit -m \"...\"",
-    "hint": "Формат Conventional Commits: сначала тип (chore, feat, fix, docs, refactor), затем двоеточие с пробелом, затем краткое описание строчными буквами. Пример: chore: add .gitignore for node project. Каждый игнорируемый шаблон пиши на своей строке.",
-    "checks": [
-     {
-      "type": "contains",
-      "value": "node_modules/",
-      "message": "В .gitignore должна быть папка зависимостей node_modules/"
-     },
-     {
-      "type": "contains",
-      "value": ".env",
-      "message": "Файл секретов .env обязательно должен игнорироваться"
-     },
-     {
-      "type": "contains",
-      "value": "*.log",
-      "message": "Добавь маску логов *.log"
-     },
-     {
-      "type": "contains",
-      "value": "dist/",
-      "message": "Папка сборки dist/ не должна попадать в репозиторий"
-     },
-     {
-      "type": "contains",
-      "value": "git add .gitignore",
-      "message": "Добавляй в индекс именно .gitignore, а не всё подряд"
-     },
-     {
-      "type": "regex",
-      "value": "git commit -m \"(feat|fix|docs|chore|refactor|test)(\\([^)]+\\))?: .+\"",
-      "message": "Сообщение коммита должно быть по Conventional Commits: 'тип: описание'"
-     },
-     {
-      "type": "notContains",
-      "value": "git add .env",
-      "message": "Никогда не добавляй файл секретов .env в индекс"
-     }
-    ],
-    "solution": "#!/usr/bin/env bash\n\n# 1. Создаём .gitignore со списком игнорируемого\ncat > .gitignore <<'EOF'\n# зависимости\nnode_modules/\n# секреты\n.env\n# логи\n*.log\n# сборка\ndist/\nbuild/\nEOF\n\n# 2. Добавляем в индекс только сам .gitignore\ngit add .gitignore\n\n# 3. Коммит по Conventional Commits\ngit commit -m \"chore: add .gitignore for node project\"",
-    "resources": [
-     {
-      "title": "gitignore — документация Git",
-      "url": "https://git-scm.com/docs/gitignore",
-      "note": "Как работают шаблоны игнорирования."
-     },
-     {
-      "title": "Conventional Commits",
-      "url": "https://www.conventionalcommits.org/ru/v1.0.0/",
-      "note": "Стандарт понятных сообщений коммитов на русском."
-     }
-    ]
-   }
-  },
-  {
    "title": "Квиз: коммиты, staging и .gitignore",
    "kind": "quiz",
    "summary": "Проверяем, что попадает в коммит, чем staged отличается от modified, что показывает git diff и что стоит игнорировать.",
