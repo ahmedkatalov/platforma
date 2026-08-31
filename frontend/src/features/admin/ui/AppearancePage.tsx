@@ -392,7 +392,7 @@ export default function AppearancePage() {
                   <img src={Logo} alt="" className="h-8 w-8" />
                 </span>
                 <div>
-                  <p className="text-sm font-bold text-fg">DevOps Platform</p>
+                  <p className="text-sm font-bold text-fg">Okvion Learning</p>
                   <p className="text-xs text-faint">так выглядит интерфейс</p>
                 </div>
               </div>

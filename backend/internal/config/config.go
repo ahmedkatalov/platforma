@@ -59,7 +59,7 @@ func Load() *Config {
 		EmailJSTemplateID: getEnv("EMAILJS_TEMPLATE_ID", ""),
 		EmailJSPublicKey:  getEnv("EMAILJS_PUBLIC_KEY", ""),
 		EmailJSPrivateKey: getEnv("EMAILJS_PRIVATE_KEY", ""),
-		EmailJSFromName:   getEnv("EMAILJS_FROM_NAME", "DevOps Platform"),
+		EmailJSFromName:   getEnv("EMAILJS_FROM_NAME", "Okvion Learning"),
 		EmailJSNoticeTemplateID: getEnv("EMAILJS_NOTICE_TEMPLATE_ID",
 			getEnv("EMAILJS_TEMPLATE_ID", "")),
 		VerificationCodeTTL: getEnvDuration("VERIFICATION_CODE_TTL", 15*time.Minute),

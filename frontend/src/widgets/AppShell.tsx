@@ -134,7 +134,7 @@ export default function AppShell() {
             <img src={Logo} alt="" className="h-8 w-8" />
           </span>
           <div className={clsx("min-w-0", sidebarCollapsed && "lg:hidden")}>
-            <p className="truncate text-sm font-bold text-fg">DevOps Platform</p>
+            <p className="truncate text-sm font-bold text-fg">Okvion Learning</p>
             <p className="truncate text-[11px] text-faint">
               {inStudentArea
                 ? isAdmin
