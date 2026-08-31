@@ -166,6 +166,63 @@ const DOCKERFILE = [
   'ENTRYPOINT ["/app"]',
 ].join("\n");
 
+const PASSWD = [
+  "root:x:0:0:root:/root:/bin/bash",
+  "daemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin",
+  "www-data:x:33:33:www-data:/var/www:/usr/sbin/nologin",
+  "postgres:x:114:120:PostgreSQL admin:/var/lib/postgresql:/bin/bash",
+  "student:x:1000:1000:Student:/home/student:/bin/bash",
+].join("\n");
+
+const CPUINFO = [
+  "processor\t: 0",
+  "model name\t: Intel(R) Xeon(R) CPU @ 2.30GHz",
+  "cpu MHz\t\t: 2300.000",
+  "cores\t\t: 4",
+  "",
+  "processor\t: 1",
+  "model name\t: Intel(R) Xeon(R) CPU @ 2.30GHz",
+  "",
+  "processor\t: 2",
+  "model name\t: Intel(R) Xeon(R) CPU @ 2.30GHz",
+  "",
+  "processor\t: 3",
+  "model name\t: Intel(R) Xeon(R) CPU @ 2.30GHz",
+].join("\n");
+
+const MEMINFO = [
+  "MemTotal:        4030524 kB",
+  "MemFree:          812340 kB",
+  "MemAvailable:    2600128 kB",
+  "SwapTotal:             0 kB",
+].join("\n");
+
+const CI_LOG = [
+  "2026-08-27T10:00:01Z INFO  checkout main",
+  "2026-08-27T10:00:12Z INFO  running: go test ./...",
+  "2026-08-27T10:00:44Z Error: cart_test.go:52: want status 200, got 500",
+  "2026-08-27T10:00:44Z FAIL  tests failed (41/42)",
+  "2026-08-27T10:00:44Z INFO  build cancelled, prod untouched",
+].join("\n");
+
+const USERS_TXT = "anna\nbob\nanna\ncarol\nbob\nanna\ndave\ncarol\nbob\n";
+
+const SSH_CONFIG = [
+  "Host web-1",
+  "    HostName 10.0.0.21",
+  "    User deploy",
+  "    IdentityFile ~/.ssh/id_ed25519",
+].join("\n");
+
+const TF_LOCK = [
+  "# This file is maintained automatically by \"terraform init\".",
+  "# Manual edits may be lost in future updates.",
+  "",
+  'provider "registry.terraform.io/hashicorp/aws" {',
+  '  version = "5.60.0"',
+  "}",
+].join("\n");
+
 function file(content: string, mode = "-rw-r--r--"): FsFile {
   return { type: "file", content, mode };
 }
@@ -183,6 +240,23 @@ export function defaultFs(): FsDir {
         "deploy.sh": file("#!/bin/bash\necho \"deploying...\"\n", "-rw-r--r--"),
         "docker-compose.yml": file(COMPOSE),
         "notes.txt": file("Заметки к практике DevOps.\n"),
+        "users.txt": file(USERS_TXT),
+        "access.log": file(NGINX_ACCESS),
+        "app.txt": file("первая строка приложения\n"),
+        "ci.log": file(CI_LOG),
+        ".terraform.lock.hcl": file(TF_LOCK),
+        ".github": dir({
+          workflows: dir({ "ci.yml": file(CI_WORKFLOW) }),
+        }),
+        "Hello-World": dir({
+          README: file("Hello World!\n"),
+          ".git": dir({ HEAD: file("ref: refs/heads/master\n") }),
+        }),
+        myapp: dir({
+          "README.md": file("# myapp\n\nУчебный веб-проект. История коммитов — для практики git.\n"),
+          "index.js": file("console.log('hello from myapp');\n"),
+          "package.json": file('{\n  "name": "myapp",\n  "version": "1.0.0"\n}\n'),
+        }),
         projects: dir({
           api: dir({
             Dockerfile: file(DOCKERFILE),
@@ -201,11 +275,15 @@ export function defaultFs(): FsDir {
         }),
         ".ssh": dir({
           "known_hosts": file("github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl\n"),
+          id_ed25519: file("-----BEGIN OPENSSH PRIVATE KEY-----\n(учебный приватный ключ)\n-----END OPENSSH PRIVATE KEY-----\n", "-rw-------"),
+          "id_ed25519.pub": file("ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIStudentKey student@devops\n"),
+          config: file(SSH_CONFIG),
         }),
       }),
     }),
     etc: dir({
       hosts: file("127.0.0.1 localhost\n10.0.0.5 db\n"),
+      passwd: file(PASSWD),
       "resolv.conf": file("nameserver 10.0.0.2\nsearch cluster.local\n"),
       nginx: dir({
         "nginx.conf": file(NGINX_CONF),
@@ -227,6 +305,18 @@ export function defaultFs(): FsDir {
           "error.log": file(
             '2026/08/27 09:15:02 [error] 712#712: *184 connect() failed (111: Connection refused) while connecting to upstream, client: 10.0.0.9, server: app.example.com, upstream: "http://10.0.0.4:8080/api/orders"\n',
           ),
+        }),
+      }),
+    }),
+    proc: dir({
+      cpuinfo: file(CPUINFO),
+      meminfo: file(MEMINFO),
+    }),
+    sys: dir({
+      class: dir({
+        net: dir({
+          eth0: dir({ address: file("02:42:ac:11:00:02\n") }),
+          lo: dir({ address: file("00:00:00:00:00:00\n") }),
         }),
       }),
     }),
@@ -254,8 +344,9 @@ export function prompt(state: ShellState): string {
 // Приводит путь к массиву сегментов относительно корня.
 function resolve(state: ShellState, raw: string): string[] | null {
   let path = raw.trim();
-  if (path === "~") path = `/home/${state.user}`;
+  if (path === "~" || path === "$HOME") path = `/home/${state.user}`;
   else if (path.startsWith("~/")) path = `/home/${state.user}/${path.slice(2)}`;
+  else if (path.startsWith("$HOME/")) path = `/home/${state.user}/${path.slice(6)}`;
 
   const segments = path.startsWith("/") ? [] : [...state.cwd];
   for (const part of path.split("/")) {
@@ -528,28 +619,90 @@ export function execute(state: ShellState, input: string): CommandResult {
 
   for (const stage of parts.slice(1)) {
     const tokens = tokenize(stage);
-    if (tokens[0] === "grep") {
-      const flags = tokens.filter((t) => t.startsWith("-"));
+    const cmd = tokens[0];
+    const flags = tokens.filter((t) => t.startsWith("-"));
+    const rows = result.output ? result.output.split("\n") : [];
+
+    if (cmd === "grep") {
       const pattern = tokens.find((t, i) => i > 0 && !t.startsWith("-")) ?? "";
       const insensitive = flags.some((f) => f.includes("i"));
+      const invert = flags.some((f) => f.includes("v"));
       const needle = insensitive ? pattern.toLowerCase() : pattern;
       result = {
         ...result,
-        output: result.output
-          .split("\n")
-          .filter((row) => (insensitive ? row.toLowerCase() : row).includes(needle))
+        output: rows
+          .filter((row) => {
+            const has = (insensitive ? row.toLowerCase() : row).includes(needle);
+            return invert ? !has : has;
+          })
           .join("\n"),
       };
-    } else if (tokens[0] === "wc") {
-      const count = result.output ? result.output.split("\n").length : 0;
-      result = { ...result, output: String(count) };
-    } else if (tokens[0] === "head" || tokens[0] === "tail") {
+    } else if (cmd === "wc") {
+      result = { ...result, output: String(result.output ? rows.length : 0) };
+    } else if (cmd === "head" || cmd === "tail") {
       const n = Number(tokens[tokens.indexOf("-n") + 1]) || 10;
-      const rows = result.output.split("\n");
+      result = { ...result, output: (cmd === "head" ? rows.slice(0, n) : rows.slice(-n)).join("\n") };
+    } else if (cmd === "sort") {
+      const numeric = flags.some((f) => f.includes("n"));
+      const reverse = flags.some((f) => f.includes("r"));
+      const sorted = [...rows].sort((a, b) =>
+        numeric ? (parseFloat(a) || 0) - (parseFloat(b) || 0) : a.localeCompare(b),
+      );
+      if (reverse) sorted.reverse();
+      result = { ...result, output: sorted.join("\n") };
+    } else if (cmd === "uniq") {
+      const withCount = flags.some((f) => f.includes("c"));
+      const out: string[] = [];
+      let prev: string | null = null;
+      let count = 0;
+      for (const row of rows) {
+        if (row === prev) count += 1;
+        else {
+          if (prev !== null) out.push(withCount ? `${String(count).padStart(7)} ${prev}` : prev);
+          prev = row;
+          count = 1;
+        }
+      }
+      if (prev !== null) out.push(withCount ? `${String(count).padStart(7)} ${prev}` : prev);
+      result = { ...result, output: out.join("\n") };
+    } else if (cmd === "cut") {
+      const delim = tokens[tokens.indexOf("-d") + 1] ?? "\t";
+      const fieldSpec = tokens[tokens.indexOf("-f") + 1] ?? "1";
+      const fields = fieldSpec.split(",").map((x) => Number(x) - 1);
       result = {
         ...result,
-        output: (tokens[0] === "head" ? rows.slice(0, n) : rows.slice(-n)).join("\n"),
+        output: rows
+          .map((row) => {
+            const cols = row.split(delim);
+            return fields.map((i) => cols[i] ?? "").join(delim);
+          })
+          .join("\n"),
       };
+    } else if (cmd === "tr") {
+      const a = tokens[1] ?? "";
+      const b = tokens[2] ?? "";
+      result = {
+        ...result,
+        output:
+          a === "a-z" && b === "A-Z"
+            ? result.output.toUpperCase()
+            : a === "A-Z" && b === "a-z"
+              ? result.output.toLowerCase()
+              : result.output,
+      };
+    } else if (cmd === "xargs") {
+      // Поддержка: xargs wc -l — посчитать строки каждого файла из потока.
+      if (tokens[1] === "wc") {
+        const out = rows
+          .filter(Boolean)
+          .map((name) => {
+            const segments = resolve(state, name);
+            const node = segments && nodeAt(state, segments);
+            const n = node && node.type === "file" ? node.content.trimEnd().split("\n").length : 0;
+            return `${String(n).padStart(7)} ${name}`;
+          });
+        result = { ...result, output: out.join("\n") };
+      }
     }
   }
 
@@ -611,15 +764,17 @@ function executeSingle(state: ShellState, input: string): CommandResult {
 
     case "head":
     case "tail": {
-      const target = operands[0];
+      const nIndex = args.indexOf("-n");
+      const count = nIndex >= 0 ? Number(args[nIndex + 1]) || 10 : 10;
+      // Имя файла — операнд, который не является значением флага -n.
+      const nValue = nIndex >= 0 ? args[nIndex + 1] : null;
+      const target = operands.find((o) => o !== nValue) ?? operands[operands.length - 1];
       if (!target) return { output: `${command}: не указан файл`, state };
       const segments = resolve(state, target);
       const node = segments && nodeAt(state, segments);
       if (!node || node.type !== "file") {
         return { output: `${command}: ${target}: нет такого файла`, state };
       }
-      const nIndex = args.indexOf("-n");
-      const count = nIndex >= 0 ? Number(args[nIndex + 1]) || 10 : 10;
       const rows = node.content.trimEnd().split("\n");
       const slice = command === "head" ? rows.slice(0, count) : rows.slice(-count);
       const follow = hasFlag("f") ? "\n(следим за файлом… Ctrl+C для выхода)" : "";
@@ -630,6 +785,8 @@ function executeSingle(state: ShellState, input: string): CommandResult {
       const pattern = operands[0] ?? "";
       const target = operands[1];
       const insensitive = hasFlag("i");
+      const countOnly = hasFlag("c");
+      const numbered = hasFlag("n");
       if (!target) return { output: "grep: не указан файл", state };
 
       const segments = resolve(state, target);
@@ -638,10 +795,14 @@ function executeSingle(state: ShellState, input: string): CommandResult {
         return { output: `grep: ${target}: нет такого файла или каталога`, state };
       }
       const needle = insensitive ? pattern.toLowerCase() : pattern;
-      const rows = node.content
-        .split("\n")
-        .filter((row) => (insensitive ? row.toLowerCase() : row).includes(needle));
-      return { output: rows.join("\n"), state };
+      const matches: string[] = [];
+      node.content.split("\n").forEach((row, i) => {
+        if ((insensitive ? row.toLowerCase() : row).includes(needle)) {
+          matches.push(numbered ? `${i + 1}:${row}` : row);
+        }
+      });
+      if (countOnly) return { output: String(matches.length), state };
+      return { output: matches.join("\n"), state };
     }
 
     case "find": {
@@ -793,6 +954,34 @@ function executeSingle(state: ShellState, input: string): CommandResult {
         state,
       };
 
+    case "ip":
+    case "ifconfig": {
+      const eth0 = [
+        "eth0: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500",
+        "        inet 10.0.0.21  netmask 255.255.255.0  broadcast 10.0.0.255",
+        "        ether 02:42:ac:11:00:02  txqueuelen 1000  (Ethernet)",
+      ].join("\n");
+      const lo = [
+        "lo: flags=73<UP,LOOPBACK,RUNNING>  mtu 65536",
+        "        inet 127.0.0.1  netmask 255.0.0.0",
+        "        loop  txqueuelen 1000  (Local Loopback)",
+      ].join("\n");
+      if (operands.includes("lo")) return { output: lo, state };
+      if (operands.includes("eth0")) return { output: eth0, state };
+      return { output: eth0 + "\n" + lo, state };
+    }
+
+    case "ssh":
+      return {
+        output: `Welcome to Ubuntu 24.04 LTS (GNU/Linux)\ndeploy@${operands[0] ?? "server"}:~$ (учебная сессия, наберите exit для выхода)`,
+        state,
+      };
+
+    case "scp": {
+      const src = operands[0] ?? "file";
+      return { output: `${src}                              100% 1234     1.2KB/s   00:00`, state };
+    }
+
     case "dig":
     case "nslookup":
       return { output: runDig(args), state };
@@ -837,6 +1026,26 @@ function executeSingle(state: ShellState, input: string): CommandResult {
 
     case "date":
       return { output: runDate(), state };
+
+    case "cut": {
+      const target = operands[operands.length - 1];
+      const segments = target ? resolve(state, target) : null;
+      const node = segments && nodeAt(state, segments);
+      if (!node || node.type !== "file") {
+        return { output: `cut: ${target ?? ""}: нет такого файла`, state };
+      }
+      const delim = args[args.indexOf("-d") + 1] ?? "\t";
+      const fieldSpec = args[args.indexOf("-f") + 1] ?? "1";
+      const fields = fieldSpec.split(",").map((x) => Number(x) - 1);
+      const out = node.content
+        .trimEnd()
+        .split("\n")
+        .map((row) => {
+          const cols = row.split(delim);
+          return fields.map((i) => cols[i] ?? "").join(delim);
+        });
+      return { output: out.join("\n"), state };
+    }
 
     case "sort": {
       const target = operands[0];
