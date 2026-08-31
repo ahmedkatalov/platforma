@@ -11,7 +11,7 @@ import type {
   QuizResult,
 } from "@/shared/types";
 import { Badge, Button, Card, Input, Progress } from "@/shared/ui";
-import { IconCheck, IconChevron, IconClose, IconClock } from "@/shared/ui/icons";
+import { Check, ChevronRight, X, Clock } from "lucide-react";
 import { useToast } from "@/shared/ui/ToastProvider";
 
 import LessonResources from "./LessonResources";
@@ -219,7 +219,7 @@ export default function QuizLesson({
                         : "bg-[var(--danger-soft)] text-danger"
                     }`}
                   >
-                    {outcome?.correct ? <IconCheck size={16} /> : <IconClose size={16} />}
+                    {outcome?.correct ? <Check size={16} /> : <X size={16} />}
                   </span>
                   <p className="flex-1 font-semibold text-fg">
                     <span className="text-faint">{i + 1}. </span>
@@ -316,7 +316,7 @@ export default function QuizLesson({
               <Badge tone="accent">лучший: {Math.round(progress.bestScore)}%</Badge>
             )}
             <Badge>
-              <IconClock size={12} /> порог {Math.round(passScore)}%
+              <Clock size={12} /> порог {Math.round(passScore)}%
             </Badge>
           </div>
         </div>
@@ -368,7 +368,7 @@ export default function QuizLesson({
                         question.multiple ? "rounded-[0.3rem]" : "rounded-full"
                       } ${active ? "border-[var(--accent)] bg-accent-soft" : "border-line"}`}
                     >
-                      {active && <IconCheck size={14} />}
+                      {active && <Check size={14} />}
                     </span>
                     {option.text}
                   </button>
@@ -400,7 +400,7 @@ export default function QuizLesson({
                       disabled={pos === 0}
                       aria-label="Выше"
                     >
-                      <IconChevron size={14} className="-rotate-90" />
+                      <ChevronRight size={14} className="-rotate-90" />
                     </button>
                     <button
                       className="btn btn-ghost h-7 w-7 !p-0"
@@ -408,7 +408,7 @@ export default function QuizLesson({
                       disabled={pos === orderOf(question).length - 1}
                       aria-label="Ниже"
                     >
-                      <IconChevron size={14} className="rotate-90" />
+                      <ChevronRight size={14} className="rotate-90" />
                     </button>
                   </span>
                 </li>
@@ -441,7 +441,7 @@ export default function QuizLesson({
                         disabled={pos === 0}
                         aria-label="Выше"
                       >
-                        <IconChevron size={14} className="-rotate-90" />
+                        <ChevronRight size={14} className="-rotate-90" />
                       </button>
                       <button
                         className="btn btn-ghost h-7 w-7 !p-0"
@@ -449,7 +449,7 @@ export default function QuizLesson({
                         disabled={pos === orderOf(question).length - 1}
                         aria-label="Ниже"
                       >
-                        <IconChevron size={14} className="rotate-90" />
+                        <ChevronRight size={14} className="rotate-90" />
                       </button>
                     </span>
                   </div>

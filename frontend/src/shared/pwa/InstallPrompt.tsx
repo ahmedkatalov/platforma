@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import { IconClose, IconTerminal } from "@/shared/ui/icons";
+import { X, Terminal } from "lucide-react";
 
 // Событие beforeinstallprompt есть только в спецификации Chromium.
 type InstallEvent = Event & {
@@ -68,7 +68,7 @@ export default function InstallPrompt() {
           className="grid h-10 w-10 shrink-0 place-items-center rounded-[var(--radius-md)] text-accent-fg"
           style={{ background: "var(--gradient)" }}
         >
-          <IconTerminal size={20} />
+          <Terminal size={20} />
         </span>
 
         <div className="min-w-0 flex-1">
@@ -95,7 +95,7 @@ export default function InstallPrompt() {
           onClick={dismiss}
           aria-label="Скрыть"
         >
-          <IconClose size={16} />
+          <X size={16} />
         </button>
       </div>
     </div>

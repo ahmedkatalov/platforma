@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { useGetStudentCoursesQuery } from "@/features/admin/api/coursesApi";
 import type { CourseLevel } from "@/shared/types";
 import { Badge, Card, EmptyState, PageHeader, Spinner } from "@/shared/ui";
-import { IconBook } from "@/shared/ui/icons";
+import { Book } from "lucide-react";
 
 const LEVEL_LABEL: Record<CourseLevel, string> = {
   beginner: "Начальный",
@@ -31,7 +31,7 @@ export default function CoursesPage() {
           <EmptyState
             title="Курсов пока нет"
             description="Опубликованные курсы появятся здесь"
-            icon={<IconBook size={32} />}
+            icon={<Book size={32} />}
           />
         </Card>
       ) : (

@@ -7,7 +7,7 @@ import {
 } from "@/features/certificates/api/certificatesApi";
 import { apiErrorMessage } from "@/shared/api/baseApi";
 import { Button, EmptyState, Modal, Spinner } from "@/shared/ui";
-import { IconPlus, IconTrash } from "@/shared/ui/icons";
+import { Plus, Trash2 } from "lucide-react";
 import { useToast } from "@/shared/ui/ToastProvider";
 
 // Библиотека картинок для уроков: загрузка, выбор и удаление.
@@ -90,7 +90,7 @@ export default function AssetPicker({
         </p>
         <Button
           variant="primary"
-          icon={<IconPlus size={16} />}
+          icon={<Plus size={16} />}
           onClick={() => inputRef.current?.click()}
           loading={uploading}
         >
@@ -138,7 +138,7 @@ export default function AssetPicker({
                 className="mt-1 flex w-full items-center justify-center gap-1 text-[11px] text-faint transition-colors hover:text-danger"
                 onClick={() => remove(asset.id)}
               >
-                <IconTrash size={12} />
+                <Trash2 size={12} />
                 удалить
               </button>
             </li>

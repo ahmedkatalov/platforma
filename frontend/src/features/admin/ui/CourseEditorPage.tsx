@@ -27,7 +27,7 @@ import {
   Spinner,
   Textarea,
 } from "@/shared/ui";
-import { IconBook, IconChevron, IconEdit, IconPlus, IconTrash } from "@/shared/ui/icons";
+import { Book, ChevronRight, Edit2, Plus, Trash2 } from "lucide-react";
 import { useToast } from "@/shared/ui/ToastProvider";
 
 import LessonContentEditor from "./LessonContentEditor";
@@ -107,7 +107,7 @@ export default function CourseEditorPage() {
         actions={
           <>
             <Link to={`/learn/courses/${course.slug}`} className="btn btn-secondary">
-              <IconBook size={16} />
+              <Book size={16} />
               Открыть как студент
             </Link>
             <Link to="/admin/courses" className="btn btn-ghost">
@@ -125,7 +125,7 @@ export default function CourseEditorPage() {
             <h2 className="text-base font-bold text-fg">Программа курса</h2>
             <Button
               variant="primary"
-              icon={<IconPlus size={16} />}
+              icon={<Plus size={16} />}
               onClick={() => setModuleModal("new")}
             >
               Модуль
@@ -136,7 +136,7 @@ export default function CourseEditorPage() {
             <EmptyState
               title="Модулей пока нет"
               description="Разбейте курс на модули, а модули — на уроки"
-              icon={<IconBook size={32} />}
+              icon={<Book size={32} />}
             />
           ) : (
             <div className="space-y-3">
@@ -323,7 +323,7 @@ function ModuleBlock({
           onClick={() => setOpen((v) => !v)}
           aria-label={open ? "Свернуть" : "Развернуть"}
         >
-          <IconChevron
+          <ChevronRight
             size={16}
             className={`transition-transform ${open ? "rotate-90" : ""}`}
           />
@@ -340,7 +340,7 @@ function ModuleBlock({
         <Badge>{module.lessons?.length ?? 0} уроков</Badge>
 
         <Button variant="ghost" className="h-8 !px-2" onClick={onEdit} title="Изменить модуль">
-          <IconEdit size={16} />
+          <Edit2 size={16} />
         </Button>
         <Button
           variant="ghost"
@@ -348,7 +348,7 @@ function ModuleBlock({
           onClick={removeModule}
           title="Удалить модуль"
         >
-          <IconTrash size={16} />
+          <Trash2 size={16} />
         </Button>
       </div>
 
@@ -369,7 +369,7 @@ function ModuleBlock({
                     onClick={() => onEditLesson(lesson)}
                     title="Изменить урок"
                   >
-                    <IconEdit size={14} />
+                    <Edit2 size={14} />
                   </Button>
                   <Button
                     variant="ghost"
@@ -377,14 +377,14 @@ function ModuleBlock({
                     onClick={() => removeLesson(lesson)}
                     title="Удалить урок"
                   >
-                    <IconTrash size={14} />
+                    <Trash2 size={14} />
                   </Button>
                 </li>
               ))}
             </ul>
           )}
 
-          <Button variant="ghost" className="mt-1 w-full" icon={<IconPlus size={16} />} onClick={onAddLesson}>
+          <Button variant="ghost" className="mt-1 w-full" icon={<Plus size={16} />} onClick={onAddLesson}>
             Добавить урок
           </Button>
         </div>

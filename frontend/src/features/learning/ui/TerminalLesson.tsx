@@ -11,7 +11,7 @@ import { apiErrorMessage } from "@/shared/api/baseApi";
 import type {
   Certificate, LessonProgress, TaskState, TerminalContent } from "@/shared/types";
 import { Badge, Button, Card, Progress } from "@/shared/ui";
-import { IconCheck, IconTerminal } from "@/shared/ui/icons";
+import { Check, Terminal } from "lucide-react";
 import { useToast } from "@/shared/ui/ToastProvider";
 
 import LessonResources from "./LessonResources";
@@ -175,7 +175,7 @@ export default function TerminalLesson({
               <span className="h-3 w-3 rounded-full bg-[var(--success)]" />
             </span>
             <span className="ml-2 flex items-center gap-1.5 text-xs font-semibold text-muted">
-              <IconTerminal size={14} />
+              <Terminal size={14} />
               {content.shell ?? "student@devops"}
             </span>
           </div>
@@ -255,7 +255,7 @@ export default function TerminalLesson({
                         done ? "bg-[var(--success)] text-white" : "bg-surface-2 text-muted"
                       }`}
                     >
-                      {done ? <IconCheck size={12} /> : i + 1}
+                      {done ? <Check size={12} /> : i + 1}
                     </span>
                     <p className={`flex-1 text-sm ${done ? "text-muted line-through" : "text-fg"}`}>
                       {task.prompt}

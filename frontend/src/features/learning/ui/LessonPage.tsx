@@ -18,12 +18,13 @@ import type {
 } from "@/shared/types";
 import { Badge, Button, Card, EmptyState, Modal, Progress, Spinner } from "@/shared/ui";
 import {
-  IconBook,
-  IconCheck,
-  IconChevron,
-  IconClock,
-  IconTerminal,
-} from "@/shared/ui/icons";
+  Book,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  Terminal,
+} from "lucide-react";
 
 import { groupThemes } from "@/features/learning/lib/themes";
 
@@ -58,6 +59,8 @@ export default function LessonPage() {
 
   const [asideOpen, setAsideOpen] = useState(false);
   const [certificate, setCertificate] = useState<Certificate | null>(null);
+  const [openModuleId, setOpenModuleId] = useState<string | null>(null);
+  const [contentsCollapsed, setContentsCollapsed] = useState(false);
 
   useEffect(() => {
     if (lessonId) void startLesson(lessonId);
@@ -79,6 +82,17 @@ export default function LessonPage() {
     return { total: all.length, done: done.length };
   }, [modules, progressByLesson]);
 
+  // При переходе к уроку из другой главы раскрываем именно её.
+  useEffect(() => {
+    const activeLessonId = data?.lesson.id;
+    if (!activeLessonId) return;
+
+    const activeModule = modules.find((module) =>
+      module.lessons?.some((item) => item.id === activeLessonId),
+    );
+    if (activeModule) setOpenModuleId(activeModule.id);
+  }, [data?.lesson.id, modules]);
+
   if (isLoading) {
     return (
       <div className="grid place-items-center py-20 text-accent">
@@ -98,7 +112,7 @@ export default function LessonPage() {
               ? "Попросите администратора назначить вам этот курс"
               : "Возможно, урок удалён или ещё не опубликован"
           }
-          icon={<IconBook size={32} />}
+          icon={<Book size={32} />}
           action={
             <Link to="/learn/courses" className="btn btn-secondary">
               К списку курсов
@@ -171,26 +185,56 @@ export default function LessonPage() {
   })();
 
   return (
-    <div className="grid gap-[var(--gap)] xl:grid-cols-[18rem_1fr]">
+    <div
+      className={`grid gap-[var(--gap)] transition-[grid-template-columns] duration-200 ${
+        contentsCollapsed ? "xl:grid-cols-[4.5rem_1fr]" : "xl:grid-cols-[18rem_1fr]"
+      }`}
+    >
       {/* Содержание курса */}
       <aside className={`xl:block ${asideOpen ? "block" : "hidden"}`}>
-        <Card className="xl:sticky xl:top-24 p-3">
-          <Link
-            to={`/learn/courses/${data.courseSlug}`}
-            className="mb-3 block rounded-[var(--radius-md)] p-2 transition-colors hover:bg-surface-2"
-          >
-            <p className="text-sm font-bold text-fg">{data.courseTitle}</p>
-            <p className="mt-0.5 text-xs text-faint">
-              {totals.done} из {totals.total} уроков пройдено
-            </p>
-            <div className="mt-2">
-              <Progress value={totals.total ? (totals.done / totals.total) * 100 : 0} />
-            </div>
-          </Link>
 
-          <nav className="max-h-[60vh] space-y-4 overflow-y-auto">
+        <Card className={`relative xl:sticky xl:top-24 p-3 ${contentsCollapsed ? "xl:p-2" : "xl:p-3"}`}>
+          {contentsCollapsed && (
+            <button
+              type="button"
+              className="hidden h-16 w-full flex cursor-pointer items-center justify-center gap-1 rounded-[var(--radius-md)] bg-accent-soft text-accent transition-colors hover:bg-surface-2 xl:flex"
+              onClick={() => setContentsCollapsed(false)}
+              aria-label="Развернуть содержание"
+              title="Содержание курса"
+            >
+              <Book size={18} />
+              <ChevronRight size={14} />
+            </button>
+          )}
+          <button
+            className={`btn btn-ghost absolute right-2 top-2 hidden h-8 w-8 p-0! ${
+              contentsCollapsed ? "xl:hidden" : "xl:inline-flex"
+            }`}
+            onClick={() => setContentsCollapsed((value) => !value)}
+            aria-label={contentsCollapsed ? "Развернуть содержание" : "Свернуть содержание"}
+            title={contentsCollapsed ? "Развернуть содержание" : "Свернуть содержание"}
+          >
+            {contentsCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+          </button>
+
+          <div className={contentsCollapsed ? "xl:hidden" : undefined}>
+            <Link
+              to={`/learn/courses/${data.courseSlug}`}
+              className="mb-3 block rounded-[var(--radius-md)] p-2 pr-10 transition-colors hover:bg-surface-2"
+            >
+              <p className="text-sm font-bold text-fg">{data.courseTitle}</p>
+              <p className="mt-0.5 text-xs text-faint">
+                {totals.done} из {totals.total} уроков пройдено
+              </p>
+              <div className="mt-2">
+                <Progress value={totals.total ? (totals.done / totals.total) * 100 : 0} />
+              </div>
+            </Link>
+
+            <nav className="max-h-[60vh] space-y-4 overflow-y-auto">
             {modules.map((module, moduleIndex) => {
               const themes = groupThemes(module);
+              const expanded = openModuleId === module.id;
 
               const renderRow = (item: Lesson, isQuiz: boolean) => {
                 const state = progressByLesson.get(item.id);
@@ -215,7 +259,7 @@ export default function LessonPage() {
                               : "border-line"
                         }`}
                       >
-                        {done && <IconCheck size={10} />}
+                        {done && <Check size={10} />}
                       </span>
                       <span className="min-w-0 flex-1 truncate">{item.title}</span>
                       {item.kind !== "text" && (
@@ -229,36 +273,52 @@ export default function LessonPage() {
               };
 
               return (
-                <div key={module.id}>
-                  <p className="mb-1.5 px-2 text-[11px] font-bold uppercase tracking-wide text-faint">
-                    Глава {moduleIndex + 1}. {module.title}
-                  </p>
+                <section key={module.id} className="rounded-[var(--radius-md)] border border-transparent hover:border-line">
+                  <button
+                    type="button"
+                    className="flex w-full cursor-pointer items-center gap-2 rounded-[var(--radius-md)] px-2 py-2 text-left transition-colors hover:bg-surface-2"
+                    onClick={() => setOpenModuleId((current) => (current === module.id ? null : module.id))}
+                    aria-expanded={expanded}
+                    aria-controls={`module-${module.id}`}
+                  >
+                    <span className="min-w-0 flex-1 text-[11px] font-bold uppercase tracking-wide text-faint">
+                      Глава {moduleIndex + 1}. {module.title}
+                    </span>
+                    <ChevronRight
+                      size={16}
+                      className={`shrink-0 text-faint transition-transform duration-200 ${expanded ? "rotate-90" : ""}`}
+                      aria-hidden="true"
+                    />
+                  </button>
 
-                  <div className="space-y-2">
-                    {themes.map((theme, ti) => (
-                      <div key={theme.key} className="rounded-[var(--radius-md)] bg-surface-2/40 p-1.5">
-                        <p className="truncate px-1.5 pb-1 text-xs font-semibold text-fg">
-                          <span className="text-faint">{ti + 1}. </span>
-                          {theme.title}
-                        </p>
-                        <ul className="space-y-0.5">
-                          {theme.pages.map((page) => renderRow(page, false))}
-                          {theme.quiz && (
-                            <>
-                              <li className="px-2 pt-0.5 text-[10px] font-bold uppercase tracking-wide text-accent">
-                                Проверка темы
-                              </li>
-                              {renderRow(theme.quiz, true)}
-                            </>
-                          )}
-                        </ul>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                  {expanded && (
+                    <div id={`module-${module.id}`} className="space-y-2 px-1 pb-1.5">
+                      {themes.map((theme, ti) => (
+                        <div key={theme.key} className="rounded-[var(--radius-md)] bg-surface-2/40 p-1.5">
+                          <p className="truncate px-1.5 pb-1 text-[16px] font-semibold text-fg">
+                            <span className="text-faint">{ti + 1}. </span>
+                            {theme.title}
+                          </p>
+                          <ul className="space-y-0.5">
+                            {theme.pages.map((page) => renderRow(page, false))}
+                            {theme.quiz && (
+                              <>
+                                <li className="px-2 pt-0.5 text-[10px] font-bold uppercase tracking-wide text-accent">
+                                  Проверка темы
+                                </li>
+                                {renderRow(theme.quiz, true)}
+                              </>
+                            )}
+                          </ul>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </section>
               );
             })}
-          </nav>
+            </nav>
+          </div>
         </Card>
       </aside>
 
@@ -289,7 +349,7 @@ export default function LessonPage() {
               className="mx-auto grid h-16 w-16 place-items-center rounded-full text-accent-fg"
               style={{ background: "var(--gradient)" }}
             >
-              <IconCheck size={32} />
+              <Check size={32} />
             </span>
 
             <div>
@@ -315,12 +375,12 @@ export default function LessonPage() {
       <div className="min-w-0">
         <div className="mb-4 flex flex-wrap items-center gap-2">
           <Button className="xl:hidden" onClick={() => setAsideOpen((v) => !v)}>
-            <IconBook size={16} />
+            <Book size={16} />
             Содержание
           </Button>
           <Badge tone={KIND_TONE[lesson.kind]}>{KIND_LABEL[lesson.kind]}</Badge>
           <Badge>
-            <IconClock size={12} /> {lesson.durationMin} мин
+            <Clock size={12} /> {lesson.durationMin} мин
           </Badge>
           {completed && <Badge tone="success">Пройдено</Badge>}
           <span className="text-xs text-faint">{data.moduleTitle}</span>
@@ -339,7 +399,7 @@ export default function LessonPage() {
               to={`/learn/courses/${data.courseSlug}/lessons/${data.prevLessonId}`}
               className="btn btn-secondary"
             >
-              <IconChevron size={16} className="rotate-180" />
+              <ChevronRight size={16} className="rotate-180" />
               Предыдущий
             </Link>
           ) : (
@@ -352,11 +412,11 @@ export default function LessonPage() {
               className="btn btn-secondary"
             >
               Следующий
-              <IconChevron size={16} />
+              <ChevronRight size={16} />
             </Link>
           ) : (
             <Link to={`/learn/courses/${data.courseSlug}`} className="btn btn-secondary">
-              <IconTerminal size={16} />
+              <Terminal size={16} />
               К программе курса
             </Link>
           )}

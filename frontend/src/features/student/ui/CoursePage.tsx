@@ -6,21 +6,21 @@ import { useGetMeQuery } from "@/shared/api/meApi";
 import type { Lesson, LessonKind, LessonProgress } from "@/shared/types";
 import { Badge, Card, EmptyState, PageHeader, Progress, Spinner } from "@/shared/ui";
 import {
-  IconBook,
-  IconCheck,
-  IconChevron,
-  IconClock,
-  IconEdit,
-  IconTerminal,
-} from "@/shared/ui/icons";
+  Book,
+  Check,
+  ChevronRight,
+  Clock,
+  Edit2,
+  Terminal,
+} from "lucide-react";
 
 const dueFmt = new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "long" });
 
 function pageIcon(kind: LessonKind) {
-  if (kind === "terminal") return <IconTerminal size={15} />;
-  if (kind === "code") return <IconEdit size={15} />;
-  if (kind === "quiz") return <IconCheck size={15} />;
-  return <IconBook size={15} />;
+  if (kind === "terminal") return <Terminal size={15} />;
+  if (kind === "code") return <Edit2 size={15} />;
+  if (kind === "quiz") return <Check size={15} />;
+  return <Book size={15} />;
 }
 
 export default function CoursePage() {
@@ -42,7 +42,7 @@ export default function CoursePage() {
         <EmptyState
           title="Курс не найден"
           description="Возможно, он ещё не опубликован"
-          icon={<IconBook size={32} />}
+          icon={<Book size={32} />}
           action={
             <Link to="/learn/courses" className="btn btn-secondary">
               К списку курсов
@@ -90,7 +90,7 @@ export default function CoursePage() {
             {enrolled && nextLesson && (
               <Link to={lessonHref(nextLesson)} className="btn btn-primary">
                 {doneCount > 0 ? "Продолжить" : "Начать обучение"}
-                <IconChevron size={16} />
+                <ChevronRight size={16} />
               </Link>
             )}
           </>
@@ -105,8 +105,8 @@ export default function CoursePage() {
         )}
         {deadline && (
           <Badge tone={deadline.overdue ? "danger" : deadline.soon ? "warning" : "default"}>
-            <IconClock size={12} />
-            {deadline.overdue ? `срок истёк ${deadline.label}` : `сдать до ${deadline.label}`}
+            <Clock size={12} />
+            {deadline.overdue ? `срок истёк {deadline.label}` : `сдать до {deadline.label}`}
           </Badge>
         )}
         {course.tags.map((tag) => (
@@ -115,7 +115,7 @@ export default function CoursePage() {
           </Badge>
         ))}
         <Badge>
-          <IconClock size={12} /> ~{Math.max(1, Math.round(totalMinutes / 60))} ч
+          <Clock size={12} /> ~{Math.max(1, Math.round(totalMinutes / 60))} ч
         </Badge>
       </div>
 
@@ -139,7 +139,7 @@ export default function CoursePage() {
 
       {modules.length === 0 ? (
         <Card>
-          <EmptyState title="Программа ещё готовится" icon={<IconBook size={32} />} />
+          <EmptyState title="Программа ещё готовится" icon={<Book size={32} />} />
         </Card>
       ) : (
         <div className="space-y-[var(--gap)]">
@@ -236,7 +236,7 @@ function ThemeCard({
                 : "border-line text-faint"
           }`}
         >
-          {done ? <IconCheck size={13} /> : pageIcon(lesson.kind)}
+          {done ? <Check size={13} /> : pageIcon(lesson.kind)}
         </span>
         <span className={`min-w-0 flex-1 truncate text-sm ${done ? "text-muted" : "text-fg"}`}>
           {lesson.title}
@@ -247,7 +247,7 @@ function ThemeCard({
           </span>
         )}
         <span className="hidden shrink-0 text-xs text-faint sm:inline">{lesson.durationMin} мин</span>
-        {enrolled && <IconChevron size={15} className="shrink-0 text-faint" />}
+        {enrolled && <ChevronRight size={15} className="shrink-0 text-faint" />}
       </>
     );
 

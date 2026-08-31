@@ -7,7 +7,7 @@ import {
   type ReactNode,
 } from "react";
 
-import { IconCheck, IconClose } from "./icons";
+import { Check, X } from "lucide-react";
 
 type ToastKind = "success" | "error" | "info";
 type Toast = { id: number; kind: ToastKind; text: string };
@@ -56,14 +56,14 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             className={`card pointer-events-auto flex items-start gap-3 border-l-4 p-3 text-sm ${TONE[toast.kind]}`}
             role="status"
           >
-            {toast.kind === "success" ? <IconCheck size={18} /> : <IconClose size={18} />}
+            {toast.kind === "success" ? <Check size={18} /> : <X size={18} />}
             <p className="flex-1 text-fg">{toast.text}</p>
             <button
               className="text-faint transition-colors hover:text-fg"
               onClick={() => setToasts((c) => c.filter((t) => t.id !== toast.id))}
               aria-label="Закрыть уведомление"
             >
-              <IconClose size={16} />
+              <X size={16} />
             </button>
           </div>
         ))}

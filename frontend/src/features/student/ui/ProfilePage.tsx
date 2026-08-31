@@ -7,7 +7,7 @@ import { apiErrorMessage } from "@/shared/api/baseApi";
 import { useTheme } from "@/shared/theme/ThemeProvider";
 import { ACCENT_PRESETS, DEFAULT_THEME, TONE_PRESETS, type ThemeMode } from "@/shared/theme/types";
 import { Badge, Button, Card, Field, Input, PageHeader } from "@/shared/ui";
-import { IconMoon, IconSettings, IconSun } from "@/shared/ui/icons";
+import { Moon, Settings, Sun } from "lucide-react";
 import { useToast } from "@/shared/ui/ToastProvider";
 
 // Профиль: данные аккаунта, смена пароля и личные настройки оформления.
@@ -126,9 +126,9 @@ export default function ProfilePage() {
             <div className="grid gap-2 sm:grid-cols-3">
               {(
                 [
-                  { key: "dark", label: "Тёмная", icon: <IconMoon size={18} /> },
-                  { key: "light", label: "Светлая", icon: <IconSun size={18} /> },
-                  { key: "system", label: "Как в системе", icon: <IconSettings size={18} /> },
+                  { key: "dark", label: "Тёмная", icon: <Moon size={18} /> },
+                  { key: "light", label: "Светлая", icon: <Sun size={18} /> },
+                  { key: "system", label: "Как в системе", icon: <Settings size={18} /> },
                 ] as { key: ThemeMode; label: string; icon: React.ReactNode }[]
               ).map((option) => (
                 <button

@@ -17,5 +17,30 @@ services:
       retries: 30
     restart: unless-stopped
 
+  backend:
+    build: ./backend
+    container_name: platforma_backend
+    environment:
+      DATABASE_URL: postgres://platforma:platforma@db:5432/platforma?sslmode=disable
+      APP_ENV: development
+      PORT: 8090
+      JWT_SECRET: your-secret-key-change-in-production
+      CORS_ORIGINS: http://localhost:5173,http://127.0.0.1:5173,http://localhost:8091,http://127.0.0.1:8091
+    ports:
+      - "127.0.0.1:8090:8090"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    container_name: platforma_frontend
+    ports:
+      - "127.0.0.1:8091:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
 volumes:
   platforma_pgdata:

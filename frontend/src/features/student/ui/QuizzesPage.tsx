@@ -13,7 +13,7 @@ import {
   Spinner,
   StatCard,
 } from "@/shared/ui";
-import { IconCheck, IconChart, IconClock, IconFlame } from "@/shared/ui/icons";
+import { Check, BarChart3, Clock, Flame } from "lucide-react";
 
 type Filter = "all" | "todo" | "repeat" | "done";
 
@@ -98,25 +98,25 @@ export default function QuizzesPage() {
           label="Пройдено"
           value={`${done} из ${quizzes.length}`}
           hint={`${totalQuestions} вопросов всего`}
-          icon={<IconCheck size={20} />}
+          icon={<Check size={20} />}
         />
         <StatCard
           label="Средний балл"
           value={stats && stats.quiz.attempts > 0 ? `${Math.round(stats.quiz.averageScore)}%` : "—"}
           hint={stats ? `${stats.quiz.attempts} попыток` : undefined}
-          icon={<IconChart size={20} />}
+          icon={<BarChart3 size={20} />}
         />
         <StatCard
           label="Точность ответов"
           value={stats && stats.quiz.answeredTotal > 0 ? `${Math.round(stats.quiz.accuracy)}%` : "—"}
           hint={stats ? `${stats.quiz.answeredCorrect} из ${stats.quiz.answeredTotal}` : undefined}
-          icon={<IconCheck size={20} />}
+          icon={<Check size={20} />}
         />
         <StatCard
           label="Стоит повторить"
           value={repeat}
           hint="сданы давно или на слабый балл"
-          icon={<IconFlame size={20} />}
+          icon={<Flame size={20} />}
         />
       </div>
 
@@ -133,7 +133,7 @@ export default function QuizzesPage() {
                 ? "Как только администратор откроет вам курс, квизы появятся здесь"
                 : "Попробуйте выбрать другой фильтр"
             }
-            icon={<IconChart size={32} />}
+            icon={<BarChart3 size={32} />}
           />
         </Card>
       ) : (
@@ -160,7 +160,7 @@ export default function QuizzesPage() {
                               : "bg-surface-2 text-muted"
                           }`}
                         >
-                          {passed ? <IconCheck size={16} /> : quiz.questions}
+                          {passed ? <Check size={16} /> : quiz.questions}
                         </span>
 
                         <span className="min-w-0 flex-1">
@@ -187,7 +187,7 @@ export default function QuizzesPage() {
                           </span>
                         ) : (
                           <Badge>
-                            <IconClock size={12} /> не пройден
+                            <Clock size={12} /> не пройден
                           </Badge>
                         )}
                       </Link>

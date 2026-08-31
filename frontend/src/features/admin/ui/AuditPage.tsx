@@ -1,6 +1,6 @@
 import { useGetAuditQuery } from "@/features/admin/api/adminApi";
 import { Badge, Card, EmptyState, PageHeader, Spinner } from "@/shared/ui";
-import { IconShield } from "@/shared/ui/icons";
+import { Shield } from "lucide-react";
 
 const dateFmt = new Intl.DateTimeFormat("ru-RU", {
   day: "2-digit",
@@ -36,7 +36,7 @@ export default function AuditPage() {
             <Spinner size={28} />
           </div>
         ) : entries.length === 0 ? (
-          <EmptyState title="Записей пока нет" icon={<IconShield size={32} />} />
+          <EmptyState title="Записей пока нет" icon={<Shield size={32} />} />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[40rem] text-sm">

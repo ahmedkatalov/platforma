@@ -10,16 +10,18 @@ import {
   type ThemeMode,
   type ThemeSettings,
 } from "@/shared/theme/types";
-import { Badge, Button, Card, Field, PageHeader, Progress, Select } from "@/shared/ui";
 import {
-  IconCheck,
-  IconMoon,
-  IconPalette,
-  IconSettings,
-  IconSun,
-  IconTerminal,
-} from "@/shared/ui/icons";
+  Badge,
+  Button,
+  Card,
+  Field,
+  PageHeader,
+  Progress,
+  Select,
+} from "@/shared/ui";
+import { Check, Moon, Palette, Settings, Sun } from "lucide-react";
 import { useToast } from "@/shared/ui/ToastProvider";
+import Logo from "@/shared/images/svg/logo.svg";
 
 // Круглый сэмпл цвета поверх нативного color-input.
 function ColorSwatch({
@@ -89,7 +91,8 @@ function Slider({
 
 export default function AppearancePage() {
   const { settings, mode, update, replace, resetToPlatform } = useTheme();
-  const [savePlatformTheme, { isLoading: applying }] = useSavePlatformThemeMutation();
+  const [savePlatformTheme, { isLoading: applying }] =
+    useSavePlatformThemeMutation();
   const [savedForAll, setSavedForAll] = useState(false);
   const toast = useToast();
 
@@ -105,7 +108,8 @@ export default function AppearancePage() {
   };
 
   const activeAccent = ACCENT_PRESETS.find(
-    (preset) => preset.accent === settings.accent && preset.accent2 === settings.accent2,
+    (preset) =>
+      preset.accent === settings.accent && preset.accent2 === settings.accent2,
   );
 
   const set = (patch: Partial<ThemeSettings>) => update(patch);
@@ -117,11 +121,13 @@ export default function AppearancePage() {
         subtitle="Настройте интерфейс под себя и примените его для всех пользователей платформы"
         actions={
           <>
-            <Button onClick={() => replace(DEFAULT_THEME)}>Сброс к стандарту</Button>
+            <Button onClick={() => replace(DEFAULT_THEME)}>
+              Сброс к стандарту
+            </Button>
             <Button onClick={resetToPlatform}>Как у платформы</Button>
             <Button
               variant="primary"
-              icon={savedForAll ? <IconCheck size={18} /> : <IconPalette size={18} />}
+              icon={savedForAll ? <Check size={18} /> : <Palette size={18} />}
               onClick={applyForEveryone}
               loading={applying}
             >
@@ -139,9 +145,13 @@ export default function AppearancePage() {
             <div className="grid gap-2 sm:grid-cols-3">
               {(
                 [
-                  { key: "dark", label: "Тёмная", icon: <IconMoon size={18} /> },
-                  { key: "light", label: "Светлая", icon: <IconSun size={18} /> },
-                  { key: "system", label: "Как в системе", icon: <IconSettings size={18} /> },
+                  { key: "dark", label: "Тёмная", icon: <Moon size={18} /> },
+                  { key: "light", label: "Светлая", icon: <Sun size={18} /> },
+                  {
+                    key: "system",
+                    label: "Как в системе",
+                    icon: <Settings size={18} />,
+                  },
                 ] as { key: ThemeMode; label: string; icon: React.ReactNode }[]
               ).map((option) => (
                 <button
@@ -173,9 +183,13 @@ export default function AppearancePage() {
                 return (
                   <button
                     key={preset.key}
-                    onClick={() => set({ accent: preset.accent, accent2: preset.accent2 })}
+                    onClick={() =>
+                      set({ accent: preset.accent, accent2: preset.accent2 })
+                    }
                     className={`flex items-center gap-2 rounded-[var(--radius-md)] border p-2.5 text-xs font-semibold transition-colors ${
-                      active ? "border-[var(--accent)] bg-accent-soft" : "border-line hover:bg-surface-2"
+                      active
+                        ? "border-[var(--accent)] bg-accent-soft"
+                        : "border-line hover:bg-surface-2"
                     }`}
                   >
                     <span
@@ -199,7 +213,9 @@ export default function AppearancePage() {
                 />
                 <div>
                   <p className="text-sm font-semibold text-fg">Основной</p>
-                  <p className="font-mono text-xs text-faint">{settings.accent}</p>
+                  <p className="font-mono text-xs text-faint">
+                    {settings.accent}
+                  </p>
                 </div>
               </div>
 
@@ -211,7 +227,9 @@ export default function AppearancePage() {
                 />
                 <div>
                   <p className="text-sm font-semibold text-fg">Вторичный</p>
-                  <p className="font-mono text-xs text-faint">{settings.accent2}</p>
+                  <p className="font-mono text-xs text-faint">
+                    {settings.accent2}
+                  </p>
                 </div>
               </div>
             </div>
@@ -235,12 +253,17 @@ export default function AppearancePage() {
                       })
                     }
                     className={`flex items-center gap-2 rounded-[var(--radius-md)] border p-2.5 text-xs font-semibold transition-colors ${
-                      active ? "border-[var(--accent)] bg-accent-soft" : "border-line hover:bg-surface-2"
+                      active
+                        ? "border-[var(--accent)] bg-accent-soft"
+                        : "border-line hover:bg-surface-2"
                     }`}
                   >
                     <span
                       className="h-6 w-6 shrink-0 rounded-md border border-line"
-                      style={{ background: mode === "dark" ? preset.darkBase : preset.lightBase }}
+                      style={{
+                        background:
+                          mode === "dark" ? preset.darkBase : preset.lightBase,
+                      }}
                     />
                     <span className="truncate text-fg">{preset.name}</span>
                   </button>
@@ -257,7 +280,9 @@ export default function AppearancePage() {
                 />
                 <div>
                   <p className="text-sm font-semibold text-fg">Тёмная база</p>
-                  <p className="font-mono text-xs text-faint">{settings.darkBase}</p>
+                  <p className="font-mono text-xs text-faint">
+                    {settings.darkBase}
+                  </p>
                 </div>
               </div>
 
@@ -269,7 +294,9 @@ export default function AppearancePage() {
                 />
                 <div>
                   <p className="text-sm font-semibold text-fg">Светлая база</p>
-                  <p className="font-mono text-xs text-faint">{settings.lightBase}</p>
+                  <p className="font-mono text-xs text-faint">
+                    {settings.lightBase}
+                  </p>
                 </div>
               </div>
             </div>
@@ -360,9 +387,9 @@ export default function AppearancePage() {
               <div className="flex items-center gap-3">
                 <span
                   className="grid h-11 w-11 place-items-center rounded-[var(--radius-md)] text-accent-fg"
-                  style={{ background: "var(--gradient)" }}
+                  style={{ background: "#fff" }}
                 >
-                  <IconTerminal size={22} />
+                  <img src={Logo} alt="" className="h-8 w-8" />
                 </span>
                 <div>
                   <p className="text-sm font-bold text-fg">DevOps Platform</p>
@@ -372,7 +399,9 @@ export default function AppearancePage() {
 
               <div className="card-flat p-3">
                 <div className="mb-2 flex items-center justify-between">
-                  <span className="text-sm font-semibold text-fg">Прогресс курса</span>
+                  <span className="text-sm font-semibold text-fg">
+                    Прогресс курса
+                  </span>
                   <span className="text-xs font-bold text-accent">68%</span>
                 </div>
                 <Progress value={68} />
@@ -393,13 +422,14 @@ export default function AppearancePage() {
 
               <div className="card-flat p-3 font-mono text-xs">
                 <p className="text-success">$ docker ps</p>
-                <p className="text-muted">CONTAINER ID   IMAGE     STATUS</p>
-                <p className="text-fg">a1b2c3d4e5f6   nginx     Up 2 minutes</p>
+                <p className="text-muted">CONTAINER ID IMAGE STATUS</p>
+                <p className="text-fg">a1b2c3d4e5f6 nginx Up 2 minutes</p>
               </div>
 
               <p className="text-xs text-muted">
-                Изменения применяются сразу и сохраняются лично для вас. Кнопка «Применить для всех»
-                делает это оформление стандартным для студентов.
+                Изменения применяются сразу и сохраняются лично для вас. Кнопка
+                «Применить для всех» делает это оформление стандартным для
+                студентов.
               </p>
             </div>
           </Card>

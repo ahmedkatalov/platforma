@@ -9,40 +9,43 @@ import { useTrackActivityMutation } from "@/shared/api/meApi";
 import { tokenStorage } from "@/shared/api/tokenStorage";
 import { useTheme } from "@/shared/theme/ThemeProvider";
 import {
-  IconBook,
-  IconChart,
-  IconChevron,
-  IconCheck,
-  IconClose,
-  IconDashboard,
-  IconEdit,
-  IconLogout,
-  IconMoon,
-  IconPalette,
-  IconSettings,
-  IconShield,
-  IconSun,
-  IconTerminal,
-  IconUsers,
-} from "@/shared/ui/icons";
+  LayoutGrid,
+  BarChart3,
+  ChevronLeft,
+  ChevronRight,
+  Check,
+  X,
+  LogOut,
+  Edit2,
+  Moon,
+  Palette,
+  Settings,
+  Shield,
+  Sun,
+  Users,
+  Book,
+} from "lucide-react";
+import Logo from "@/shared/images/svg/logo.svg";
 
 type NavItem = { to: string; label: string; icon: React.ReactNode; end?: boolean };
 
+const SIDEBAR_COLLAPSED_KEY = "platforma.sidebarCollapsed";
+
 const ADMIN_NAV: NavItem[] = [
-  { to: "/admin", label: "Обзор", icon: <IconDashboard size={18} />, end: true },
-  { to: "/admin/students", label: "Студенты", icon: <IconUsers size={18} /> },
-  { to: "/admin/courses", label: "Курсы", icon: <IconBook size={18} /> },
-  { to: "/admin/certificates", label: "Сертификаты", icon: <IconShield size={18} /> },
-  { to: "/admin/appearance", label: "Оформление", icon: <IconPalette size={18} /> },
-  { to: "/admin/audit", label: "Журнал", icon: <IconSettings size={18} /> },
+  { to: "/admin", label: "Обзор", icon: <LayoutGrid size={18} />, end: true },
+  { to: "/admin/students", label: "Студенты", icon: <Users size={18} /> },
+  { to: "/admin/courses", label: "Курсы", icon: <Book size={18} /> },
+  { to: "/admin/certificates", label: "Сертификаты", icon: <Shield size={18} /> },
+  { to: "/admin/appearance", label: "Оформление", icon: <Palette size={18} /> },
+  { to: "/admin/audit", label: "Журнал", icon: <Settings size={18} /> },
 ];
 
 const STUDENT_NAV: NavItem[] = [
-  { to: "/learn", label: "Главная", icon: <IconDashboard size={18} />, end: true },
-  { to: "/learn/courses", label: "Мои курсы", icon: <IconBook size={18} /> },
-  { to: "/learn/quizzes", label: "Квизы", icon: <IconCheck size={18} /> },
-  { to: "/learn/notes", label: "Заметки", icon: <IconEdit size={18} /> },
-  { to: "/learn/stats", label: "Статистика", icon: <IconChart size={18} /> },
+  { to: "/learn", label: "Главная", icon: <LayoutGrid size={18} />, end: true },
+  { to: "/learn/courses", label: "Мои курсы", icon: <Book size={18} /> },
+  { to: "/learn/quizzes", label: "Квизы", icon: <Check size={18} /> },
+  { to: "/learn/notes", label: "Заметки", icon: <Edit2 size={18} /> },
+  { to: "/learn/stats", label: "Статистика", icon: <BarChart3 size={18} /> },
 ];
 
 // Каждые 60 секунд отправляем время, проведённое на платформе.
@@ -69,10 +72,16 @@ export default function AppShell() {
   const { mode, toggleMode } = useTheme();
   const [logout] = useLogoutMutation();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(
+    () => localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "true",
+  );
 
   useActivityTracker();
 
   useEffect(() => setMenuOpen(false), [location.pathname]);
+  useEffect(() => {
+    localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(sidebarCollapsed));
+  }, [sidebarCollapsed]);
 
   if (!user) return null;
 
@@ -83,7 +92,7 @@ export default function AppShell() {
   const nav =
     isAdmin && inStudentArea
       ? [
-          { to: "/admin/courses", label: "← В админку", icon: <IconChevron size={18} className="rotate-180" />, end: false },
+          { to: "/admin/courses", label: "← В админку", icon: <ChevronRight size={18} className="rotate-180" />, end: false },
           ...STUDENT_NAV,
         ]
       : inStudentArea
@@ -115,15 +124,16 @@ export default function AppShell() {
       {/* Боковая навигация */}
       <aside
         className={clsx(
-          "fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r border-line bg-surface backdrop-blur-[var(--glass-blur)] transition-transform duration-200 lg:translate-x-0",
+          "fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r border-line bg-surface backdrop-blur-[var(--glass-blur)] transition-[width,transform] duration-200 lg:translate-x-0",
+          sidebarCollapsed ? "lg:w-20" : "lg:w-64",
           menuOpen ? "translate-x-0" : "-translate-x-full",
         )}
       >
-        <div className="flex h-16 items-center gap-2 border-b border-line px-5">
-          <span className="grid h-9 w-9 place-items-center rounded-[var(--radius-md)] text-accent-fg" style={{ background: "var(--gradient)" }}>
-            <IconTerminal size={20} />
+        <div className={clsx("flex h-16 items-center gap-2 border-b border-line px-5", sidebarCollapsed && "lg:justify-center lg:px-3")}>
+          <span className="grid h-11 w-11 place-items-center rounded-[var(--radius-md)] text-accent-fg" style={{ background: "#fff" }}>
+            <img src={Logo} alt="" className="h-8 w-8" />
           </span>
-          <div className="min-w-0">
+          <div className={clsx("min-w-0", sidebarCollapsed && "lg:hidden")}>
             <p className="truncate text-sm font-bold text-fg">DevOps Platform</p>
             <p className="truncate text-[11px] text-faint">
               {inStudentArea
@@ -138,11 +148,11 @@ export default function AppShell() {
             onClick={() => setMenuOpen(false)}
             aria-label="Закрыть меню"
           >
-            <IconClose size={18} />
+            <X size={18} />
           </button>
         </div>
 
-        <nav className="flex-1 space-y-1 overflow-y-auto p-3">
+        <nav className={clsx("flex-1 space-y-1 overflow-y-auto p-3", sidebarCollapsed ? "lg:p-2" : "lg:p-3")}>
           {nav.map((item) => (
             <NavLink
               key={item.to}
@@ -151,24 +161,26 @@ export default function AppShell() {
               className={({ isActive }) =>
                 clsx(
                   "flex items-center gap-3 rounded-[var(--radius-md)] px-3 py-2.5 text-sm font-medium transition-colors",
+                  sidebarCollapsed && "lg:justify-center lg:px-0",
                   isActive
                     ? "bg-accent-soft text-accent"
                     : "text-muted hover:bg-surface-2 hover:text-fg",
                 )
               }
             >
-              {item.icon}
-              {item.label}
+              <span className="shrink-0">{item.icon}</span>
+              <span className={clsx(sidebarCollapsed && "lg:sr-only")}>{item.label}</span>
             </NavLink>
           ))}
         </nav>
 
-        <div className="border-t border-line p-3">
+        <div className={clsx("border-t border-line p-3", sidebarCollapsed ? "lg:p-2" : "lg:p-3")}>
           <NavLink
             to={isAdmin ? "/admin/profile" : "/learn/profile"}
             className={({ isActive }) =>
               clsx(
                 "flex items-center gap-3 rounded-[var(--radius-md)] p-2 transition-colors",
+                sidebarCollapsed && "lg:justify-center",
                 isActive ? "bg-accent-soft" : "hover:bg-surface-2",
               )
             }
@@ -179,21 +191,22 @@ export default function AppShell() {
             >
               {initials}
             </span>
-            <span className="min-w-0 flex-1">
+            <span className={clsx("min-w-0 flex-1", sidebarCollapsed && "lg:hidden")}>
               <span className="block truncate text-sm font-semibold text-fg">
                 {user.fullName || user.email}
               </span>
               <span className="block truncate text-[11px] text-faint">{user.email}</span>
             </span>
-            <IconSettings size={16} className="text-faint" />
+            <Settings size={16} className={clsx("text-faint", sidebarCollapsed && "lg:hidden")} />
           </NavLink>
 
           <button
-            className="btn btn-ghost mt-1 w-full justify-start"
+            className={clsx("btn btn-ghost mt-1 w-full justify-start", sidebarCollapsed && "lg:justify-center lg:px-0")}
             onClick={handleLogout}
+            title={sidebarCollapsed ? "Выйти" : undefined}
           >
-            <IconLogout size={18} />
-            Выйти
+            <LogOut size={18} />
+            <span className={clsx(sidebarCollapsed && "lg:sr-only")}>Выйти</span>
           </button>
         </div>
       </aside>
@@ -207,7 +220,7 @@ export default function AppShell() {
       )}
 
       {/* Контент */}
-      <div className="lg:pl-64">
+      <div className={clsx("transition-[padding] duration-200", sidebarCollapsed ? "lg:pl-20" : "lg:pl-64")}>
         <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-line bg-surface px-4 backdrop-blur-[var(--glass-blur)] sm:px-6">
           <button
             className="btn btn-ghost h-9 w-9 !p-0 lg:hidden"
@@ -221,6 +234,15 @@ export default function AppShell() {
             </span>
           </button>
 
+          <button
+            className="btn btn-ghost hidden h-9 w-9 !p-0 lg:inline-flex"
+            onClick={() => setSidebarCollapsed((value) => !value)}
+            aria-label={sidebarCollapsed ? "Развернуть меню" : "Свернуть меню"}
+            title={sidebarCollapsed ? "Развернуть меню" : "Свернуть меню"}
+          >
+            {sidebarCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+          </button>
+
           <div className="ml-auto flex items-center gap-2">
             <button
               className="btn btn-secondary h-9 w-9 !p-0"
@@ -228,7 +250,7 @@ export default function AppShell() {
               aria-label={mode === "dark" ? "Включить светлую тему" : "Включить тёмную тему"}
               title={mode === "dark" ? "Светлая тема" : "Тёмная тема"}
             >
-              {mode === "dark" ? <IconSun size={18} /> : <IconMoon size={18} />}
+              {mode === "dark" ? <Sun size={18} /> : <Moon size={18} />}
             </button>
           </div>
         </header>

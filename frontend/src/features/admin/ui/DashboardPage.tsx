@@ -16,7 +16,7 @@ import {
 } from "@/features/admin/api/adminApi";
 import { useGetAdminCoursesQuery } from "@/features/admin/api/coursesApi";
 import { Badge, Card, EmptyState, PageHeader, Progress, Spinner, StatCard } from "@/shared/ui";
-import { IconBook, IconChart, IconUsers } from "@/shared/ui/icons";
+import { Book, BarChart3, Users } from "lucide-react";
 
 const dateFmt = new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
 
@@ -52,25 +52,25 @@ export default function DashboardPage() {
           label="Студентов"
           value={overview.students}
           hint={`${overview.activeStudents} активных · ${overview.invitedStudents} приглашены`}
-          icon={<IconUsers size={20} />}
+          icon={<Users size={20} />}
         />
         <StatCard
           label="Курсов"
           value={overview.courses}
           hint={`${overview.publishedCourses} опубликовано · ${overview.lessons} уроков`}
-          icon={<IconBook size={20} />}
+          icon={<Book size={20} />}
         />
         <StatCard
           label="Записей на курсы"
           value={overview.enrollments}
           hint="Всего назначений студентам"
-          icon={<IconChart size={20} />}
+          icon={<BarChart3 size={20} />}
         />
         <StatCard
           label="Активность"
           value={overview.activeToday}
           hint={`сегодня · ${overview.activeWeek} за неделю`}
-          icon={<IconChart size={20} />}
+          icon={<BarChart3 size={20} />}
         />
       </div>
 
@@ -81,7 +81,7 @@ export default function DashboardPage() {
             <EmptyState
               title="Курсов пока нет"
               description="Создайте первый курс, чтобы увидеть статистику"
-              icon={<IconBook size={32} />}
+              icon={<Book size={32} />}
             />
           ) : (
             <div className="h-64">
@@ -126,7 +126,7 @@ export default function DashboardPage() {
           </div>
 
           {progress.length === 0 ? (
-            <EmptyState title="Студентов пока нет" icon={<IconUsers size={32} />} />
+            <EmptyState title="Студентов пока нет" icon={<Users size={32} />} />
           ) : (
             <ul className="space-y-3">
               {progress.slice(0, 6).map((student) => (

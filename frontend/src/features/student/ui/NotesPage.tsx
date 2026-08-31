@@ -18,7 +18,7 @@ import {
   Spinner,
   Textarea,
 } from "@/shared/ui";
-import { IconBook, IconCheck, IconEdit, IconSearch, IconTrash } from "@/shared/ui/icons";
+import { Book, Check, Edit2, Search, Trash2 } from "lucide-react";
 import { useToast } from "@/shared/ui/ToastProvider";
 
 const dateFmt = new Intl.DateTimeFormat("ru-RU", {
@@ -72,7 +72,7 @@ export default function NotesPage() {
       {notes.length > 0 && (
         <Card className="mb-[var(--gap)] p-[var(--pad)]">
           <div className="relative">
-            <IconSearch
+            <Search
               size={16}
               className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-faint"
             />
@@ -95,11 +95,11 @@ export default function NotesPage() {
                 ? "Откройте урок, выделите важную мысль мышкой и нажмите «В заметки»"
                 : "Попробуйте другой запрос"
             }
-            icon={<IconEdit size={32} />}
+            icon={<Edit2 size={32} />}
             action={
               notes.length === 0 ? (
                 <Link to="/learn/courses" className="btn btn-primary">
-                  <IconBook size={16} />
+                  <Book size={16} />
                   К урокам
                 </Link>
               ) : undefined
@@ -185,7 +185,7 @@ function NoteCard({ note }: { note: Note }) {
             <Button
               variant="primary"
               className="h-8"
-              icon={<IconCheck size={14} />}
+              icon={<Check size={14} />}
               onClick={save}
               loading={saving}
             >
@@ -221,7 +221,7 @@ function NoteCard({ note }: { note: Note }) {
             onClick={() => setEditing(true)}
             title="Изменить комментарий"
           >
-            <IconEdit size={14} />
+            <Edit2 size={14} />
           </Button>
           <Button
             variant="ghost"
@@ -229,7 +229,7 @@ function NoteCard({ note }: { note: Note }) {
             onClick={remove}
             title="Удалить заметку"
           >
-            <IconTrash size={14} />
+            <Trash2 size={14} />
           </Button>
         </div>
       )}

@@ -15,12 +15,12 @@ import (
 )
 
 var (
-	ErrInvalidCredentials = errors.New("неверная почта или пароль")
-	ErrUserBlocked        = errors.New("аккаунт заблокирован, обратитесь к администратору")
-	ErrInvalidCode        = errors.New("неверный код подтверждения")
-	ErrCodeExpired        = errors.New("код истёк, запросите новый")
-	ErrTooManyAttempts    = errors.New("слишком много попыток, запросите новый код")
-	ErrTooManyRequests    = errors.New("слишком часто — подождите минуту и попробуйте снова")
+	ErrInvalidCredentials = errors.New("Неверная почта или пароль")
+	ErrUserBlocked        = errors.New("Аккаунт заблокирован, обратитесь к администратору")
+	ErrInvalidCode        = errors.New("Неверный код подтверждения")
+	ErrCodeExpired        = errors.New("Код истёк, запросите новый")
+	ErrTooManyAttempts    = errors.New("Слишком много попыток, запросите новый код")
+	ErrTooManyRequests    = errors.New("Слишком часто — подождите минуту и попробуйте снова")
 	ErrEmailTaken         = repository.ErrEmailTaken
 )
 

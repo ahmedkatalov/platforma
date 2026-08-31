@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 
 import type { LessonKind } from "@/shared/types";
 import { Badge, Button, Field, Input, Select, Textarea } from "@/shared/ui";
-import { IconPlus, IconTrash } from "@/shared/ui/icons";
+import { Plus, Trash2 } from "lucide-react";
 
 import AssetPicker from "./AssetPicker";
 
@@ -159,7 +159,7 @@ function QuizEditor({ value, onChange }: { value: AnyRecord; onChange: (next: An
               onClick={() => update(questions.filter((_, i) => i !== questionIndex))}
               title="Удалить вопрос"
             >
-              <IconTrash size={16} />
+              <Trash2 size={16} />
             </Button>
           }
         >
@@ -228,7 +228,7 @@ function QuizEditor({ value, onChange }: { value: AnyRecord; onChange: (next: An
                       }
                       title="Удалить вариант"
                     >
-                      <IconTrash size={14} />
+                      <Trash2 size={14} />
                     </Button>
                   </li>
                 ))}
@@ -237,7 +237,7 @@ function QuizEditor({ value, onChange }: { value: AnyRecord; onChange: (next: An
               <Button
                 variant="ghost"
                 className="mt-2"
-                icon={<IconPlus size={14} />}
+                icon={<Plus size={14} />}
                 onClick={() =>
                   patchQuestion(questionIndex, {
                     options: [...question.options, { id: uid("o"), text: "", correct: false }],
@@ -258,7 +258,7 @@ function QuizEditor({ value, onChange }: { value: AnyRecord; onChange: (next: An
         </Section>
       ))}
 
-      <Button variant="secondary" icon={<IconPlus size={16} />} onClick={addQuestion}>
+      <Button variant="secondary" icon={<Plus size={16} />} onClick={addQuestion}>
         Добавить вопрос
       </Button>
     </div>
@@ -313,7 +313,7 @@ function TerminalEditor({
               onClick={() => update(tasks.filter((_, i) => i !== index))}
               title="Удалить задание"
             >
-              <IconTrash size={16} />
+              <Trash2 size={16} />
             </Button>
           }
         >
@@ -375,7 +375,7 @@ function TerminalEditor({
 
       <Button
         variant="secondary"
-        icon={<IconPlus size={16} />}
+        icon={<Plus size={16} />}
         onClick={() => update([...tasks, { id: uid("t"), prompt: "", expected: [] }])}
       >
         Добавить задание
@@ -450,7 +450,7 @@ function CodeContentEditor({
         action={
           <Button
             variant="ghost"
-            icon={<IconPlus size={14} />}
+            icon={<Plus size={14} />}
             onClick={() =>
               onChange({ ...value, checks: [...checks, { type: "contains", value: "", message: "" }] })
             }
@@ -497,7 +497,7 @@ function CodeContentEditor({
                   }
                   title="Удалить проверку"
                 >
-                  <IconTrash size={16} />
+                  <Trash2 size={16} />
                 </Button>
               </li>
             ))}
@@ -533,7 +533,7 @@ function ResourcesEditor({
       action={
         <Button
           variant="ghost"
-          icon={<IconPlus size={14} />}
+          icon={<Plus size={14} />}
           onClick={() => onChange({ ...value, resources: [...resources, { title: "", url: "" }] })}
         >
           Ссылка
@@ -567,7 +567,7 @@ function ResourcesEditor({
                 }
                 title="Удалить ссылку"
               >
-                <IconTrash size={16} />
+                <Trash2 size={16} />
               </Button>
 
               <Input

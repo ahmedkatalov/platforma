@@ -22,7 +22,7 @@ import {
   Select,
   Spinner,
 } from "@/shared/ui";
-import { IconKey, IconPlus, IconSearch, IconTrash, IconUsers } from "@/shared/ui/icons";
+import { Key, Plus, Search, Trash2, Users } from "lucide-react";
 import { useToast } from "@/shared/ui/ToastProvider";
 
 const STATUS_TONE: Record<UserStatus, "success" | "warning" | "danger"> = {
@@ -91,7 +91,7 @@ export default function StudentsPage() {
         actions={
           <>
             <Button onClick={exportCsv}>Выгрузить CSV</Button>
-            <Button variant="primary" icon={<IconPlus size={18} />} onClick={() => setCreateOpen(true)}>
+            <Button variant="primary" icon={<Plus size={18} />} onClick={() => setCreateOpen(true)}>
               Создать аккаунт
             </Button>
           </>
@@ -102,7 +102,7 @@ export default function StudentsPage() {
         <div className="min-w-[14rem] flex-1">
           <Field label="Поиск">
             <div className="relative">
-              <IconSearch
+              <Search
                 size={16}
                 className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-faint"
               />
@@ -151,7 +151,7 @@ export default function StudentsPage() {
           <EmptyState
             title="Аккаунтов не найдено"
             description="Измените фильтры или создайте первый аккаунт студента"
-            icon={<IconUsers size={32} />}
+            icon={<Users size={32} />}
             action={
               <Button variant="primary" onClick={() => setCreateOpen(true)}>
                 Создать аккаунт
@@ -204,7 +204,7 @@ export default function StudentsPage() {
                           onClick={() => toggleBlock(user)}
                           title={user.status === "blocked" ? "Разблокировать" : "Заблокировать"}
                         >
-                          <IconKey size={16} />
+                          <Key size={16} />
                         </Button>
                         <Button
                           variant="ghost"
@@ -212,7 +212,7 @@ export default function StudentsPage() {
                           onClick={() => removeUser(user)}
                           title="Удалить"
                         >
-                          <IconTrash size={16} />
+                          <Trash2 size={16} />
                         </Button>
                       </div>
                     </td>

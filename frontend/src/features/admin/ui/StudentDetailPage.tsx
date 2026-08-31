@@ -27,7 +27,7 @@ import {
   Spinner,
   StatCard,
 } from "@/shared/ui";
-import { IconBook, IconChart, IconClock, IconKey, IconTrash } from "@/shared/ui/icons";
+import { Book, BarChart3, Clock, Key, Trash2 } from "lucide-react";
 import { useToast } from "@/shared/ui/ToastProvider";
 
 const STATUS_LABEL: Record<UserStatus, string> = {
@@ -144,7 +144,7 @@ export default function StudentDetailPage() {
             <Link to="/admin/students" className="btn btn-ghost">
               К списку
             </Link>
-            <Button icon={<IconKey size={18} />} onClick={issueNewPassword} loading={resetting}>
+            <Button icon={<Key size={18} />} onClick={issueNewPassword} loading={resetting}>
               Новый пароль
             </Button>
             {user.status === "blocked" ? (
@@ -179,25 +179,25 @@ export default function StudentDetailPage() {
           label="Прогресс"
           value={`${Math.round(summary.progress)}%`}
           hint={`${summary.lessonsCompleted} из ${summary.lessonsTotal} уроков`}
-          icon={<IconChart size={20} />}
+          icon={<BarChart3 size={20} />}
         />
         <StatCard
           label="Курсов"
           value={summary.courses}
           hint="Назначено студенту"
-          icon={<IconBook size={20} />}
+          icon={<Book size={20} />}
         />
         <StatCard
           label="Дней посещения"
           value={summary.daysVisited}
           hint="Всего за время обучения"
-          icon={<IconClock size={20} />}
+          icon={<Clock size={20} />}
         />
         <StatCard
           label="Времени на платформе"
           value={`${Math.floor(summary.minutesSpent / 60)} ч`}
           hint={`${summary.minutesSpent} минут суммарно`}
-          icon={<IconClock size={20} />}
+          icon={<Clock size={20} />}
         />
       </div>
 
@@ -205,7 +205,7 @@ export default function StudentDetailPage() {
         <Card className="p-[var(--pad)] lg:col-span-3">
           <h2 className="mb-4 text-base font-bold text-fg">Активность за 30 дней</h2>
           {chartData.length === 0 ? (
-            <EmptyState title="Студент ещё не заходил" icon={<IconClock size={32} />} />
+            <EmptyState title="Студент ещё не заходил" icon={<Clock size={32} />} />
           ) : (
             <div className="h-56">
               <ResponsiveContainer width="100%" height="100%">
@@ -303,7 +303,7 @@ export default function StudentDetailPage() {
                       onClick={() => removeCourse(enrollment.courseId)}
                       title="Снять курс"
                     >
-                      <IconTrash size={16} />
+                      <Trash2 size={16} />
                     </Button>
                   </div>
 
@@ -376,7 +376,7 @@ export default function StudentDetailPage() {
           </div>
 
           {attempts.length === 0 ? (
-            <EmptyState title="Попыток пока нет" icon={<IconChart size={32} />} />
+            <EmptyState title="Попыток пока нет" icon={<BarChart3 size={32} />} />
           ) : (
             <div className="max-h-80 overflow-y-auto">
               <table className="w-full text-sm">

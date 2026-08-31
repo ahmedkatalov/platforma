@@ -15,7 +15,7 @@ import { useGetMyCertificatesQuery } from "@/features/certificates/api/certifica
 import { useGetMyAttemptsQuery, useGetMyStatsQuery } from "@/shared/api/meApi";
 import type { Attempt } from "@/shared/types";
 import { Badge, Card, EmptyState, PageHeader, Progress, Select, Spinner, StatCard } from "@/shared/ui";
-import { IconChart, IconCheck, IconClock, IconFlame, IconTerminal } from "@/shared/ui/icons";
+import { BarChart3, Check, Clock, Flame, Terminal } from "lucide-react";
 
 const dayFmt = new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "short" });
 const stampFmt = new Intl.DateTimeFormat("ru-RU", {
@@ -75,25 +75,25 @@ export default function StatsPage() {
           label="Прогресс"
           value={`${Math.round(stats.summary.progress)}%`}
           hint={`${stats.summary.lessonsCompleted} из ${stats.summary.lessonsTotal} уроков`}
-          icon={<IconChart size={20} />}
+          icon={<BarChart3 size={20} />}
         />
         <StatCard
           label="Дней подряд"
           value={stats.streak}
           hint="Текущая серия"
-          icon={<IconFlame size={20} />}
+          icon={<Flame size={20} />}
         />
         <StatCard
           label="Дней посещения"
           value={stats.summary.daysVisited}
           hint="За всё время"
-          icon={<IconClock size={20} />}
+          icon={<Clock size={20} />}
         />
         <StatCard
           label="Время обучения"
           value={`${Math.floor(stats.summary.minutesSpent / 60)} ч`}
           hint={`${stats.summary.minutesSpent} минут`}
-          icon={<IconClock size={20} />}
+          icon={<Clock size={20} />}
         />
       </div>
 
@@ -103,7 +103,7 @@ export default function StatsPage() {
           <EmptyState
             title="Данных пока нет"
             description="Занимайтесь — и здесь появится ваша статистика"
-            icon={<IconChart size={32} />}
+            icon={<BarChart3 size={32} />}
           />
         ) : (
           <div className="h-64">
@@ -239,25 +239,25 @@ export default function StatsPage() {
           label="Попыток в квизах"
           value={stats.quiz.attempts}
           hint={`${stats.quiz.passed} успешных`}
-          icon={<IconCheck size={20} />}
+          icon={<Check size={20} />}
         />
         <StatCard
           label="Средний балл"
           value={`${Math.round(stats.quiz.averageScore)}%`}
           hint={`лучший результат ${Math.round(stats.quiz.bestScore)}%`}
-          icon={<IconChart size={20} />}
+          icon={<BarChart3 size={20} />}
         />
         <StatCard
           label="Точность ответов"
           value={`${Math.round(stats.quiz.accuracy)}%`}
           hint={`${stats.quiz.answeredCorrect} из ${stats.quiz.answeredTotal}`}
-          icon={<IconCheck size={20} />}
+          icon={<Check size={20} />}
         />
         <StatCard
           label="Скорость ответа"
           value={`${stats.quiz.avgSecondsPerQuestion.toFixed(1)} c`}
           hint="в среднем на вопрос"
-          icon={<IconClock size={20} />}
+          icon={<Clock size={20} />}
         />
       </div>
 
@@ -302,7 +302,7 @@ export default function StatsPage() {
           <EmptyState
             title="Попыток пока нет"
             description="Пройдите квиз или тренажёр — результаты появятся здесь"
-            icon={<IconTerminal size={32} />}
+            icon={<Terminal size={32} />}
           />
         ) : (
           <div className="overflow-x-auto">

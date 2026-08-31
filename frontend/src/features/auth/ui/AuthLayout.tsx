@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 
 import { useTheme } from "@/shared/theme/ThemeProvider";
-import { IconMoon, IconSun, IconTerminal } from "@/shared/ui/icons";
+import { Moon, Sun, Terminal } from "lucide-react";
 
 // Общая обёртка экранов входа: логотип, стеклянная карточка, переключатель темы.
 export default function AuthLayout({
@@ -25,7 +25,7 @@ export default function AuthLayout({
         onClick={toggleMode}
         aria-label="Сменить тему"
       >
-        {mode === "dark" ? <IconSun size={18} /> : <IconMoon size={18} />}
+        {mode === "dark" ? <Sun size={18} /> : <Moon size={18} />}
       </button>
 
       <div className="w-full max-w-md">
@@ -34,7 +34,7 @@ export default function AuthLayout({
             className="grid h-11 w-11 place-items-center rounded-[var(--radius-md)] text-accent-fg"
             style={{ background: "var(--gradient)" }}
           >
-            <IconTerminal size={24} />
+            <Terminal size={24} />
           </span>
           <span className="text-xl font-extrabold tracking-tight">
             DevOps <span className="gradient-text">Platform</span>

@@ -2,7 +2,7 @@ import { useState, type ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
-import { IconCheck } from "@/shared/ui/icons";
+import { Check } from "lucide-react";
 
 // Якорь для оглавления: «Права доступа» → prava-dostupa-подобный стабильный id.
 export function headingId(text: string): string {
@@ -51,7 +51,7 @@ function CodeBlock({ children }: { children: ReactNode }) {
       >
         {copied ? (
           <span className="flex items-center gap-1">
-            <IconCheck size={11} /> скопировано
+            <Check size={11} /> скопировано
           </span>
         ) : (
           "копировать"

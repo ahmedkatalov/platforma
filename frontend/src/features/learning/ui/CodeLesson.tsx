@@ -5,7 +5,7 @@ import { apiErrorMessage } from "@/shared/api/baseApi";
 import type {
   Certificate, CodeCheckResult, CodeContent, LessonProgress } from "@/shared/types";
 import { Badge, Button, Card, Progress } from "@/shared/ui";
-import { IconCheck, IconClose } from "@/shared/ui/icons";
+import { Check, X } from "lucide-react";
 import { useToast } from "@/shared/ui/ToastProvider";
 
 import CodeEditor from "./CodeEditor";
@@ -125,7 +125,7 @@ export default function CodeLesson({
                     }`}
                   >
                     <span className={check.ok ? "text-success" : "text-faint"}>
-                      {check.ok ? <IconCheck size={16} /> : <IconClose size={16} />}
+                      {check.ok ? <Check size={16} /> : <X size={16} />}
                     </span>
                     <span className={check.ok ? "text-fg" : undefined}>{check.message}</span>
                   </li>

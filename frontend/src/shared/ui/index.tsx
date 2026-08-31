@@ -10,7 +10,7 @@ import {
   type TextareaHTMLAttributes,
 } from "react";
 
-import { IconClose } from "./icons";
+import { X } from "lucide-react";
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: "primary" | "secondary" | "ghost" | "danger";
@@ -172,7 +172,7 @@ export function Modal({
         <div className="flex items-center justify-between border-b border-line px-5 py-4">
           <h2 className="text-lg font-bold text-fg">{title}</h2>
           <button className="btn btn-ghost h-8 w-8 !p-0" onClick={onClose} aria-label="Закрыть">
-            <IconClose size={18} />
+            <X size={18} />
           </button>
         </div>
         <div className="flex-1 overflow-y-auto px-5 py-4">{children}</div>

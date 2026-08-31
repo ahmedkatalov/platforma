@@ -8,7 +8,7 @@ import {
 import { apiErrorMessage } from "@/shared/api/baseApi";
 import { downloadFile } from "@/shared/lib/download";
 import { Badge, Button, Card, EmptyState, Input, PageHeader, Spinner } from "@/shared/ui";
-import { IconCheck, IconClose, IconSearch, IconShield } from "@/shared/ui/icons";
+import { Check, X, Search, Shield } from "lucide-react";
 import { useToast } from "@/shared/ui/ToastProvider";
 
 const dateFmt = new Intl.DateTimeFormat("ru-RU", {
@@ -68,7 +68,7 @@ export default function CertificatesPage() {
 
       <Card className="mb-[var(--gap)] p-[var(--pad)]">
         <div className="relative">
-          <IconSearch
+          <Search
             size={16}
             className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-faint"
           />
@@ -90,7 +90,7 @@ export default function CertificatesPage() {
           <EmptyState
             title="Сертификатов пока нет"
             description="Первый сертификат появится, когда студент пройдёт курс целиком"
-            icon={<IconShield size={32} />}
+            icon={<Shield size={32} />}
           />
         ) : (
           <div className="overflow-x-auto">
@@ -145,7 +145,7 @@ export default function CertificatesPage() {
                           onClick={() => toggle(cert.id, Boolean(cert.revokedAt))}
                           title={cert.revokedAt ? "Восстановить" : "Отозвать"}
                         >
-                          {cert.revokedAt ? <IconCheck size={16} /> : <IconClose size={16} />}
+                          {cert.revokedAt ? <Check size={16} /> : <X size={16} />}
                         </Button>
                       </div>
                     </td>

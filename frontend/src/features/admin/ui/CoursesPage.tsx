@@ -24,7 +24,7 @@ import {
   Spinner,
   Textarea,
 } from "@/shared/ui";
-import { IconBook, IconChevron, IconEdit, IconPlus, IconTrash } from "@/shared/ui/icons";
+import { Book, ChevronRight, Edit2, Plus, Trash2 } from "lucide-react";
 import { useToast } from "@/shared/ui/ToastProvider";
 
 const STATUS_LABEL: Record<CourseStatus, string> = {
@@ -147,12 +147,12 @@ export default function CoursesPage() {
       });
       if (!res.ok) throw new Error();
       const url = URL.createObjectURL(await res.blob());
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${course.slug}.course.json`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${course.slug}.course.json`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
       URL.revokeObjectURL(url);
     } catch {
       toast.error("Не удалось скачать курс");
@@ -175,13 +175,13 @@ export default function CoursesPage() {
           <div className="flex gap-2">
             <Button
               variant="secondary"
-              icon={<IconBook size={18} />}
+              icon={<Book size={18} />}
               loading={importing}
               onClick={() => fileRef.current?.click()}
             >
               Загрузить из файла
             </Button>
-            <Button variant="primary" icon={<IconPlus size={18} />} onClick={() => setCreateOpen(true)}>
+            <Button variant="primary" icon={<Plus size={18} />} onClick={() => setCreateOpen(true)}>
               Новый курс
             </Button>
           </div>
@@ -197,7 +197,7 @@ export default function CoursesPage() {
           <EmptyState
             title="Курсов пока нет"
             description="Создайте курс по DevOps и наполните его модулями, квизами и практикой в терминале"
-            icon={<IconBook size={32} />}
+            icon={<Book size={32} />}
             action={
               <Button variant="primary" onClick={() => setCreateOpen(true)}>
                 Создать курс
@@ -249,7 +249,7 @@ export default function CoursesPage() {
 
               <div className="mt-auto flex gap-2">
                 <Link to={`/admin/courses/${course.id}`} className="btn btn-primary flex-1">
-                  <IconEdit size={16} />
+                  <Edit2 size={16} />
                   Редактировать
                 </Link>
                 <Link
@@ -257,14 +257,14 @@ export default function CoursesPage() {
                   className="btn btn-secondary"
                   title="Открыть курс глазами студента"
                 >
-                  <IconBook size={16} />
+                  <Book size={16} />
                 </Link>
                 <Button
                   variant="ghost"
                   onClick={() => exportCourse(course)}
                   title="Скачать курс файлом (для загрузки в другом месте)"
                 >
-                  <IconChevron size={16} className="rotate-90" />
+                  <ChevronRight size={16} className="rotate-90" />
                 </Button>
                 <Button
                   variant="ghost"
@@ -272,7 +272,7 @@ export default function CoursesPage() {
                   onClick={() => remove(course)}
                   title="Удалить курс"
                 >
-                  <IconTrash size={16} />
+                  <Trash2 size={16} />
                 </Button>
               </div>
             </Card>

@@ -1,7 +1,17 @@
 // Service worker платформы. Задача: сделать приложение устанавливаемым
 // и дать базовый офлайн-режим, НЕ ломая обновления и API.
-const CACHE = "platforma-v1";
-const SHELL = ["/", "/index.html", "/manifest.webmanifest", "/pwa-192.png", "/apple-touch-icon.png"];
+const CACHE = "platforma-v2";
+const SHELL = [
+  "/",
+  "/index.html",
+  "/manifest.webmanifest",
+  "/favicon.svg",
+  "/favicon-48.png",
+  "/pwa-192.png",
+  "/pwa-512.png",
+  "/pwa-maskable-512.png",
+  "/apple-touch-icon.png",
+];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(

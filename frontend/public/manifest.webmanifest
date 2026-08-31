@@ -1,7 +1,7 @@
 {
   "name": "DevOps Platform — обучение",
   "short_name": "DevOps",
-  "description": "Платформа обучения DevOps: курсы, квизы, тренажёр терминала и практика прямо в браузере.",
+  "description": "Обучающая платформа по DevOps: Linux, Docker, CI/CD, Kubernetes, квизы и практика в браузере.",
   "lang": "ru",
   "dir": "ltr",
   "start_url": "/?source=pwa",

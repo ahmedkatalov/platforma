@@ -3,7 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { useVerifyCertificateQuery } from "@/features/certificates/api/certificatesApi";
 import { useTheme } from "@/shared/theme/ThemeProvider";
 import { Badge, Button, Card, Spinner } from "@/shared/ui";
-import { IconCheck, IconClose, IconMoon, IconSun, IconTerminal } from "@/shared/ui/icons";
+import { Check, X, Moon, Sun, Terminal } from "lucide-react";
 
 const dateFmt = new Intl.DateTimeFormat("ru-RU", {
   day: "numeric",
@@ -36,7 +36,7 @@ export default function CertificatePage() {
         onClick={toggleMode}
         aria-label="Сменить тему"
       >
-        {mode === "dark" ? <IconSun size={18} /> : <IconMoon size={18} />}
+        {mode === "dark" ? <Sun size={18} /> : <Moon size={18} />}
       </button>
 
       <div className="mx-auto max-w-3xl">
@@ -45,7 +45,7 @@ export default function CertificatePage() {
             className="grid h-10 w-10 place-items-center rounded-[var(--radius-md)] text-accent-fg"
             style={{ background: "var(--gradient)" }}
           >
-            <IconTerminal size={22} />
+            <Terminal size={22} />
           </span>
           <span className="text-lg font-extrabold tracking-tight">
             DevOps <span className="gradient-text">Platform</span>
@@ -55,7 +55,7 @@ export default function CertificatePage() {
         {!cert ? (
           <Card className="p-8 text-center">
             <span className="mx-auto mb-4 grid h-14 w-14 place-items-center rounded-full bg-[var(--danger-soft)] text-danger">
-              <IconClose size={28} />
+              <X size={28} />
             </span>
             <h1 className="text-xl font-bold text-fg">Сертификат не найден</h1>
             <p className="mt-2 text-sm text-muted">
@@ -112,11 +112,11 @@ export default function CertificatePage() {
 
                   {valid ? (
                     <Badge tone="success">
-                      <IconCheck size={12} /> Сертификат действителен
+                      <Check size={12} /> Сертификат действителен
                     </Badge>
                   ) : (
                     <Badge tone="danger">
-                      <IconClose size={12} /> {data?.message ?? "Сертификат отозван"}
+                      <X size={12} /> {data?.message ?? "Сертификат отозван"}
                     </Badge>
                   )}
                 </div>

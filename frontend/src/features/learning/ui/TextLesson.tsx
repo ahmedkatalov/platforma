@@ -5,7 +5,7 @@ import { apiErrorMessage } from "@/shared/api/baseApi";
 import type {
   Certificate, LessonProgress, TextContent } from "@/shared/types";
 import { Button, Card } from "@/shared/ui";
-import { IconCheck } from "@/shared/ui/icons";
+import { Check } from "lucide-react";
 import { useToast } from "@/shared/ui/ToastProvider";
 
 import LessonResources from "./LessonResources";
@@ -56,7 +56,7 @@ export default function TextLesson({
   return (
     <>
       <Card className="p-[var(--pad)] sm:p-8">
-        <div className="mx-auto max-w-[46rem]">
+        <div className="mx-auto">
           {headings.length >= 4 && (
             <nav className="mb-6 rounded-[var(--radius-md)] border border-line bg-surface-2 p-4">
               <p className="mb-2 text-xs font-bold uppercase tracking-wide text-faint">
@@ -92,7 +92,7 @@ export default function TextLesson({
         </p>
         <Button
           variant={done ? "secondary" : "primary"}
-          icon={done ? <IconCheck size={18} /> : undefined}
+          icon={done ? <Check size={18} /> : undefined}
           onClick={markDone}
           loading={isLoading}
           disabled={done}

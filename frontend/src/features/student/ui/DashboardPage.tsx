@@ -8,7 +8,7 @@ import {
 import { useGetMyStatsQuery } from "@/shared/api/meApi";
 import type { LessonKind, LessonProgress } from "@/shared/types";
 import { Badge, Card, EmptyState, PageHeader, Progress, Spinner, StatCard } from "@/shared/ui";
-import { IconBook, IconChart, IconClock, IconFlame, IconTerminal } from "@/shared/ui/icons";
+import { Book, BarChart3, Clock, Flame, Terminal, CheckCircle } from "lucide-react";
 
 const KIND_LABEL: Record<LessonKind, string> = {
   text: "Теория",
@@ -54,7 +54,7 @@ export default function DashboardPage() {
         subtitle="Ваш прогресс по курсам DevOps"
         actions={
           <Link to="/learn/courses" className="btn btn-primary">
-            <IconBook size={18} />
+            <Book size={18} />
             К обучению
           </Link>
         }
@@ -65,25 +65,25 @@ export default function DashboardPage() {
           label="Прогресс"
           value={`${Math.round(stats.summary.progress)}%`}
           hint={`${stats.summary.lessonsCompleted} из ${stats.summary.lessonsTotal} уроков`}
-          icon={<IconChart size={20} />}
+          icon={<BarChart3 size={20} />}
         />
         <StatCard
           label="Средний балл"
           value={stats.quiz.attempts > 0 ? `${Math.round(stats.quiz.averageScore)}%` : "—"}
           hint={`${stats.quiz.attempts} попыток в квизах`}
-          icon={<IconCheckLike />}
+          icon={<CheckCircle size={20} />}
         />
         <StatCard
           label="Дней подряд"
           value={stats.streak}
           hint={`${stats.summary.daysVisited} дней всего`}
-          icon={<IconFlame size={20} />}
+          icon={<Flame size={20} />}
         />
         <StatCard
           label="Время обучения"
           value={`${Math.floor(stats.summary.minutesSpent / 60)} ч`}
           hint={`${stats.summary.minutesSpent} минут`}
-          icon={<IconClock size={20} />}
+          icon={<Clock size={20} />}
         />
       </div>
 
@@ -103,7 +103,7 @@ export default function DashboardPage() {
             to={`/learn/courses/${activeCourse.course.slug}/lessons/${nextLesson.id}`}
             className="btn btn-primary"
           >
-            <IconTerminal size={18} />
+            <Terminal size={18} />
             Открыть урок
           </Link>
         </Card>
@@ -121,7 +121,7 @@ export default function DashboardPage() {
           <EmptyState
             title="Курсы ещё не назначены"
             description="Как только администратор откроет вам курс, он появится здесь"
-            icon={<IconBook size={32} />}
+            icon={<Book size={32} />}
             action={
               <Link to="/learn/courses" className="btn btn-secondary">
                 Посмотреть каталог
@@ -178,15 +178,5 @@ export default function DashboardPage() {
         )}
       </Card>
     </>
-  );
-}
-
-// Небольшая иконка «галочка в круге» для карточки со средним баллом.
-function IconCheckLike() {
-  return (
-    <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75}>
-      <circle cx="12" cy="12" r="9" />
-      <path d="M8 12.5l2.5 2.5L16 9.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
   );
 }
