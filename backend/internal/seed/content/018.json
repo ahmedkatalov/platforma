@@ -682,9 +682,9 @@
     ],
     "resources": [
      {
-      "title": "roadmap.sh: DevOps",
-      "url": "https://roadmap.sh/devops",
-      "note": "Карта навыков: как инструменты из проектов складываются в общий путь."
+      "title": "CI/CD: непрерывная доставка",
+      "url": "https://ru.wikipedia.org/wiki/CI/CD",
+      "note": "Как этапы сборки, тестов и деплоя складываются в единый конвейер доставки."
      },
      {
       "title": "Prometheus: обзор",

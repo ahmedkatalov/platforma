@@ -16,9 +16,9 @@
       "note": "Как тестирование связано с надёжностью систем (на английском)."
      },
      {
-      "title": "DevOps Roadmap",
-      "url": "https://roadmap.sh/devops",
-      "note": "Общая карта навыков DevOps, включая тестирование и CI/CD."
+      "title": "Martin Fowler — Пирамида тестов",
+      "url": "https://martinfowler.com/bliki/TestPyramid.html",
+      "note": "Классическая статья о пирамиде тестирования и балансе трёх уровней тестов."
      }
     ]
    }
@@ -68,9 +68,9 @@
     "solution": "#!/usr/bin/env bash\nset -euo pipefail\n\n# Шаг 1 (lint): линтер читает код и ищет ошибки БЕЗ запуска программы\necho \"== lint ==\"\nshellcheck app.sh\n\n# Функция, которую тестируем\ngreet() {\n  echo \"Привет, $1\"\n}\n\n# Шаг 2 (test): сравниваем фактический результат с ожидаемым\necho \"== test ==\"\ngot=\"$(greet Мир)\"\nwant=\"Привет, Мир\"\nif [ \"$got\" = \"$want\" ]; then\n  echo \"OK: greet\"\nelse\n  echo \"FAIL: ждали '$want', получили '$got'\"\n  exit 1\nfi\n\necho \"Все проверки прошли\"\n",
     "resources": [
      {
-      "title": "DevOps Roadmap",
-      "url": "https://roadmap.sh/devops",
-      "note": "Где в общей картине стоят линтеры и тесты."
+      "title": "Википедия — Линтер",
+      "url": "https://ru.wikipedia.org/wiki/Lint",
+      "note": "Что такое линтер и как статическая проверка ловит ошибки до запуска кода."
      },
      {
       "title": "Google SRE Book — Testing for Reliability",
@@ -303,9 +303,9 @@
       "note": "Понятное объяснение CI, Delivery и Deployment (на английском)."
      },
      {
-      "title": "DevOps Roadmap",
-      "url": "https://roadmap.sh/devops",
-      "note": "Где CI/CD стоит в общей картине DevOps."
+      "title": "Википедия — Непрерывная интеграция",
+      "url": "https://ru.wikipedia.org/wiki/Непрерывная_интеграция",
+      "note": "Идея CI: зачем автоматически собирать и проверять каждый коммит."
      }
     ]
    }
@@ -324,9 +324,9 @@
       "note": "Официальное определение pipeline, stage, job, step, agent и trigger (на английском)."
      },
      {
-      "title": "DevOps Roadmap",
-      "url": "https://roadmap.sh/devops",
-      "note": "Общая карта: где стоят конвейеры и артефакты."
+      "title": "GitLab Docs — CI/CD pipelines",
+      "url": "https://docs.gitlab.com/ci/pipelines/",
+      "note": "Устройство конвейера: pipeline, stage, job и артефакты на практике GitLab."
      }
     ]
    }
@@ -478,9 +478,9 @@
       "note": "Проверить определения pipeline, stage, job, step, agent, trigger."
      },
      {
-      "title": "DevOps Roadmap",
-      "url": "https://roadmap.sh/devops",
-      "note": "Общая карта CI/CD для повторения."
+      "title": "Википедия — CI/CD",
+      "url": "https://ru.wikipedia.org/wiki/CI/CD",
+      "note": "Обзор понятий CI/CD на русском для повторения перед квизом."
      }
     ]
    }
@@ -1480,9 +1480,9 @@
       "note": "Повторить синтаксис workflow и понятия job/step."
      },
      {
-      "title": "DevOps roadmap",
-      "url": "https://roadmap.sh/devops",
-      "note": "Обзор всего пути CI/CD одним списком."
+      "title": "Martin Fowler — Continuous Delivery",
+      "url": "https://martinfowler.com/bliki/ContinuousDelivery.html",
+      "note": "Непрерывная поставка: конвейер до продакшена, откаты и обратная связь."
      }
     ]
    }

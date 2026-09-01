@@ -99,9 +99,9 @@
       "note": "Официальный справочник по bash: read, переменные, подстановка"
      },
      {
-      "title": "DevOps Roadmap",
-      "url": "https://roadmap.sh/devops",
-      "note": "Где скриптинг стоит в карте навыков DevOps"
+      "title": "Bash-скрипты: параметры и ключи командной строки",
+      "url": "https://habr.com/ru/companies/ruvds/articles/326328/",
+      "note": "Как читать аргументы и ввод в bash: позиционные параметры $1..$n, ключи, $@ и $*."
      }
     ]
    }
@@ -257,9 +257,9 @@
       "note": "Разделы про переменные, параметры и подстановку"
      },
      {
-      "title": "DevOps Roadmap",
-      "url": "https://roadmap.sh/devops",
-      "note": "Скриптинг как базовый навык DevOps"
+      "title": "Введение в bash-скрипты (Metanit)",
+      "url": "https://metanit.com/os/linux/12.1.php",
+      "note": "Основы синтаксиса bash: shebang, переменные, запуск и структура скрипта."
      }
     ]
    }

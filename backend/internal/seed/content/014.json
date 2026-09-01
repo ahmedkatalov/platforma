@@ -632,9 +632,9 @@
       "note": "Официальная документация по всем темам главы."
      },
      {
-      "title": "DevOps roadmap",
-      "url": "https://roadmap.sh/devops",
-      "note": "Где Ansible стоит в общей картине DevOps."
+      "title": "Ansible: обзор (Википедия)",
+      "url": "https://ru.wikipedia.org/wiki/Ansible",
+      "note": "Что такое Ansible и из чего он состоит — краткое повторение перед итоговым квизом."
      }
     ]
    }
@@ -658,9 +658,9 @@
       "note": "Освежить роль Ansible в связке."
      },
      {
-      "title": "DevOps roadmap",
-      "url": "https://roadmap.sh/devops",
-      "note": "Как облако, IaC и настройка укладываются в общий путь."
+      "title": "Инфраструктура как код (Википедия)",
+      "url": "https://ru.wikipedia.org/wiki/Инфраструктура_как_код",
+      "note": "Идея IaC, которая объединяет Terraform и Ansible в единый подход к инфраструктуре."
      }
     ]
    }
