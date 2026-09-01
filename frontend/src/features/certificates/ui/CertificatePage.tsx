@@ -48,7 +48,7 @@ export default function CertificatePage() {
             <Terminal size={22} />
           </span>
           <span className="text-lg font-extrabold tracking-tight">
-            DevOps <span className="gradient-text">Platform</span>
+            Okvion <span className="gradient-text">Learning</span>
           </span>
         </Link>
 

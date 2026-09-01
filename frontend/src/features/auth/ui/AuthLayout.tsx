@@ -37,7 +37,7 @@ export default function AuthLayout({
             <Terminal size={24} />
           </span>
           <span className="text-xl font-extrabold tracking-tight">
-            DevOps <span className="gradient-text">Platform</span>
+            Okvion <span className="gradient-text">Learning</span>
           </span>
         </Link>
 
