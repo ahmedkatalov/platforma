@@ -24,6 +24,7 @@ import {
   Sun,
   Users,
   Book,
+  TerminalSquare,
 } from "lucide-react";
 import Logo from "@/shared/images/svg/logo.svg";
 
@@ -43,6 +44,7 @@ const ADMIN_NAV: NavItem[] = [
 const STUDENT_NAV: NavItem[] = [
   { to: "/learn", label: "Главная", icon: <LayoutGrid size={18} />, end: true },
   { to: "/learn/courses", label: "Мои курсы", icon: <Book size={18} /> },
+  { to: "/learn/sandbox", label: "Песочница", icon: <TerminalSquare size={18} /> },
   { to: "/learn/quizzes", label: "Квизы", icon: <Check size={18} /> },
   { to: "/learn/notes", label: "Заметки", icon: <Edit2 size={18} /> },
   { to: "/learn/stats", label: "Статистика", icon: <BarChart3 size={18} /> },

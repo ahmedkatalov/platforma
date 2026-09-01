@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 
 import { sessionEnded, userRefreshed } from "@/features/auth/authSlice";
@@ -21,6 +21,8 @@ import ProfilePage from "@/features/student/ui/ProfilePage";
 import NotesPage from "@/features/student/ui/NotesPage";
 import QuizzesPage from "@/features/student/ui/QuizzesPage";
 import StudentStatsPage from "@/features/student/ui/StatsPage";
+// Песочница тянет тяжёлый движок Linux — грузим её отдельным чанком по требованию.
+const SandboxPage = lazy(() => import("@/features/learning/ui/SandboxPage"));
 import { useGetMeQuery } from "@/shared/api/meApi";
 import { tokenStorage } from "@/shared/api/tokenStorage";
 import { Spinner } from "@/shared/ui";
@@ -124,6 +126,14 @@ export default function App() {
         <Route path="courses/:slug" element={<StudentCoursePage />} />
         <Route path="courses/:slug/lessons/:lessonId" element={<LessonPage />} />
         <Route path="quizzes" element={<QuizzesPage />} />
+        <Route
+          path="sandbox"
+          element={
+            <Suspense fallback={<FullScreenLoader />}>
+              <SandboxPage />
+            </Suspense>
+          }
+        />
         <Route path="notes" element={<NotesPage />} />
         <Route path="stats" element={<StudentStatsPage />} />
         <Route path="profile" element={<ProfilePage />} />
