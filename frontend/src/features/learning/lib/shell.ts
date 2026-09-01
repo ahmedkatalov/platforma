@@ -550,7 +550,7 @@ function runKubectl(args: string[]): string {
 
 const HELP = [
   "Доступные команды учебного терминала:",
-  "  файлы:      pwd, ls, cd, cat, head, tail, grep, find, echo, sort, uniq, wc",
+  "  файлы:      pwd, ls, cd, cat, head, tail, grep, sed, find, echo, sort, uniq, wc",
   "              mkdir, touch, rm, cp, mv, chmod, chown, du",
   "  система:    ps, whoami, uname, df, free, uptime, date, systemctl, journalctl",
   "  сеть:       curl, wget, dig, ss, ping, nginx",
@@ -760,6 +760,31 @@ function executeSingle(state: ShellState, input: string): CommandResult {
         return node.content.trimEnd();
       });
       return { output: outputs.join("\n"), state };
+    }
+
+    case "sed": {
+      // Учебные формы: sed 's/old/new/g' файл  и  sed '/шаблон/d' файл.
+      const script = operands[0] ?? "";
+      const target = operands[1];
+      if (!target) return { output: "sed: не указан файл", state };
+      const segments = resolve(state, target);
+      const node = segments && nodeAt(state, segments);
+      if (!node || node.type !== "file") {
+        return { output: `sed: ${target}: нет такого файла или каталога`, state };
+      }
+      const lines = node.content.replace(/\n$/, "").split("\n");
+      const sub = script.match(/^s\/(.*?)\/(.*?)\/(g?)$/);
+      const del = script.match(/^\/(.*)\/d$/);
+      if (sub) {
+        const [, from, to, global] = sub;
+        const out = lines.map((row) => (global ? row.split(from).join(to) : row.replace(from, to)));
+        return { output: out.join("\n"), state };
+      }
+      if (del) {
+        const [, pat] = del;
+        return { output: lines.filter((row) => !row.includes(pat)).join("\n"), state };
+      }
+      return { output: "sed: поддерживаются формы 's/старое/новое/g' и '/шаблон/d'", state };
     }
 
     case "head":
