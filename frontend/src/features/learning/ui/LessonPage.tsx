@@ -291,29 +291,41 @@ export default function LessonPage() {
                     />
                   </button>
 
-                  {expanded && (
-                    <div id={`module-${module.id}`} className="space-y-2 px-1 pb-1.5">
-                      {themes.map((theme, ti) => (
-                        <div key={theme.key} className="rounded-[var(--radius-md)] bg-surface-2/40 p-1.5">
-                          <p className="truncate px-1.5 pb-1 text-[16px] font-semibold text-fg">
-                            <span className="text-faint">{ti + 1}. </span>
-                            {theme.title}
-                          </p>
-                          <ul className="space-y-0.5">
-                            {theme.pages.map((page) => renderRow(page, false))}
-                            {theme.quiz && (
-                              <>
-                                <li className="px-2 pt-0.5 text-[10px] font-bold uppercase tracking-wide text-accent">
-                                  Проверка темы
-                                </li>
-                                {renderRow(theme.quiz, true)}
-                              </>
-                            )}
-                          </ul>
-                        </div>
-                      ))}
+                  <div
+                    id={`module-${module.id}`}
+                    aria-hidden={!expanded}
+                    className={`grid transition-[grid-template-rows] duration-200 ease-out ${
+                      expanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+                    }`}
+                  >
+                    <div
+                      className={`overflow-hidden transition-opacity duration-200 ${
+                        expanded ? "opacity-100" : "opacity-0"
+                      }`}
+                    >
+                      <div className="space-y-2 px-1 pb-1.5">
+                        {themes.map((theme, ti) => (
+                          <div key={theme.key} className="rounded-[var(--radius-md)] bg-surface-2/40 p-1.5">
+                            <p className="truncate px-1.5 pb-1 text-[16px] font-semibold text-fg">
+                              <span className="text-faint">{ti + 1}. </span>
+                              {theme.title}
+                            </p>
+                            <ul className="space-y-0.5">
+                              {theme.pages.map((page) => renderRow(page, false))}
+                              {theme.quiz && (
+                                <>
+                                  <li className="px-2 pt-0.5 text-[10px] font-bold uppercase tracking-wide text-accent">
+                                    Проверка темы
+                                  </li>
+                                  {renderRow(theme.quiz, true)}
+                                </>
+                              )}
+                            </ul>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  )}
+                  </div>
                 </section>
               );
             })}
