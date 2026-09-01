@@ -213,6 +213,8 @@ export type TerminalTask = {
   id: string;
   prompt: string;
   hint?: string;
+  /** Прогрессивные подсказки: концепт → синтаксис → команда (открываются по одной). */
+  hints?: string[];
   success?: string;
 };
 

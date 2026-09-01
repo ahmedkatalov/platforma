@@ -287,6 +287,7 @@ type TerminalTask struct {
 	Expected []string `json:"expected"`          // допустимые команды
 	Pattern  string   `json:"pattern,omitempty"` // либо регулярное выражение
 	Hint     string   `json:"hint,omitempty"`
+	Hints    []string `json:"hints,omitempty"` // прогрессивные подсказки: концепт → синтаксис → команда
 	Success  string   `json:"success,omitempty"`
 }
 
@@ -298,6 +299,7 @@ func (t *TerminalTask) UnmarshalJSON(data []byte) error {
 		Expected json.RawMessage `json:"expected"`
 		Pattern  string          `json:"pattern"`
 		Hint     string          `json:"hint"`
+		Hints    []string        `json:"hints"`
 		Success  string          `json:"success"`
 	}
 
@@ -310,6 +312,7 @@ func (t *TerminalTask) UnmarshalJSON(data []byte) error {
 	t.Prompt = raw.Prompt
 	t.Pattern = raw.Pattern
 	t.Hint = raw.Hint
+	t.Hints = raw.Hints
 	t.Success = raw.Success
 	t.Expected = nil
 

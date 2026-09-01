@@ -19,6 +19,19 @@ import Markdown from "./Markdown";
 
 type Line = { kind: "input" | "output" | "note"; text: string };
 
+// Рендер подсказки: `код` в обратных кавычках — моноширинной плашкой.
+function renderHint(text: string) {
+  return text.split(/`([^`]+)`/g).map((part, i) =>
+    i % 2 === 1 ? (
+      <code key={i} className="rounded bg-surface-solid px-1 font-mono text-accent">
+        {part}
+      </code>
+    ) : (
+      part
+    ),
+  );
+}
+
 // Тренажёр терминала: команды выполняет учебный эмулятор, а правильность
 // решения задания подтверждает сервер.
 export default function TerminalLesson({
@@ -46,7 +59,7 @@ export default function TerminalLesson({
   const [solved, setSolved] = useState<Set<string>>(
     () => new Set(tasks.filter((t) => t.completedAt).map((t) => t.taskId)),
   );
-  const [hintShown, setHintShown] = useState<Record<string, boolean>>({});
+  const [hintLevel, setHintLevel] = useState<Record<string, number>>({});
 
   const [checkTerminal] = useCheckTerminalMutation();
   const toast = useToast();
@@ -106,7 +119,7 @@ export default function TerminalLesson({
         id: lessonId,
         taskId: current.id,
         command,
-        usedHint: Boolean(hintShown[current.id]),
+        usedHint: Boolean(hintLevel[current.id]),
         seconds,
       }).unwrap();
 
@@ -262,22 +275,52 @@ export default function TerminalLesson({
                     </p>
                   </div>
 
-                  {active && task.hint && (
-                    <div className="mt-2">
-                      {hintShown[task.id] ? (
-                        <p className="rounded-[var(--radius-sm)] bg-surface-2 px-2.5 py-1.5 text-xs text-muted">
-                          Подсказка: {task.hint}
-                        </p>
-                      ) : (
-                        <button
-                          className="text-xs font-semibold text-accent hover:underline"
-                          onClick={() => setHintShown((c) => ({ ...c, [task.id]: true }))}
-                        >
-                          Показать подсказку
-                        </button>
-                      )}
-                    </div>
-                  )}
+                  {active &&
+                    (() => {
+                      const levels =
+                        task.hints && task.hints.length
+                          ? task.hints
+                          : task.hint
+                            ? [task.hint]
+                            : [];
+                      if (!levels.length) return null;
+                      const shown = hintLevel[task.id] ?? 0;
+                      const isLast = (i: number) => i === levels.length - 1 && levels.length > 1;
+                      return (
+                        <div className="mt-2 space-y-1.5">
+                          {levels.slice(0, shown).map((h, hi) => (
+                            <p
+                              key={hi}
+                              className="rounded-[var(--radius-sm)] bg-surface-2 px-2.5 py-1.5 text-xs text-muted"
+                            >
+                              <span className="font-semibold text-faint">
+                                {isLast(hi) ? "Команда" : `Подсказка ${hi + 1}`}:{" "}
+                              </span>
+                              {renderHint(h)}
+                            </p>
+                          ))}
+                          {shown < levels.length && (
+                            <button
+                              className="text-xs font-semibold text-accent hover:underline"
+                              onClick={() =>
+                                setHintLevel((c) => ({ ...c, [task.id]: shown + 1 }))
+                              }
+                            >
+                              {shown === 0
+                                ? "Показать подсказку"
+                                : isLast(shown)
+                                  ? "Показать команду"
+                                  : "Ещё подсказку"}
+                              {levels.length > 1 && (
+                                <span className="ml-1 text-faint">
+                                  ({shown}/{levels.length})
+                                </span>
+                              )}
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })()}
                 </li>
               );
             })}
