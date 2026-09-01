@@ -5,7 +5,10 @@ import { useAppDispatch } from "@/app/store";
 import { useLoginMutation } from "@/features/auth/api/authApi";
 import { sessionStarted } from "@/features/auth/authSlice";
 import { apiErrorMessage } from "@/shared/api/baseApi";
+import { useGetPublicContactsQuery } from "@/shared/api/meApi";
 import { Button, Field, Input } from "@/shared/ui";
+import { ContactLinks } from "@/shared/ui/ContactLinks";
+import { hasAnyContact } from "@/shared/lib/contacts";
 
 import AuthLayout from "./AuthLayout";
 
@@ -17,6 +20,9 @@ export default function LoginPage() {
   const [login, { isLoading }] = useLoginMutation();
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
+  const { data: contactsData } = useGetPublicContactsQuery();
+  const contacts = contactsData?.contacts;
+  const showContacts = Boolean(contacts?.showOnLogin) && hasAnyContact(contacts);
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -35,6 +41,14 @@ export default function LoginPage() {
     <AuthLayout
       title="Вход на платформу"
       subtitle="Введите почту и пароль, выданные администратором"
+      footer={
+        showContacts ? (
+          <div className="space-y-2">
+            <p className="text-xs text-faint">Нет доступа? Напишите нам:</p>
+            <ContactLinks contacts={contacts} className="flex flex-wrap justify-center gap-2" size="sm" />
+          </div>
+        ) : undefined
+      }
     >
       <form onSubmit={onSubmit} className="space-y-4">
         <Field label="Почта">

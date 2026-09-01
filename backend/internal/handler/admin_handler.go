@@ -24,6 +24,8 @@ type AdminHandler struct {
 	audit    *repository.AuditRepo
 	theme    *repository.ThemeRepo
 	progress *repository.ProgressRepo
+	access   *repository.AccessRepo
+	contacts *repository.ContactsRepo
 	userSvc  *service.UserService
 }
 
@@ -35,10 +37,13 @@ func NewAdminHandler(
 	audit *repository.AuditRepo,
 	theme *repository.ThemeRepo,
 	progress *repository.ProgressRepo,
+	access *repository.AccessRepo,
+	contacts *repository.ContactsRepo,
 	userSvc *service.UserService,
 ) *AdminHandler {
 	return &AdminHandler{users: users, courses: courses, stats: stats,
-		activity: activity, audit: audit, theme: theme, progress: progress, userSvc: userSvc}
+		activity: activity, audit: audit, theme: theme, progress: progress,
+		access: access, contacts: contacts, userSvc: userSvc}
 }
 
 // Routes собирает /api/admin. Редактор курсов монтируется сюда же, чтобы не
@@ -64,13 +69,26 @@ func (h *AdminHandler) Routes(courses, certificates, reports, uploads http.Handl
 		r.Post("/{id}/enrollments", h.enroll)
 		r.Patch("/{id}/enrollments/{courseId}", h.setDueDate)
 		r.Delete("/{id}/enrollments/{courseId}", h.unenroll)
+		r.Get("/{id}/module-access", h.getModuleAccess)
+		r.Post("/{id}/module-access", h.setModuleAccess)
 	})
 
 	r.Get("/students-progress", h.studentsProgress)
 
+	r.Route("/access-requests", func(r chi.Router) {
+		r.Get("/", h.listAccessRequests)
+		r.Post("/{id}/approve", h.approveAccessRequest)
+		r.Post("/{id}/reject", h.rejectAccessRequest)
+	})
+
 	r.Route("/theme", func(r chi.Router) {
 		r.Get("/", h.getTheme)
 		r.Put("/", h.putTheme)
+	})
+
+	r.Route("/contacts", func(r chi.Router) {
+		r.Get("/", h.getContacts)
+		r.Put("/", h.putContacts)
 	})
 
 	return r
@@ -297,6 +315,11 @@ func (h *AdminHandler) enroll(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Не удалось записать студента на курс")
 		return
 	}
+	// Сразу открываем первую главу, чтобы студенту было с чего начать.
+	if err := h.courses.GrantFirstModuleAccess(r.Context(), userID, body.CourseID, middleware.UserID(r.Context())); err != nil {
+		writeError(w, http.StatusInternalServerError, "Не удалось открыть первую главу")
+		return
+	}
 	h.audit.Log(r.Context(), middleware.UserID(r.Context()), "enrollment.create", "user", userID,
 		map[string]any{"courseId": body.CourseID})
 
@@ -390,6 +413,139 @@ func (h *AdminHandler) putTheme(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.audit.Log(r.Context(), actor, "theme.update", "platform", "", nil)
+	writeJSON(w, http.StatusOK, map[string]any{"settings": body.Settings})
+}
+
+// --- Пошаговый доступ к главам ---
+
+func (h *AdminHandler) getModuleAccess(w http.ResponseWriter, r *http.Request) {
+	userID := chi.URLParam(r, "id")
+	courseID := r.URL.Query().Get("courseId")
+	if courseID == "" {
+		writeError(w, http.StatusBadRequest, "Не указан курс")
+		return
+	}
+	m, err := h.courses.ModuleAccessMap(r.Context(), userID, courseID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Не удалось загрузить доступы")
+		return
+	}
+	ids := make([]string, 0, len(m))
+	for id := range m {
+		ids = append(ids, id)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"granted": ids})
+}
+
+func (h *AdminHandler) setModuleAccess(w http.ResponseWriter, r *http.Request) {
+	userID := chi.URLParam(r, "id")
+	var body struct {
+		ModuleID string `json:"moduleId"`
+		Granted  bool   `json:"granted"`
+	}
+	if err := decodeJSON(w, r, &body); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if body.ModuleID == "" {
+		writeError(w, http.StatusBadRequest, "Не указана глава")
+		return
+	}
+
+	actor := middleware.UserID(r.Context())
+	action := "module.revoke"
+	if body.Granted {
+		action = "module.grant"
+		if err := h.courses.GrantModuleAccess(r.Context(), userID, body.ModuleID, actor); err != nil {
+			writeError(w, http.StatusInternalServerError, "Не удалось открыть главу")
+			return
+		}
+	} else {
+		if err := h.courses.RevokeModuleAccess(r.Context(), userID, body.ModuleID); err != nil {
+			writeError(w, http.StatusInternalServerError, "Не удалось закрыть главу")
+			return
+		}
+	}
+	h.audit.Log(r.Context(), actor, action, "user", userID, map[string]any{"moduleId": body.ModuleID})
+	writeJSON(w, http.StatusOK, map[string]any{"granted": body.Granted})
+}
+
+// --- Заявки на доступ ---
+
+func (h *AdminHandler) listAccessRequests(w http.ResponseWriter, r *http.Request) {
+	items, err := h.access.List(r.Context(), r.URL.Query().Get("status"), queryInt(r, "limit", 200, 1, 500))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Не удалось загрузить заявки")
+		return
+	}
+	writeJSON(w, http.StatusOK, items)
+}
+
+func (h *AdminHandler) approveAccessRequest(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	userID, moduleID, status, err := h.access.Get(r.Context(), id)
+	if err != nil {
+		writeError(w, statusForRepoError(err), "Заявка не найдена")
+		return
+	}
+	if status != "pending" {
+		writeError(w, http.StatusConflict, "Заявка уже обработана")
+		return
+	}
+
+	actor := middleware.UserID(r.Context())
+	if err := h.courses.GrantModuleAccess(r.Context(), userID, moduleID, actor); err != nil {
+		writeError(w, http.StatusInternalServerError, "Не удалось открыть главу")
+		return
+	}
+	if err := h.access.Decide(r.Context(), id, "approved", actor); err != nil {
+		writeError(w, statusForRepoError(err), "Не удалось обновить заявку")
+		return
+	}
+	h.audit.Log(r.Context(), actor, "access.approve", "user", userID, map[string]any{"moduleId": moduleID})
+	writeJSON(w, http.StatusOK, map[string]string{"message": "Доступ открыт"})
+}
+
+func (h *AdminHandler) rejectAccessRequest(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	actor := middleware.UserID(r.Context())
+	if err := h.access.Decide(r.Context(), id, "rejected", actor); err != nil {
+		writeError(w, statusForRepoError(err), "Заявка уже обработана или не найдена")
+		return
+	}
+	h.audit.Log(r.Context(), actor, "access.reject", "request", id, nil)
+	writeJSON(w, http.StatusOK, map[string]string{"message": "Заявка отклонена"})
+}
+
+// --- Контакты для связи (Telegram/WhatsApp) ---
+
+func (h *AdminHandler) getContacts(w http.ResponseWriter, r *http.Request) {
+	settings, err := h.contacts.Get(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Не удалось загрузить контакты")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"settings": rawOrNil(settings)})
+}
+
+func (h *AdminHandler) putContacts(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Settings json.RawMessage `json:"settings"`
+	}
+	if err := decodeJSON(w, r, &body); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if len(body.Settings) == 0 || !json.Valid(body.Settings) {
+		writeError(w, http.StatusBadRequest, "Некорректные контакты")
+		return
+	}
+	actor := middleware.UserID(r.Context())
+	if err := h.contacts.Set(r.Context(), body.Settings, actor); err != nil {
+		writeError(w, http.StatusInternalServerError, "Не удалось сохранить контакты")
+		return
+	}
+	h.audit.Log(r.Context(), actor, "contacts.update", "platform", "", nil)
 	writeJSON(w, http.StatusOK, map[string]any{"settings": body.Settings})
 }
 

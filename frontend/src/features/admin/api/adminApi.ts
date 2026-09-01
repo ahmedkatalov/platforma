@@ -1,9 +1,11 @@
 import { baseApi } from "@/shared/api/baseApi";
 import type {
+  AccessRequest,
   ActivityDay,
   AdminOverview,
   Attempt,
   AuditEntry,
+  ContactSettings,
   CreatedStudent,
   Enrollment,
   Paginated,
@@ -126,6 +128,46 @@ export const adminApi = baseApi.injectEndpoints({
     savePlatformTheme: builder.mutation<{ settings: unknown }, unknown>({
       query: (settings) => ({ url: "/admin/theme", method: "PUT", body: { settings } }),
     }),
+
+    // --- Пошаговый доступ к главам ---
+    getAccessRequests: builder.query<AccessRequest[], string | void>({
+      query: (status) =>
+        status ? `/admin/access-requests?status=${status}` : "/admin/access-requests",
+      providesTags: ["AccessRequests"],
+    }),
+    approveAccessRequest: builder.mutation<{ message: string }, string>({
+      query: (id) => ({ url: `/admin/access-requests/${id}/approve`, method: "POST" }),
+      invalidatesTags: ["AccessRequests", "Users"],
+    }),
+    rejectAccessRequest: builder.mutation<{ message: string }, string>({
+      query: (id) => ({ url: `/admin/access-requests/${id}/reject`, method: "POST" }),
+      invalidatesTags: ["AccessRequests"],
+    }),
+    getUserModuleAccess: builder.query<{ granted: string[] }, { userId: string; courseId: string }>({
+      query: ({ userId, courseId }) => `/admin/users/${userId}/module-access?courseId=${courseId}`,
+      providesTags: (_r, _e, { userId }) => [{ type: "Access", id: userId }],
+    }),
+    setModuleAccess: builder.mutation<
+      { granted: boolean },
+      { userId: string; moduleId: string; granted: boolean }
+    >({
+      query: ({ userId, moduleId, granted }) => ({
+        url: `/admin/users/${userId}/module-access`,
+        method: "POST",
+        body: { moduleId, granted },
+      }),
+      invalidatesTags: (_r, _e, { userId }) => [{ type: "Access", id: userId }],
+    }),
+
+    // --- Контакты (Telegram/WhatsApp) ---
+    getContacts: builder.query<{ settings: ContactSettings | null }, void>({
+      query: () => "/admin/contacts",
+      providesTags: ["Contacts"],
+    }),
+    saveContacts: builder.mutation<{ settings: ContactSettings }, ContactSettings>({
+      query: (settings) => ({ url: "/admin/contacts", method: "PUT", body: { settings } }),
+      invalidatesTags: ["Contacts"],
+    }),
   }),
 });
 
@@ -144,4 +186,11 @@ export const {
   useGetAuditQuery,
   useGetPlatformThemeQuery,
   useSavePlatformThemeMutation,
+  useGetAccessRequestsQuery,
+  useApproveAccessRequestMutation,
+  useRejectAccessRequestMutation,
+  useGetUserModuleAccessQuery,
+  useSetModuleAccessMutation,
+  useGetContactsQuery,
+  useSaveContactsMutation,
 } = adminApi;

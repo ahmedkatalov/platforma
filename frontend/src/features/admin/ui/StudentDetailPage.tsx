@@ -11,6 +11,7 @@ import {
   useUpdateUserMutation,
 } from "@/features/admin/api/adminApi";
 import { useGetAdminCoursesQuery } from "@/features/admin/api/coursesApi";
+import { ChapterAccess } from "@/features/admin/ui/ChapterAccess";
 import { apiErrorMessage } from "@/shared/api/baseApi";
 import { lastSeenLabel } from "@/shared/lib/time";
 import type { Attempt, CreatedStudent, UserStatus } from "@/shared/types";
@@ -324,6 +325,8 @@ export default function StudentDetailPage() {
                       className="h-8 text-xs"
                     />
                   </div>
+
+                  <ChapterAccess userId={id} courseId={enrollment.courseId} />
                 </li>
               ))}
             </ul>

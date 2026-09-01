@@ -2,6 +2,7 @@ import { baseApi } from "@/shared/api/baseApi";
 import type {
   ActivityDay,
   Attempt,
+  ContactSettings,
   Enrollment,
   Note,
   QuizCard,
@@ -68,6 +69,10 @@ export const meApi = baseApi.injectEndpoints({
     getPublicTheme: builder.query<{ settings: unknown }, void>({
       query: () => "/theme",
     }),
+    getPublicContacts: builder.query<{ contacts: ContactSettings | null }, void>({
+      query: () => "/contacts",
+      providesTags: ["Contacts"],
+    }),
   }),
 });
 
@@ -85,4 +90,5 @@ export const {
   useSavePreferencesMutation,
   useResetPreferencesMutation,
   useGetPublicThemeQuery,
+  useGetPublicContactsQuery,
 } = meApi;

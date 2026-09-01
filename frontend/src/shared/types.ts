@@ -362,3 +362,32 @@ export type Note = {
   createdAt: string;
   updatedAt: string;
 };
+
+// --- Пошаговый доступ к главам ---
+
+export type AccessRequestStatus = "pending" | "approved" | "rejected";
+
+export type AccessRequest = {
+  id: string;
+  userId: string;
+  userName: string;
+  userEmail: string;
+  moduleId: string;
+  moduleTitle: string;
+  chapterNo: number;
+  courseId: string;
+  courseTitle: string;
+  courseSlug: string;
+  status: AccessRequestStatus;
+  note: string;
+  createdAt: string;
+};
+
+// Контакты для связи (Telegram/WhatsApp), настраиваются администратором.
+export type ContactSettings = {
+  enabled?: boolean;
+  showOnLogin?: boolean;
+  telegram?: string;
+  whatsapp?: string;
+  note?: string;
+};

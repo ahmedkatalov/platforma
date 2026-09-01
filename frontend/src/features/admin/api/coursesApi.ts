@@ -43,11 +43,25 @@ export const coursesApi = baseApi.injectEndpoints({
       providesTags: ["Courses", "Progress"],
     }),
     getStudentCourse: builder.query<
-      { course: Course; enrolled: boolean; progress: LessonProgress[] },
+      {
+        course: Course;
+        enrolled: boolean;
+        progress: LessonProgress[];
+        moduleAccess?: Record<string, boolean>;
+        requests?: Record<string, string>;
+      },
       string
     >({
       query: (slug) => `/courses/${slug}`,
-      providesTags: (_r, _e, slug) => [{ type: "Course", id: slug }],
+      providesTags: (_r, _e, slug) => [{ type: "Course", id: slug }, "Access"],
+    }),
+    requestModuleAccess: builder.mutation<{ message: string }, { slug: string; moduleId: string }>({
+      query: ({ moduleId }) => ({
+        url: "/courses/request-access",
+        method: "POST",
+        body: { moduleId },
+      }),
+      invalidatesTags: (_r, _e, { slug }) => [{ type: "Course", id: slug }, "Access"],
     }),
 
     // --- Редактор администратора ---
@@ -131,6 +145,7 @@ export const coursesApi = baseApi.injectEndpoints({
 export const {
   useGetStudentCoursesQuery,
   useGetStudentCourseQuery,
+  useRequestModuleAccessMutation,
   useGetAdminCoursesQuery,
   useGetAdminCourseQuery,
   useCreateCourseMutation,

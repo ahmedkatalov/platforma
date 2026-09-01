@@ -125,15 +125,27 @@ func (h *LessonHandler) access(r *http.Request, lessonID string) (*repository.Le
 		return nil, repository.ErrNotFound
 	}
 
-	enrolled, err := h.courses.IsEnrolled(r.Context(), middleware.UserID(r.Context()), lesson.CourseID)
+	userID := middleware.UserID(r.Context())
+	enrolled, err := h.courses.IsEnrolled(r.Context(), userID, lesson.CourseID)
 	if err != nil {
 		return nil, err
 	}
 	if !enrolled {
 		return nil, errNoAccess
 	}
+
+	// Глава (модуль) должна быть открыта студенту.
+	hasModule, err := h.courses.HasModuleAccess(r.Context(), userID, lesson.Lesson.ModuleID)
+	if err != nil {
+		return nil, err
+	}
+	if !hasModule {
+		return nil, errModuleLocked
+	}
 	return lesson, nil
 }
+
+var errModuleLocked = errors.New("эта глава вам ещё не открыта — запросите доступ у администратора")
 
 var errNoAccess = errors.New("курс вам ещё не открыт — обратитесь к администратору")
 
@@ -141,7 +153,7 @@ func (h *LessonHandler) writeAccessError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, repository.ErrNotFound):
 		writeError(w, http.StatusNotFound, "Урок не найден")
-	case errors.Is(err, errNoAccess):
+	case errors.Is(err, errNoAccess), errors.Is(err, errModuleLocked):
 		writeError(w, http.StatusForbidden, err.Error())
 	default:
 		writeError(w, http.StatusInternalServerError, "Не удалось открыть урок")

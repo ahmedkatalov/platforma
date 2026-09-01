@@ -54,6 +54,8 @@ func main() {
 	certRepo := repository.NewCertificateRepo(pool)
 	assetRepo := repository.NewAssetRepo(pool)
 	reminderRepo := repository.NewReminderRepo(pool)
+	accessRepo := repository.NewAccessRepo(pool)
+	contactsRepo := repository.NewContactsRepo(pool)
 
 	// Сервисы.
 	tokens := auth.NewTokenManager(cfg.JWTSecret, cfg.AccessTTL, cfg.RefreshTTL)
@@ -70,10 +72,11 @@ func main() {
 	meHandler := handler.NewMeHandler(userRepo, courseRepo, activityRepo, statsRepo, themeRepo,
 		progressRepo, certRepo, noteRepo, authHandler)
 	adminHandler := handler.NewAdminHandler(userRepo, courseRepo, statsRepo, activityRepo, auditRepo,
-		themeRepo, progressRepo, userSvc)
-	courseHandler := handler.NewCourseHandler(courseRepo, auditRepo, progressRepo)
+		themeRepo, progressRepo, accessRepo, contactsRepo, userSvc)
+	courseHandler := handler.NewCourseHandler(courseRepo, auditRepo, progressRepo, accessRepo)
 	lessonHandler := handler.NewLessonHandler(progressRepo, courseRepo, activityRepo, certRepo, mail, cfg)
 	themeHandler := handler.NewThemeHandler(themeRepo)
+	contactsHandler := handler.NewContactsHandler(contactsRepo)
 	certHandler := handler.NewCertificateHandler(certRepo)
 	reportHandler := handler.NewReportHandler(statsRepo, certRepo)
 	uploadHandler := handler.NewUploadHandler(assetRepo, cfg.UploadDir)
@@ -84,17 +87,18 @@ func main() {
 	srv := &http.Server{
 		Addr: ":" + cfg.Port,
 		Handler: router.New(router.Deps{
-			Config:  cfg,
-			Tokens:  tokens,
-			Auth:    authHandler,
-			Me:      meHandler,
-			Admin:   adminHandler,
-			Courses: courseHandler,
-			Lessons: lessonHandler,
-			Theme:   themeHandler,
-			Certs:   certHandler,
-			Reports: reportHandler,
-			Uploads: uploadHandler,
+			Config:   cfg,
+			Tokens:   tokens,
+			Auth:     authHandler,
+			Me:       meHandler,
+			Admin:    adminHandler,
+			Courses:  courseHandler,
+			Lessons:  lessonHandler,
+			Theme:    themeHandler,
+			Contacts: contactsHandler,
+			Certs:    certHandler,
+			Reports:  reportHandler,
+			Uploads:  uploadHandler,
 		}),
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       15 * time.Second,

@@ -21,20 +21,23 @@ type CourseHandler struct {
 	courses  *repository.CourseRepo
 	audit    *repository.AuditRepo
 	progress *repository.ProgressRepo
+	access   *repository.AccessRepo
 }
 
 func NewCourseHandler(
 	courses *repository.CourseRepo,
 	audit *repository.AuditRepo,
 	progress *repository.ProgressRepo,
+	access *repository.AccessRepo,
 ) *CourseHandler {
-	return &CourseHandler{courses: courses, audit: audit, progress: progress}
+	return &CourseHandler{courses: courses, audit: audit, progress: progress, access: access}
 }
 
 // StudentRoutes — /api/courses для любого авторизованного пользователя.
 func (h *CourseHandler) StudentRoutes() http.Handler {
 	r := chi.NewRouter()
 	r.Get("/", h.listForStudent)
+	r.Post("/request-access", h.requestAccess)
 	r.Get("/{slug}", h.getForStudent)
 	return r
 }
@@ -144,11 +147,71 @@ func (h *CourseHandler) getForStudent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Какие главы открыты студенту и по каким есть заявки.
+	moduleAccess, err := h.courses.ModuleAccessMap(r.Context(), userID, course.ID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Не удалось загрузить доступы")
+		return
+	}
+	requests, err := h.access.StatusMap(r.Context(), userID, course.ID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Не удалось загрузить заявки")
+		return
+	}
+
 	writeJSON(w, http.StatusOK, map[string]any{
-		"course":   course,
-		"enrolled": true,
-		"progress": progress,
+		"course":       course,
+		"enrolled":     true,
+		"progress":     progress,
+		"moduleAccess": moduleAccess,
+		"requests":     requests,
 	})
+}
+
+// requestAccess — студент оставляет заявку на открытие главы.
+func (h *CourseHandler) requestAccess(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		ModuleID string `json:"moduleId"`
+		Note     string `json:"note"`
+	}
+	if err := decodeJSON(w, r, &body); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if body.ModuleID == "" {
+		writeError(w, http.StatusBadRequest, "Не указана глава")
+		return
+	}
+
+	userID := middleware.UserID(r.Context())
+
+	// Глава должна принадлежать курсу, на который студент записан.
+	courseID, err := h.courses.ModuleCourseID(r.Context(), body.ModuleID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "Глава не найдена")
+		return
+	}
+	enrolled, err := h.courses.IsEnrolled(r.Context(), userID, courseID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Не удалось проверить доступ")
+		return
+	}
+	if !enrolled {
+		writeError(w, http.StatusForbidden, "Курс вам ещё не открыт")
+		return
+	}
+
+	// Если глава уже открыта — заявка не нужна.
+	if has, _ := h.courses.HasModuleAccess(r.Context(), userID, body.ModuleID); has {
+		writeError(w, http.StatusConflict, "Эта глава уже открыта вам")
+		return
+	}
+
+	if err := h.access.Create(r.Context(), userID, body.ModuleID, body.Note); err != nil {
+		writeError(w, http.StatusInternalServerError, "Не удалось отправить заявку")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"message": "Заявка отправлена администратору"})
 }
 
 // --- Администратор ---

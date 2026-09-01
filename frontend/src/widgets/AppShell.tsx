@@ -25,6 +25,8 @@ import {
   Users,
   Book,
   TerminalSquare,
+  Inbox,
+  MessageSquare,
 } from "lucide-react";
 import Logo from "@/shared/images/svg/logo.svg";
 
@@ -35,8 +37,10 @@ const SIDEBAR_COLLAPSED_KEY = "platforma.sidebarCollapsed";
 const ADMIN_NAV: NavItem[] = [
   { to: "/admin", label: "Обзор", icon: <LayoutGrid size={18} />, end: true },
   { to: "/admin/students", label: "Студенты", icon: <Users size={18} /> },
+  { to: "/admin/requests", label: "Заявки", icon: <Inbox size={18} /> },
   { to: "/admin/courses", label: "Курсы", icon: <Book size={18} /> },
   { to: "/admin/certificates", label: "Сертификаты", icon: <Shield size={18} /> },
+  { to: "/admin/settings", label: "Связь", icon: <MessageSquare size={18} /> },
   { to: "/admin/appearance", label: "Оформление", icon: <Palette size={18} /> },
   { to: "/admin/audit", label: "Журнал", icon: <Settings size={18} /> },
 ];

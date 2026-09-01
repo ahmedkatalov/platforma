@@ -16,17 +16,18 @@ import (
 
 // Deps — всё, что нужно роутеру для сборки дерева маршрутов.
 type Deps struct {
-	Config  *config.Config
-	Tokens  *auth.TokenManager
-	Auth    *handler.AuthHandler
-	Me      *handler.MeHandler
-	Admin   *handler.AdminHandler
-	Courses *handler.CourseHandler
-	Lessons *handler.LessonHandler
-	Theme   *handler.ThemeHandler
-	Certs   *handler.CertificateHandler
-	Reports *handler.ReportHandler
-	Uploads *handler.UploadHandler
+	Config   *config.Config
+	Tokens   *auth.TokenManager
+	Auth     *handler.AuthHandler
+	Me       *handler.MeHandler
+	Admin    *handler.AdminHandler
+	Courses  *handler.CourseHandler
+	Lessons  *handler.LessonHandler
+	Theme    *handler.ThemeHandler
+	Contacts *handler.ContactsHandler
+	Certs    *handler.CertificateHandler
+	Reports  *handler.ReportHandler
+	Uploads  *handler.UploadHandler
 }
 
 func New(d Deps) http.Handler {
@@ -58,6 +59,7 @@ func New(d Deps) http.Handler {
 		// Публичное.
 		r.Mount("/auth", d.Auth.Routes())
 		r.Get("/theme", d.Theme.Public)
+		r.Get("/contacts", d.Contacts.Public)
 		r.Mount("/certificates", d.Certs.PublicRoutes())
 
 		// Требует авторизации.

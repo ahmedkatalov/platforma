@@ -1,16 +1,23 @@
 import { Link, useParams } from "react-router-dom";
 
-import { useGetStudentCourseQuery } from "@/features/admin/api/coursesApi";
+import {
+  useGetStudentCourseQuery,
+  useRequestModuleAccessMutation,
+} from "@/features/admin/api/coursesApi";
 import { groupThemes, themeProgress, type Theme } from "@/features/learning/lib/themes";
 import { useGetMeQuery } from "@/shared/api/meApi";
+import { apiErrorMessage } from "@/shared/api/baseApi";
 import type { Lesson, LessonKind, LessonProgress } from "@/shared/types";
-import { Badge, Card, EmptyState, PageHeader, Progress, Spinner } from "@/shared/ui";
+import { Badge, Button, Card, EmptyState, PageHeader, Progress, Spinner } from "@/shared/ui";
+import { useToast } from "@/shared/ui/ToastProvider";
 import {
   Book,
   Check,
   ChevronRight,
   Clock,
   Edit2,
+  Lock,
+  LockOpen,
   Terminal,
 } from "lucide-react";
 
@@ -27,6 +34,8 @@ export default function CoursePage() {
   const { slug = "" } = useParams();
   const { data, isLoading, isError } = useGetStudentCourseQuery(slug, { skip: !slug });
   const { data: me } = useGetMeQuery();
+  const [requestAccess, { isLoading: requesting }] = useRequestModuleAccessMutation();
+  const toast = useToast();
 
   if (isLoading) {
     return (
@@ -55,6 +64,17 @@ export default function CoursePage() {
 
   const { course, enrolled } = data;
   const modules = course.modules ?? [];
+  const moduleAccess = data.moduleAccess ?? {};
+  const requests = data.requests ?? {};
+
+  const askAccess = async (moduleId: string) => {
+    try {
+      await requestAccess({ slug: course.slug, moduleId }).unwrap();
+      toast.success("Заявка отправлена — администратор откроет главу");
+    } catch (err) {
+      toast.error(apiErrorMessage(err, "Не удалось отправить заявку"));
+    }
+  };
 
   const enrollment = me?.enrollments.find((item) => item.courseId === course.id);
   const deadline = enrollment?.dueDate
@@ -148,16 +168,24 @@ export default function CoursePage() {
             const lessons = module.lessons ?? [];
             const moduleDone = lessons.filter((l) => isDone(l.id)).length;
             const modulePercent = lessons.length ? (moduleDone / lessons.length) * 100 : 0;
+            const locked = enrolled && !moduleAccess[module.id];
+            const prevModule = index > 0 ? modules[index - 1] : null;
+            const prevLessons = prevModule?.lessons ?? [];
+            const prevDone =
+              !prevModule || (prevLessons.length > 0 && prevLessons.every((l) => isDone(l.id)));
+            const reqStatus = requests[module.id];
 
             return (
               <Card key={module.id} className="overflow-hidden p-0">
                 {/* Шапка главы */}
                 <div className="flex items-center gap-4 border-b border-line p-[var(--pad)]">
                   <span
-                    className="grid h-11 w-11 shrink-0 place-items-center rounded-[var(--radius-md)] text-lg font-extrabold text-accent-fg"
-                    style={{ background: "var(--gradient)" }}
+                    className={`grid h-11 w-11 shrink-0 place-items-center rounded-[var(--radius-md)] text-lg font-extrabold ${
+                      locked ? "bg-surface-2 text-faint" : "text-accent-fg"
+                    }`}
+                    style={locked ? undefined : { background: "var(--gradient)" }}
                   >
-                    {index + 1}
+                    {locked ? <Lock size={18} /> : index + 1}
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className="text-[11px] font-bold uppercase tracking-wide text-faint">
@@ -170,15 +198,41 @@ export default function CoursePage() {
                       <p className="mt-0.5 line-clamp-1 text-xs text-muted">{module.summary}</p>
                     )}
                   </div>
-                  <div className="hidden w-40 shrink-0 sm:block">
-                    <div className="mb-1 flex justify-between text-[11px] text-faint">
-                      <span>{themes.length} тем</span>
-                      {enrolled && (
-                        <span className="font-bold text-accent">{Math.round(modulePercent)}%</span>
+
+                  {/* Справа: прогресс (если открыто) или доступ (если закрыто) */}
+                  {locked ? (
+                    <div className="flex shrink-0 flex-col items-end gap-1.5">
+                      {reqStatus === "pending" ? (
+                        <Badge tone="warning">Заявка на рассмотрении</Badge>
+                      ) : prevDone ? (
+                        <Button
+                          variant="primary"
+                          className="h-9"
+                          onClick={() => askAccess(module.id)}
+                          loading={requesting}
+                        >
+                          <LockOpen size={15} /> Запросить доступ
+                        </Button>
+                      ) : (
+                        <Badge>
+                          <Lock size={12} /> Сначала пройдите предыдущую главу
+                        </Badge>
+                      )}
+                      {reqStatus === "rejected" && (
+                        <span className="text-[11px] text-danger">Заявка отклонена</span>
                       )}
                     </div>
-                    {enrolled && <Progress value={modulePercent} />}
-                  </div>
+                  ) : (
+                    <div className="hidden w-40 shrink-0 sm:block">
+                      <div className="mb-1 flex justify-between text-[11px] text-faint">
+                        <span>{themes.length} тем</span>
+                        {enrolled && (
+                          <span className="font-bold text-accent">{Math.round(modulePercent)}%</span>
+                        )}
+                      </div>
+                      {enrolled && <Progress value={modulePercent} />}
+                    </div>
+                  )}
                 </div>
 
                 {/* Темы главы */}
@@ -189,6 +243,7 @@ export default function CoursePage() {
                       theme={theme}
                       index={ti + 1}
                       enrolled={enrolled}
+                      locked={locked}
                       isDone={isDone}
                       progressByLesson={progressByLesson}
                       lessonHref={lessonHref}
@@ -208,6 +263,7 @@ function ThemeCard({
   theme,
   index,
   enrolled,
+  locked,
   isDone,
   progressByLesson,
   lessonHref,
@@ -215,12 +271,14 @@ function ThemeCard({
   theme: Theme;
   index: number;
   enrolled: boolean;
+  locked: boolean;
   isDone: (id: string) => boolean;
   progressByLesson: Map<string, LessonProgress>;
   lessonHref: (lesson: Lesson) => string;
 }) {
   const prog = themeProgress(theme, isDone);
   const complete = prog.total > 0 && prog.done === prog.total;
+  const accessible = enrolled && !locked;
 
   const Row = ({ lesson, isQuiz }: { lesson: Lesson; isQuiz: boolean }) => {
     const state = progressByLesson.get(lesson.id);
@@ -247,15 +305,19 @@ function ThemeCard({
           </span>
         )}
         <span className="hidden shrink-0 text-xs text-faint sm:inline">{lesson.durationMin} мин</span>
-        {enrolled && <ChevronRight size={15} className="shrink-0 text-faint" />}
+        {accessible ? (
+          <ChevronRight size={15} className="shrink-0 text-faint" />
+        ) : locked ? (
+          <Lock size={13} className="shrink-0 text-faint" />
+        ) : null}
       </>
     );
 
     const cls = `flex items-center gap-3 rounded-[var(--radius-md)] px-2.5 py-2 ${
       isQuiz ? "bg-accent-soft/40" : ""
-    } ${enrolled ? "transition-colors hover:bg-surface-hover" : "opacity-70"}`;
+    } ${accessible ? "transition-colors hover:bg-surface-hover" : "opacity-70"}`;
 
-    return enrolled ? (
+    return accessible ? (
       <Link to={lessonHref(lesson)} className={cls}>
         {inner}
       </Link>

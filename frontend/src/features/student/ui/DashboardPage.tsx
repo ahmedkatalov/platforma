@@ -5,10 +5,12 @@ import {
   useGetStudentCourseQuery,
   useGetStudentCoursesQuery,
 } from "@/features/admin/api/coursesApi";
-import { useGetMyStatsQuery } from "@/shared/api/meApi";
+import { useGetMyStatsQuery, useGetPublicContactsQuery } from "@/shared/api/meApi";
 import type { LessonKind, LessonProgress } from "@/shared/types";
+import { hasAnyContact } from "@/shared/lib/contacts";
 import { Badge, Card, EmptyState, PageHeader, Progress, Spinner, StatCard } from "@/shared/ui";
-import { Book, BarChart3, Clock, Flame, Terminal, CheckCircle } from "lucide-react";
+import { ContactLinks } from "@/shared/ui/ContactLinks";
+import { Book, BarChart3, Clock, Flame, MessageSquare, Terminal, CheckCircle } from "lucide-react";
 
 const KIND_LABEL: Record<LessonKind, string> = {
   text: "Теория",
@@ -21,6 +23,8 @@ export default function DashboardPage() {
   const user = useAppSelector((state) => state.auth.user);
   const { data: stats, isLoading } = useGetMyStatsQuery(30);
   const { data: catalog = [] } = useGetStudentCoursesQuery();
+  const { data: contactsData } = useGetPublicContactsQuery();
+  const contacts = contactsData?.contacts;
 
   const myCourses = catalog.filter((item) => item.enrolled);
   const activeSlug = myCourses[0]?.course.slug ?? "";
@@ -107,6 +111,23 @@ export default function DashboardPage() {
           Открыть песочницу
         </Link>
       </Card>
+
+      {hasAnyContact(contacts) && (
+        <Card className="mt-[var(--gap)] flex flex-wrap items-center justify-between gap-4 p-[var(--pad)]">
+          <div className="flex min-w-0 items-start gap-3">
+            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[var(--radius-md)] bg-accent-soft text-accent">
+              <MessageSquare size={22} />
+            </span>
+            <div className="min-w-0">
+              <p className="text-base font-bold text-fg">Нужна помощь?</p>
+              <p className="mt-0.5 text-sm text-muted">
+                {contacts?.note || "Напишите преподавателю — ответим и откроем нужную главу."}
+              </p>
+            </div>
+          </div>
+          <ContactLinks contacts={contacts} className="flex shrink-0 flex-wrap gap-2" />
+        </Card>
+      )}
 
       {nextLesson && activeCourse && (
         <Card className="mt-[var(--gap)] flex flex-wrap items-center justify-between gap-4 p-[var(--pad)]">

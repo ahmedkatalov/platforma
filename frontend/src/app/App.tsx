@@ -10,6 +10,8 @@ import AdminCertificatesPage from "@/features/admin/ui/CertificatesPage";
 import AdminCoursesPage from "@/features/admin/ui/CoursesPage";
 import CourseEditorPage from "@/features/admin/ui/CourseEditorPage";
 import AdminDashboardPage from "@/features/admin/ui/DashboardPage";
+import RequestsPage from "@/features/admin/ui/RequestsPage";
+import SettingsPage from "@/features/admin/ui/SettingsPage";
 import StudentDetailPage from "@/features/admin/ui/StudentDetailPage";
 import StudentsPage from "@/features/admin/ui/StudentsPage";
 import CertificatePage from "@/features/certificates/ui/CertificatePage";
@@ -112,6 +114,8 @@ export default function App() {
         <Route index element={<AdminDashboardPage />} />
         <Route path="students" element={<StudentsPage />} />
         <Route path="students/:id" element={<StudentDetailPage />} />
+        <Route path="requests" element={<RequestsPage />} />
+        <Route path="settings" element={<SettingsPage />} />
         <Route path="courses" element={<AdminCoursesPage />} />
         <Route path="courses/:id" element={<CourseEditorPage />} />
         <Route path="certificates" element={<AdminCertificatesPage />} />

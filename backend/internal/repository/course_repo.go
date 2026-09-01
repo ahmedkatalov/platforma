@@ -405,3 +405,86 @@ func (r *CourseRepo) EnrollmentsForUser(ctx context.Context, userID string) ([]d
 	}
 	return out, rows.Err()
 }
+
+// --- Пошаговый доступ к главам (модулям) ---
+
+// GrantModuleAccess открывает студенту главу.
+func (r *CourseRepo) GrantModuleAccess(ctx context.Context, userID, moduleID, grantedBy string) error {
+	var by *string
+	if grantedBy != "" {
+		by = &grantedBy
+	}
+	_, err := r.db.Exec(ctx, `
+		INSERT INTO module_access (user_id, module_id, granted_by)
+		VALUES ($1, $2, $3)
+		ON CONFLICT (user_id, module_id) DO NOTHING`, userID, moduleID, by)
+	return err
+}
+
+// RevokeModuleAccess закрывает студенту главу.
+func (r *CourseRepo) RevokeModuleAccess(ctx context.Context, userID, moduleID string) error {
+	_, err := r.db.Exec(ctx,
+		`DELETE FROM module_access WHERE user_id = $1 AND module_id = $2`, userID, moduleID)
+	return err
+}
+
+// HasModuleAccess — открыта ли студенту глава.
+func (r *CourseRepo) HasModuleAccess(ctx context.Context, userID, moduleID string) (bool, error) {
+	var exists bool
+	err := r.db.QueryRow(ctx,
+		`SELECT EXISTS (SELECT 1 FROM module_access WHERE user_id = $1 AND module_id = $2)`,
+		userID, moduleID).Scan(&exists)
+	return exists, err
+}
+
+// ModuleAccessMap — какие главы курса открыты студенту (id главы -> true).
+func (r *CourseRepo) ModuleAccessMap(ctx context.Context, userID, courseID string) (map[string]bool, error) {
+	rows, err := r.db.Query(ctx, `
+		SELECT ma.module_id
+		  FROM module_access ma
+		  JOIN modules m ON m.id = ma.module_id
+		 WHERE ma.user_id = $1 AND m.course_id = $2`, userID, courseID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := make(map[string]bool, 16)
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		out[id] = true
+	}
+	return out, rows.Err()
+}
+
+// GrantFirstModuleAccess открывает самую первую главу курса — вызывается при записи,
+// чтобы студенту было с чего начать.
+func (r *CourseRepo) GrantFirstModuleAccess(ctx context.Context, userID, courseID, grantedBy string) error {
+	var by *string
+	if grantedBy != "" {
+		by = &grantedBy
+	}
+	_, err := r.db.Exec(ctx, `
+		INSERT INTO module_access (user_id, module_id, granted_by)
+		SELECT $1, m.id, $3
+		  FROM modules m
+		 WHERE m.course_id = $2
+		 ORDER BY m.position, m.created_at
+		 LIMIT 1
+		ON CONFLICT (user_id, module_id) DO NOTHING`, userID, courseID, by)
+	return err
+}
+
+// ModuleCourseID возвращает id курса, которому принадлежит глава.
+func (r *CourseRepo) ModuleCourseID(ctx context.Context, moduleID string) (string, error) {
+	var courseID string
+	err := r.db.QueryRow(ctx,
+		`SELECT course_id FROM modules WHERE id = $1`, moduleID).Scan(&courseID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", ErrNotFound
+	}
+	return courseID, err
+}
