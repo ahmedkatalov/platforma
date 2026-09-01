@@ -23,10 +23,20 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock,
+  Edit2,
+  HelpCircle,
   Terminal,
 } from "lucide-react";
 
-import { groupThemes } from "@/features/learning/lib/themes";
+import { groupThemes, themeProgress } from "@/features/learning/lib/themes";
+
+// Иконка типа урока — понятнее короткой подписи вроде «Терм».
+function kindIcon(kind: LessonKind, size = 12) {
+  if (kind === "terminal") return <Terminal size={size} />;
+  if (kind === "code") return <Edit2 size={size} />;
+  if (kind === "quiz") return <HelpCircle size={size} />;
+  return <Book size={size} />;
+}
 
 import CodeLesson from "./CodeLesson";
 import NoteSelection from "./NoteSelection";
@@ -231,104 +241,132 @@ export default function LessonPage() {
               </div>
             </Link>
 
-            <nav className="max-h-[60vh] space-y-4 overflow-y-auto">
-            {modules.map((module, moduleIndex) => {
-              const themes = groupThemes(module);
-              const expanded = openModuleId === module.id;
+            <nav className="max-h-[62vh] space-y-1 overflow-y-auto pr-1">
+              {modules.map((module, moduleIndex) => {
+                const themes = groupThemes(module);
+                const expanded = openModuleId === module.id;
+                const lessons = module.lessons ?? [];
+                const isDone = (id: string) =>
+                  progressByLesson.get(id)?.status === "completed";
+                const moduleDone = lessons.filter((l) => isDone(l.id)).length;
+                const moduleTotal = lessons.length;
+                const activeChapter = lessons.some((l) => l.id === lesson.id);
+                const chapterComplete = moduleTotal > 0 && moduleDone === moduleTotal;
 
-              const renderRow = (item: Lesson, isQuiz: boolean) => {
-                const state = progressByLesson.get(item.id);
-                const active = item.id === lesson.id;
-                const done = state?.status === "completed";
-                return (
-                  <li key={item.id}>
-                    <Link
-                      to={`/learn/courses/${data.courseSlug}/lessons/${item.id}`}
-                      className={`flex items-center gap-2 rounded-[var(--radius-md)] px-2 py-1.5 text-sm transition-colors ${
-                        active
-                          ? "bg-accent-soft font-semibold text-accent"
-                          : "text-muted hover:bg-surface-2 hover:text-fg"
-                      }`}
-                    >
-                      <span
-                        className={`grid h-4 w-4 shrink-0 place-items-center rounded-full border text-[10px] ${
-                          done
-                            ? "border-[var(--success)] bg-[var(--success)] text-white"
-                            : isQuiz
-                              ? "border-accent-border text-accent"
-                              : "border-line"
+                const renderRow = (item: Lesson) => {
+                  const active = item.id === lesson.id;
+                  const done = isDone(item.id);
+                  return (
+                    <li key={item.id}>
+                      <Link
+                        to={`/learn/courses/${data.courseSlug}/lessons/${item.id}`}
+                        className={`flex items-center gap-2.5 rounded-[var(--radius-md)] px-2 py-1.5 text-sm transition-colors ${
+                          active
+                            ? "bg-accent-soft font-semibold text-accent"
+                            : "text-muted hover:bg-surface-2 hover:text-fg"
                         }`}
                       >
-                        {done && <Check size={10} />}
-                      </span>
-                      <span className="min-w-0 flex-1 truncate">{item.title}</span>
-                      {item.kind !== "text" && (
-                        <span className="shrink-0 text-[10px] text-faint">
-                          {KIND_LABEL[item.kind].slice(0, 4)}
+                        <span
+                          className={`grid h-5 w-5 shrink-0 place-items-center rounded-full ${
+                            done
+                              ? "bg-[var(--success)] text-white"
+                              : active
+                                ? "bg-accent text-accent-fg"
+                                : "bg-surface-2 text-faint"
+                          }`}
+                        >
+                          {done ? <Check size={12} /> : kindIcon(item.kind)}
                         </span>
-                      )}
-                    </Link>
-                  </li>
-                );
-              };
+                        <span className="min-w-0 flex-1 truncate">{item.title}</span>
+                      </Link>
+                    </li>
+                  );
+                };
 
-              return (
-                <section key={module.id} className="rounded-[var(--radius-md)] border border-transparent hover:border-line">
-                  <button
-                    type="button"
-                    className="flex w-full cursor-pointer items-center gap-2 rounded-[var(--radius-md)] px-2 py-2 text-left transition-colors hover:bg-surface-2"
-                    onClick={() => setOpenModuleId((current) => (current === module.id ? null : module.id))}
-                    aria-expanded={expanded}
-                    aria-controls={`module-${module.id}`}
-                  >
-                    <span className="min-w-0 flex-1 text-[11px] font-bold uppercase tracking-wide text-faint">
-                      Глава {moduleIndex + 1}. {module.title}
-                    </span>
-                    <ChevronRight
-                      size={16}
-                      className={`shrink-0 text-faint transition-transform duration-200 ${expanded ? "rotate-90" : ""}`}
-                      aria-hidden="true"
-                    />
-                  </button>
+                return (
+                  <section key={module.id}>
+                    <button
+                      type="button"
+                      className={`flex w-full cursor-pointer items-center gap-2.5 rounded-[var(--radius-md)] px-2 py-2 text-left transition-colors ${
+                        activeChapter ? "bg-surface-2" : "hover:bg-surface-2"
+                      }`}
+                      onClick={() =>
+                        setOpenModuleId((current) => (current === module.id ? null : module.id))
+                      }
+                      aria-expanded={expanded}
+                      aria-controls={`module-${module.id}`}
+                    >
+                      <span
+                        className={`grid h-7 w-7 shrink-0 place-items-center rounded-[var(--radius-md)] text-xs font-bold ${
+                          chapterComplete
+                            ? "bg-[var(--success)] text-white"
+                            : activeChapter
+                              ? "text-accent-fg"
+                              : "bg-surface-2 text-muted"
+                        }`}
+                        style={
+                          activeChapter && !chapterComplete
+                            ? { background: "var(--gradient)" }
+                            : undefined
+                        }
+                      >
+                        {chapterComplete ? <Check size={15} /> : moduleIndex + 1}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-semibold text-fg">
+                          {module.title}
+                        </span>
+                        <span className="block text-[11px] text-faint">
+                          Глава {moduleIndex + 1} · {moduleDone}/{moduleTotal} уроков
+                        </span>
+                      </span>
+                      <ChevronRight
+                        size={16}
+                        className={`shrink-0 text-faint transition-transform duration-200 ${
+                          expanded ? "rotate-90" : ""
+                        }`}
+                        aria-hidden="true"
+                      />
+                    </button>
 
-                  <div
-                    id={`module-${module.id}`}
-                    aria-hidden={!expanded}
-                    className={`grid transition-[grid-template-rows] duration-200 ease-out ${
-                      expanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
-                    }`}
-                  >
                     <div
-                      className={`overflow-hidden transition-opacity duration-200 ${
-                        expanded ? "opacity-100" : "opacity-0"
+                      id={`module-${module.id}`}
+                      aria-hidden={!expanded}
+                      className={`grid transition-[grid-template-rows] duration-200 ease-out ${
+                        expanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
                       }`}
                     >
-                      <div className="space-y-2 px-1 pb-1.5">
-                        {themes.map((theme, ti) => (
-                          <div key={theme.key} className="rounded-[var(--radius-md)] bg-surface-2/40 p-1.5">
-                            <p className="truncate px-1.5 pb-1 text-[16px] font-semibold text-fg">
-                              <span className="text-faint">{ti + 1}. </span>
-                              {theme.title}
-                            </p>
-                            <ul className="space-y-0.5">
-                              {theme.pages.map((page) => renderRow(page, false))}
-                              {theme.quiz && (
-                                <>
-                                  <li className="px-2 pt-0.5 text-[10px] font-bold uppercase tracking-wide text-accent">
-                                    Проверка темы
-                                  </li>
-                                  {renderRow(theme.quiz, true)}
-                                </>
-                              )}
-                            </ul>
-                          </div>
-                        ))}
+                      <div
+                        className={`overflow-hidden transition-opacity duration-200 ${
+                          expanded ? "opacity-100" : "opacity-0"
+                        }`}
+                      >
+                        <div className="ml-3.5 space-y-3 border-l border-line pb-2 pl-2 pt-1.5">
+                          {themes.map((theme, ti) => {
+                            const tp = themeProgress(theme, isDone);
+                            return (
+                              <div key={theme.key}>
+                                <div className="flex items-center justify-between gap-2 px-1 pb-1">
+                                  <span className="min-w-0 truncate text-[11px] font-semibold uppercase tracking-wide text-muted">
+                                    Тема {ti + 1} · {theme.title}
+                                  </span>
+                                  <span className="shrink-0 text-[10px] font-semibold text-faint">
+                                    {tp.done}/{tp.total}
+                                  </span>
+                                </div>
+                                <ul className="space-y-0.5">
+                                  {theme.pages.map((page) => renderRow(page))}
+                                  {theme.quiz && renderRow(theme.quiz)}
+                                </ul>
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </section>
-              );
-            })}
+                  </section>
+                );
+              })}
             </nav>
           </div>
         </Card>
