@@ -39,26 +39,26 @@ export default function AuditPage() {
           <EmptyState title="Записей пока нет" icon={<Shield size={32} />} />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[40rem] text-sm">
+            <table className="tbl min-w-[40rem]">
               <thead>
-                <tr className="border-b border-line text-left text-xs uppercase tracking-wide text-faint">
-                  <th className="px-4 py-3 font-semibold">Когда</th>
-                  <th className="px-4 py-3 font-semibold">Кто</th>
-                  <th className="px-4 py-3 font-semibold">Действие</th>
-                  <th className="px-4 py-3 font-semibold">Объект</th>
+                <tr>
+                  <th>Когда</th>
+                  <th>Кто</th>
+                  <th>Действие</th>
+                  <th>Объект</th>
                 </tr>
               </thead>
               <tbody>
                 {entries.map((entry) => (
-                  <tr key={entry.id} className="border-b border-line/60 last:border-0 hover:bg-surface-2">
-                    <td className="whitespace-nowrap px-4 py-3 text-muted">
+                  <tr key={entry.id}>
+                    <td className="whitespace-nowrap">
                       {dateFmt.format(new Date(entry.createdAt))}
                     </td>
-                    <td className="px-4 py-3 font-medium text-fg">{entry.actorName || "система"}</td>
-                    <td className="px-4 py-3">
+                    <td className="font-medium text-fg">{entry.actorName || "система"}</td>
+                    <td>
                       <Badge tone="accent">{ACTION_LABEL[entry.action] ?? entry.action}</Badge>
                     </td>
-                    <td className="px-4 py-3 font-mono text-xs text-faint">
+                    <td className="font-mono text-xs text-faint">
                       {entry.entity}
                       {entry.entityId && `: ${entry.entityId.slice(0, 8)}`}
                     </td>

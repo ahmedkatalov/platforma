@@ -32,7 +32,7 @@ export default function CertificatePage() {
   return (
     <div className="min-h-screen px-4 py-10">
       <button
-        className="btn btn-secondary fixed right-4 top-4 h-9 w-9 !p-0 print:hidden"
+        className="btn btn-secondary btn-icon fixed right-4 top-4 print:hidden"
         onClick={toggleMode}
         aria-label="Сменить тему"
       >

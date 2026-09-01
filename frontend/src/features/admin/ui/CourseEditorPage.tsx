@@ -319,7 +319,7 @@ function ModuleBlock({
     <div className="card-flat overflow-hidden">
       <div className="flex items-center gap-2 p-3">
         <button
-          className="btn btn-ghost h-8 w-8 !p-0"
+          className="btn btn-ghost btn-icon btn-sm"
           onClick={() => setOpen((v) => !v)}
           aria-label={open ? "Свернуть" : "Развернуть"}
         >

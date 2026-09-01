@@ -207,7 +207,7 @@ export default function LessonPage() {
             </button>
           )}
           <button
-            className={`btn btn-ghost absolute right-2 top-2 hidden h-8 w-8 p-0! ${
+            className={`btn btn-ghost btn-icon btn-sm absolute right-2 top-2 hidden ${
               contentsCollapsed ? "xl:hidden" : "xl:inline-flex"
             }`}
             onClick={() => setContentsCollapsed((value) => !value)}

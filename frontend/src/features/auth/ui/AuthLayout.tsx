@@ -21,7 +21,7 @@ export default function AuthLayout({
   return (
     <div className="flex min-h-screen items-center justify-center px-4 py-10">
       <button
-        className="btn btn-secondary fixed right-4 top-4 h-9 w-9 !p-0"
+        className="btn btn-secondary btn-icon fixed right-4 top-4"
         onClick={toggleMode}
         aria-label="Сменить тему"
       >

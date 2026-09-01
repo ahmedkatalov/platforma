@@ -150,7 +150,7 @@ export default function AppShell() {
             </p>
           </div>
           <button
-            className="btn btn-ghost ml-auto h-8 w-8 !p-0 lg:hidden"
+            className="btn btn-ghost btn-icon btn-sm ml-auto lg:hidden"
             onClick={() => setMenuOpen(false)}
             aria-label="Закрыть меню"
           >
@@ -229,7 +229,7 @@ export default function AppShell() {
       <div className={clsx("transition-[padding] duration-200", sidebarCollapsed ? "lg:pl-20" : "lg:pl-64")}>
         <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-line bg-surface px-4 backdrop-blur-[var(--glass-blur)] sm:px-6">
           <button
-            className="btn btn-ghost h-9 w-9 !p-0 lg:hidden"
+            className="btn btn-ghost btn-icon lg:hidden"
             onClick={() => setMenuOpen(true)}
             aria-label="Открыть меню"
           >
@@ -241,7 +241,7 @@ export default function AppShell() {
           </button>
 
           <button
-            className="btn btn-ghost hidden h-9 w-9 !p-0 lg:inline-flex"
+            className="btn btn-ghost btn-icon hidden lg:inline-flex"
             onClick={() => setSidebarCollapsed((value) => !value)}
             aria-label={sidebarCollapsed ? "Развернуть меню" : "Свернуть меню"}
             title={sidebarCollapsed ? "Развернуть меню" : "Свернуть меню"}
@@ -251,7 +251,7 @@ export default function AppShell() {
 
           <div className="ml-auto flex items-center gap-2">
             <button
-              className="btn btn-secondary h-9 w-9 !p-0"
+              className="btn btn-secondary btn-icon"
               onClick={toggleMode}
               aria-label={mode === "dark" ? "Включить светлую тему" : "Включить тёмную тему"}
               title={mode === "dark" ? "Светлая тема" : "Тёмная тема"}

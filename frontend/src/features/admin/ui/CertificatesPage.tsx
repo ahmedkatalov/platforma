@@ -94,22 +94,22 @@ export default function CertificatesPage() {
           />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[52rem] text-sm">
+            <table className="tbl min-w-[52rem]">
               <thead>
-                <tr className="border-b border-line text-left text-xs uppercase tracking-wide text-faint">
-                  <th className="px-4 py-3 font-semibold">Номер</th>
-                  <th className="px-4 py-3 font-semibold">Студент</th>
-                  <th className="px-4 py-3 font-semibold">Курс</th>
-                  <th className="px-4 py-3 font-semibold">Балл</th>
-                  <th className="px-4 py-3 font-semibold">Выдан</th>
-                  <th className="px-4 py-3 font-semibold">Статус</th>
-                  <th className="px-4 py-3" />
+                <tr>
+                  <th>Номер</th>
+                  <th>Студент</th>
+                  <th>Курс</th>
+                  <th className="num">Балл</th>
+                  <th>Выдан</th>
+                  <th>Статус</th>
+                  <th className="col-actions" />
                 </tr>
               </thead>
               <tbody>
                 {items.map((cert) => (
-                  <tr key={cert.id} className="border-b border-line/60 last:border-0 hover:bg-surface-2">
-                    <td className="px-4 py-3">
+                  <tr key={cert.id}>
+                    <td>
                       <a
                         href={`/certificates/${cert.serial}`}
                         target="_blank"
@@ -119,25 +119,25 @@ export default function CertificatesPage() {
                         {cert.serial}
                       </a>
                     </td>
-                    <td className="px-4 py-3 font-medium text-fg">{cert.holderName}</td>
-                    <td className="px-4 py-3 text-muted">{cert.courseTitle}</td>
-                    <td className="px-4 py-3">
+                    <td className="font-medium text-fg">{cert.holderName}</td>
+                    <td>{cert.courseTitle}</td>
+                    <td className="num">
                       <span className="font-bold text-fg">{Math.round(cert.score)}%</span>
                       <span className="ml-1.5 text-xs text-faint">
                         {cert.lessonsCompleted}/{cert.lessonsTotal}
                       </span>
                     </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-muted">
+                    <td className="whitespace-nowrap">
                       {dateFmt.format(new Date(cert.issuedAt))}
                     </td>
-                    <td className="px-4 py-3">
+                    <td>
                       {cert.revokedAt ? (
                         <Badge tone="danger">Отозван</Badge>
                       ) : (
                         <Badge tone="success">Действителен</Badge>
                       )}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="col-actions">
                       <div className="flex justify-end">
                         <Button
                           variant="ghost"
