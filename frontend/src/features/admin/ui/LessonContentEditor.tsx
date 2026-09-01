@@ -409,7 +409,7 @@ function CodeContentEditor({
         <Field label="Язык" hint="Подпись над редактором">
           <Select
             value={String(value.language ?? "yaml")}
-            onChange={(e) => onChange({ ...value, language: e.target.value })}
+            onChange={(v) => onChange({ ...value, language: v })}
           >
             <option value="yaml">YAML</option>
             <option value="bash">Bash</option>
@@ -469,7 +469,7 @@ function CodeContentEditor({
               <li key={index} className="grid gap-2 sm:grid-cols-[9rem_1fr_1fr_auto]">
                 <Select
                   value={check.type}
-                  onChange={(e) => patchCheck(index, { type: e.target.value })}
+                  onChange={(v) => patchCheck(index, { type: v })}
                 >
                   <option value="contains">содержит</option>
                   <option value="notContains">не содержит</option>

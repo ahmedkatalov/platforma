@@ -6,7 +6,6 @@ import {
   type HTMLAttributes,
   type InputHTMLAttributes,
   type ReactNode,
-  type SelectHTMLAttributes,
   type TextareaHTMLAttributes,
 } from "react";
 
@@ -14,12 +13,14 @@ import { X } from "lucide-react";
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: "primary" | "secondary" | "ghost" | "danger";
+  size?: "sm" | "md";
   loading?: boolean;
   icon?: ReactNode;
 };
 
 export function Button({
   variant = "secondary",
+  size = "md",
   loading = false,
   icon,
   className,
@@ -29,14 +30,22 @@ export function Button({
   type = "button",
   ...props
 }: ButtonProps) {
+  // Кнопка-иконка (есть иконка, нет текста) — квадратная, по единой сетке высот.
+  const iconOnly = (icon || loading) && !children;
   return (
     <button
       type={type}
-      className={clsx("btn", `btn-${variant}`, className)}
+      className={clsx(
+        "btn",
+        `btn-${variant}`,
+        size === "sm" && "btn-sm",
+        iconOnly && "btn-icon",
+        className,
+      )}
       disabled={disabled || loading}
       {...props}
     >
-      {loading ? <Spinner size={16} /> : icon}
+      {loading ? <Spinner size={size === "sm" ? 14 : 16} /> : icon}
       {children}
     </button>
   );
@@ -107,13 +116,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<H
   },
 );
 
-export function Select({ className, children, ...props }: SelectHTMLAttributes<HTMLSelectElement>) {
-  return (
-    <select className={clsx("input", className)} {...props}>
-      {children}
-    </select>
-  );
-}
+export { Select, type SelectOption } from "./Select";
 
 export function Badge({
   tone = "default",
@@ -155,29 +158,33 @@ export function Modal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-4"
       role="dialog"
       aria-modal="true"
       aria-label={title}
     >
       <div
-        className="absolute inset-0 bg-black/55 backdrop-blur-sm"
+        className="absolute inset-0 bg-black/65 backdrop-blur-[2px]"
         onClick={onClose}
         aria-hidden="true"
       />
       <div
-        className="card relative flex max-h-[90vh] w-full flex-col overflow-hidden"
+        className="menu-surface anim-pop relative flex max-h-[92vh] w-full flex-col overflow-hidden rounded-b-none sm:rounded-b-[var(--radius-lg)]"
         style={{ maxWidth: width }}
       >
-        <div className="flex items-center justify-between border-b border-line px-5 py-4">
-          <h2 className="text-lg font-bold text-fg">{title}</h2>
-          <button className="btn btn-ghost h-8 w-8 !p-0" onClick={onClose} aria-label="Закрыть">
+        <div className="flex items-center justify-between gap-3 border-b border-line px-5 py-3.5">
+          <h2 className="text-base font-bold text-fg">{title}</h2>
+          <button
+            className="btn btn-ghost btn-icon btn-sm shrink-0"
+            onClick={onClose}
+            aria-label="Закрыть"
+          >
             <X size={18} />
           </button>
         </div>
         <div className="flex-1 overflow-y-auto px-5 py-4">{children}</div>
         {footer && (
-          <div className="flex justify-end gap-2 border-t border-line px-5 py-4">{footer}</div>
+          <div className="flex justify-end gap-2 border-t border-line px-5 py-3.5">{footer}</div>
         )}
       </div>
     </div>

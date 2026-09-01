@@ -356,9 +356,7 @@ export default function AppearancePage() {
               <Field label="Плотность интерфейса">
                 <Select
                   value={settings.density}
-                  onChange={(e) =>
-                    set({ density: e.target.value as ThemeSettings["density"] })
-                  }
+                  onChange={(v) => set({ density: v as ThemeSettings["density"] })}
                 >
                   <option value="comfortable">Просторная</option>
                   <option value="compact">Компактная</option>

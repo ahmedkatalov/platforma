@@ -58,8 +58,8 @@ export default function StatsPage() {
         subtitle="Посещаемость, время и успеваемость"
         actions={
           <Select
-            value={days}
-            onChange={(e) => setDays(Number(e.target.value))}
+            value={String(days)}
+            onChange={(v) => setDays(Number(v))}
             className="w-44"
           >
             <option value={7}>Неделя</option>

@@ -264,7 +264,7 @@ export default function StudentDetailPage() {
 
           <div className="mb-4 space-y-2">
             <Field label="Курс">
-              <Select value={courseId} onChange={(e) => setCourseId(e.target.value)}>
+              <Select value={courseId} onChange={(v) => setCourseId(v)}>
                 <option value="">Выберите курс…</option>
                 {available.map((course) => (
                   <option key={course.id} value={course.id}>

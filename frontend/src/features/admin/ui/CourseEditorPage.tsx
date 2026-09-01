@@ -243,7 +243,7 @@ function CourseSettings({ course }: { course: Course }) {
           <Field label="Уровень">
             <Select
               value={form.level}
-              onChange={(e) => setForm({ ...form, level: e.target.value as CourseLevel })}
+              onChange={(v) => setForm({ ...form, level: v as CourseLevel })}
             >
               <option value="beginner">Начальный</option>
               <option value="intermediate">Средний</option>
@@ -254,7 +254,7 @@ function CourseSettings({ course }: { course: Course }) {
           <Field label="Статус">
             <Select
               value={form.status}
-              onChange={(e) => setForm({ ...form, status: e.target.value as CourseStatus })}
+              onChange={(v) => setForm({ ...form, status: v as CourseStatus })}
             >
               <option value="draft">Черновик</option>
               <option value="published">Опубликован</option>
@@ -611,7 +611,7 @@ function LessonModal({
 
         <div className="grid gap-4 sm:grid-cols-3">
           <Field label="Тип">
-            <Select value={kind} onChange={(e) => changeKind(e.target.value as LessonKind)}>
+            <Select value={kind} onChange={(v) => changeKind(v as LessonKind)}>
               <option value="text">Теория</option>
               <option value="quiz">Квиз</option>
               <option value="terminal">Терминал</option>

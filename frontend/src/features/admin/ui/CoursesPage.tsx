@@ -375,7 +375,7 @@ function CreateCourseModal({ open, onClose }: { open: boolean; onClose: () => vo
           <Field label="Уровень">
             <Select
               value={form.level}
-              onChange={(e) => setForm({ ...form, level: e.target.value as CourseLevel })}
+              onChange={(v) => setForm({ ...form, level: v as CourseLevel })}
             >
               <option value="beginner">Начальный</option>
               <option value="intermediate">Средний</option>
@@ -386,7 +386,7 @@ function CreateCourseModal({ open, onClose }: { open: boolean; onClose: () => vo
           <Field label="Статус">
             <Select
               value={form.status}
-              onChange={(e) => setForm({ ...form, status: e.target.value as CourseStatus })}
+              onChange={(v) => setForm({ ...form, status: v as CourseStatus })}
             >
               <option value="draft">Черновик</option>
               <option value="published">Опубликован</option>

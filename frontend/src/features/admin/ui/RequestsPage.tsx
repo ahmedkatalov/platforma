@@ -71,7 +71,7 @@ export default function RequestsPage() {
       <Card className="mb-[var(--gap)] flex flex-wrap items-end gap-3 p-[var(--pad)]">
         <div className="w-52">
           <Field label="Статус">
-            <Select value={status} onChange={(e) => setStatus(e.target.value as AccessRequestStatus | "")}>
+            <Select value={status} onChange={(v) => setStatus(v as AccessRequestStatus | "")}>
               <option value="pending">Ожидают решения</option>
               <option value="">Все</option>
               <option value="approved">Одобренные</option>

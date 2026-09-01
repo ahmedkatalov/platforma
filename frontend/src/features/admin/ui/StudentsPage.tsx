@@ -122,7 +122,7 @@ export default function StudentsPage() {
 
         <div className="w-40">
           <Field label="Статус">
-            <Select value={status} onChange={(e) => setStatus(e.target.value as UserStatus | "")}>
+            <Select value={status} onChange={(v) => setStatus(v as UserStatus | "")}>
               <option value="">Все</option>
               <option value="active">Активные</option>
               <option value="invited">Приглашённые</option>
@@ -133,7 +133,7 @@ export default function StudentsPage() {
 
         <div className="w-40">
           <Field label="Роль">
-            <Select value={role} onChange={(e) => setRole(e.target.value as Role | "")}>
+            <Select value={role} onChange={(v) => setRole(v as Role | "")}>
               <option value="">Все</option>
               <option value="student">Студенты</option>
               <option value="admin">Администраторы</option>
@@ -369,7 +369,7 @@ function CreateStudentModal({
         </Field>
 
         <Field label="Роль">
-          <Select value={role} onChange={(e) => setRole(e.target.value as Role)}>
+          <Select value={role} onChange={(v) => setRole(v as Role)}>
             <option value="student">Студент</option>
             <option value="admin">Администратор</option>
           </Select>

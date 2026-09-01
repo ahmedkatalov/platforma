@@ -107,7 +107,7 @@ export function DatePicker({
 
       {open && (
         <div
-          className="absolute left-0 top-full z-40 mt-2 w-[17.5rem] rounded-[var(--radius-lg)] border border-line bg-surface-solid p-3 shadow-2xl"
+          className="menu-surface anim-pop absolute left-0 top-full z-40 mt-1.5 w-[17.5rem] p-3"
           role="dialog"
         >
           <div className="mb-2 flex items-center justify-between">
