@@ -336,6 +336,173 @@ func (r *CourseRepo) DeleteLesson(ctx context.Context, id string) error {
 	return nil
 }
 
+// --- Обновление курса на месте (без потери прогресса и доступов) ---
+
+type LessonSync struct {
+	ID          string
+	Title       string
+	Kind        string
+	Summary     string
+	Content     json.RawMessage
+	DurationMin int
+}
+
+type ModuleSync struct {
+	ID      string
+	Title   string
+	Summary string
+	Lessons []LessonSync
+}
+
+type SyncResult struct {
+	ModulesAdded, ModulesUpdated, ModulesRemoved int
+	LessonsAdded, LessonsUpdated, LessonsRemoved int
+}
+
+func norm(s string) string { return strings.ToLower(strings.TrimSpace(s)) }
+
+// SyncContent обновляет модули и уроки курса НА МЕСТЕ: совпавшие по id (а если id
+// нет — по названию) правятся с сохранением своего id, поэтому прогресс студентов
+// (lesson_progress) и открытые главы (module_access) не теряются. Новые элементы
+// добавляются, исчезнувшие — удаляются. Всё в одной транзакции.
+func (r *CourseRepo) SyncContent(ctx context.Context, courseID string, modules []ModuleSync) (SyncResult, error) {
+	var res SyncResult
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return res, err
+	}
+	defer tx.Rollback(ctx)
+
+	// Существующие модули курса.
+	exMods, err := scanIDTitle(ctx, tx, `SELECT id, title FROM modules WHERE course_id = $1`, courseID)
+	if err != nil {
+		return res, err
+	}
+	modByID := map[string]bool{}
+	modByTitle := map[string]string{}
+	for _, m := range exMods {
+		modByID[m.id] = true
+		if _, ok := modByTitle[norm(m.title)]; !ok {
+			modByTitle[norm(m.title)] = m.id
+		}
+	}
+	usedMods := map[string]bool{}
+
+	for mi, m := range modules {
+		pos := mi + 1
+		modID := ""
+		if m.ID != "" && modByID[m.ID] && !usedMods[m.ID] {
+			modID = m.ID
+		} else if id, ok := modByTitle[norm(m.Title)]; ok && !usedMods[id] {
+			modID = id
+		}
+		if modID != "" {
+			if _, err := tx.Exec(ctx,
+				`UPDATE modules SET title=$2, summary=$3, position=$4, updated_at=now() WHERE id=$1`,
+				modID, m.Title, m.Summary, pos); err != nil {
+				return res, err
+			}
+			res.ModulesUpdated++
+		} else {
+			if err := tx.QueryRow(ctx,
+				`INSERT INTO modules (course_id, title, summary, position) VALUES ($1,$2,$3,$4) RETURNING id`,
+				courseID, m.Title, m.Summary, pos).Scan(&modID); err != nil {
+				return res, err
+			}
+			res.ModulesAdded++
+		}
+		usedMods[modID] = true
+
+		// Уроки этого модуля.
+		exLessons, err := scanIDTitle(ctx, tx, `SELECT id, title FROM lessons WHERE module_id = $1`, modID)
+		if err != nil {
+			return res, err
+		}
+		lesByID := map[string]bool{}
+		lesByTitle := map[string]string{}
+		for _, l := range exLessons {
+			lesByID[l.id] = true
+			if _, ok := lesByTitle[norm(l.title)]; !ok {
+				lesByTitle[norm(l.title)] = l.id
+			}
+		}
+		usedLes := map[string]bool{}
+
+		for li, l := range m.Lessons {
+			lpos := li + 1
+			content := l.Content
+			if len(content) == 0 {
+				content = json.RawMessage(`{}`)
+			}
+			lesID := ""
+			if l.ID != "" && lesByID[l.ID] && !usedLes[l.ID] {
+				lesID = l.ID
+			} else if id, ok := lesByTitle[norm(l.Title)]; ok && !usedLes[id] {
+				lesID = id
+			}
+			if lesID != "" {
+				if _, err := tx.Exec(ctx, `
+					UPDATE lessons SET title=$2, kind=$3, summary=$4, content=$5,
+					       duration_min=$6, position=$7, updated_at=now() WHERE id=$1`,
+					lesID, l.Title, l.Kind, l.Summary, content, l.DurationMin, lpos); err != nil {
+					return res, err
+				}
+				res.LessonsUpdated++
+			} else {
+				if _, err := tx.Exec(ctx, `
+					INSERT INTO lessons (module_id, title, kind, summary, content, duration_min, position)
+					VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+					modID, l.Title, l.Kind, l.Summary, content, l.DurationMin, lpos); err != nil {
+					return res, err
+				}
+				res.LessonsAdded++
+			}
+			if lesID != "" {
+				usedLes[lesID] = true
+			}
+		}
+		for _, l := range exLessons {
+			if !usedLes[l.id] {
+				if _, err := tx.Exec(ctx, `DELETE FROM lessons WHERE id=$1`, l.id); err != nil {
+					return res, err
+				}
+				res.LessonsRemoved++
+			}
+		}
+	}
+	for _, m := range exMods {
+		if !usedMods[m.id] {
+			if _, err := tx.Exec(ctx, `DELETE FROM modules WHERE id=$1`, m.id); err != nil {
+				return res, err
+			}
+			res.ModulesRemoved++
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return res, err
+	}
+	return res, nil
+}
+
+// scanIDTitle — вспомогательный: собирает пары (id, title).
+func scanIDTitle(ctx context.Context, tx pgx.Tx, sql, arg string) ([]struct{ id, title string }, error) {
+	rows, err := tx.Query(ctx, sql, arg)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make([]struct{ id, title string }, 0, 16)
+	for rows.Next() {
+		var r struct{ id, title string }
+		if err := rows.Scan(&r.id, &r.title); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
 // --- Записи на курс ---
 
 // Enroll записывает студента на курс. dueDate необязателен — срок прохождения.

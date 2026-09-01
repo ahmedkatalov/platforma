@@ -4,6 +4,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 
 import { useAppDispatch, useAppSelector } from "@/app/store";
 import { useLogoutMutation } from "@/features/auth/api/authApi";
+import { useGetPendingRequestsCountQuery } from "@/features/admin/api/adminApi";
 import { sessionEnded } from "@/features/auth/authSlice";
 import { useTrackActivityMutation } from "@/shared/api/meApi";
 import { tokenStorage } from "@/shared/api/tokenStorage";
@@ -83,6 +84,13 @@ export default function AppShell() {
   );
 
   useActivityTracker();
+
+  // Счётчик ожидающих заявок для бейджа в меню (только у администратора).
+  const { data: reqCount } = useGetPendingRequestsCountQuery(undefined, {
+    skip: user?.role !== "admin",
+    pollingInterval: 45_000,
+  });
+  const pendingRequests = reqCount?.total ?? 0;
 
   useEffect(() => setMenuOpen(false), [location.pathname]);
   useEffect(() => {
@@ -174,8 +182,25 @@ export default function AppShell() {
                 )
               }
             >
-              <span className="shrink-0">{item.icon}</span>
-              <span className={clsx(sidebarCollapsed && "lg:sr-only")}>{item.label}</span>
+              <span className="relative shrink-0">
+                {item.icon}
+                {item.to === "/admin/requests" && pendingRequests > 0 && sidebarCollapsed && (
+                  <span className="absolute -right-1.5 -top-1.5 hidden h-2 w-2 rounded-full bg-[var(--danger)] lg:block" />
+                )}
+              </span>
+              <span className={clsx("flex-1 truncate", sidebarCollapsed && "lg:sr-only")}>
+                {item.label}
+              </span>
+              {item.to === "/admin/requests" && pendingRequests > 0 && (
+                <span
+                  className={clsx(
+                    "grid h-5 min-w-[1.25rem] shrink-0 place-items-center rounded-full bg-[var(--accent)] px-1.5 text-[11px] font-bold text-accent-fg",
+                    sidebarCollapsed && "lg:hidden",
+                  )}
+                >
+                  {pendingRequests}
+                </span>
+              )}
             </NavLink>
           ))}
         </nav>

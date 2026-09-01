@@ -74,6 +74,7 @@ func (h *AdminHandler) Routes(courses, certificates, reports, uploads http.Handl
 	})
 
 	r.Get("/students-progress", h.studentsProgress)
+	r.Get("/requests-count", h.requestsCount)
 
 	r.Route("/access-requests", func(r chi.Router) {
 		r.Get("/", h.listAccessRequests)
@@ -524,6 +525,20 @@ func (h *AdminHandler) rejectAccessRequest(w http.ResponseWriter, r *http.Reques
 }
 
 // --- Заявки на курсы (запись на курс) ---
+
+// requestsCount — сколько заявок ждут решения (для бейджа-уведомления).
+func (h *AdminHandler) requestsCount(w http.ResponseWriter, r *http.Request) {
+	chapters, courses, err := h.access.PendingCounts(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Не удалось посчитать заявки")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]int{
+		"chapters": chapters,
+		"courses":  courses,
+		"total":    chapters + courses,
+	})
+}
 
 func (h *AdminHandler) listCourseRequests(w http.ResponseWriter, r *http.Request) {
 	items, err := h.access.ListCourseRequests(r.Context(), r.URL.Query().Get("status"), queryInt(r, "limit", 200, 1, 500))

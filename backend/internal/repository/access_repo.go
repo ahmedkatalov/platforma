@@ -143,6 +143,16 @@ func (r *AccessRepo) PendingCount(ctx context.Context) (int, error) {
 	return n, err
 }
 
+// PendingCounts — ожидающие заявки по главам и по курсам разом (для бейджа).
+func (r *AccessRepo) PendingCounts(ctx context.Context) (chapters, courses int, err error) {
+	err = r.db.QueryRow(ctx, `
+		SELECT
+			(SELECT count(*) FROM access_requests WHERE status = 'pending'),
+			(SELECT count(*) FROM course_requests WHERE status = 'pending')`).
+		Scan(&chapters, &courses)
+	return chapters, courses, err
+}
+
 // --- Заявки на доступ к КУРСУ (запись на курс) ---
 
 // CourseRequest — заявка на курс в списке администратора.

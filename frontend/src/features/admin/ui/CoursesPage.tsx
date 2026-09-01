@@ -117,24 +117,12 @@ export default function CoursesPage() {
       return;
     }
 
-    const runImport = async (replace: boolean) => {
-      const res = await importCourse({ raw, replace }).unwrap();
-      toast.success(`Загружено: ${res.modules} глав, ${res.lessons} уроков (черновик)`);
-    };
-
+    // Существующий курс обновляется на месте (прогресс студентов сохраняется);
+    // новый — создаётся черновиком. Сервер возвращает понятное сообщение.
     try {
-      await runImport(false);
+      const res = await importCourse({ raw, replace: false }).unwrap();
+      toast.success(res.message || `Готово: ${res.modules} глав, ${res.lessons} уроков`);
     } catch (err) {
-      if ((err as { status?: number }).status === 409) {
-        if (window.confirm(`${apiErrorMessage(err)}\n\nЗаменить существующий курс новым из файла?`)) {
-          try {
-            await runImport(true);
-          } catch (err2) {
-            toast.error(apiErrorMessage(err2, "Не удалось заменить курс"));
-          }
-        }
-        return;
-      }
       toast.error(apiErrorMessage(err, "Не удалось загрузить курс"));
     }
   };

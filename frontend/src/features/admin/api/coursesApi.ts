@@ -104,7 +104,8 @@ export const coursesApi = baseApi.injectEndpoints({
         body: raw, // сырой текст файла — разбирает сервер (надёжнее и с точной ошибкой)
         headers: { "Content-Type": "application/json" },
       }),
-      invalidatesTags: ["Courses", "Overview"],
+      // Обновление на месте затрагивает структуру, прогресс и доступы.
+      invalidatesTags: ["Courses", "Overview", "Course", "Progress", "Access"],
     }),
 
     createModule: builder.mutation<Module, { courseId: string } & ModulePayload>({
