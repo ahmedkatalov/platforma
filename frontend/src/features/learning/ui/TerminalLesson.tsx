@@ -275,6 +275,15 @@ export default function TerminalLesson({
                     </p>
                   </div>
 
+                  {active && task.predict && !done && (
+                    <div className="mt-2 flex items-start gap-2 rounded-[var(--radius-sm)] border border-accent-border bg-accent-soft px-2.5 py-1.5 text-xs text-muted">
+                      <span aria-hidden>🔮</span>
+                      <span>
+                        <b className="text-accent">Прежде чем вводить:</b> {renderHint(task.predict)}
+                      </span>
+                    </div>
+                  )}
+
                   {active &&
                     (() => {
                       const levels =
@@ -329,6 +338,28 @@ export default function TerminalLesson({
           {allDone && (
             <div className="mt-4 rounded-[var(--radius-md)] bg-[var(--success-soft)] p-3 text-sm text-success">
               Все задания выполнены. Урок засчитан.
+            </div>
+          )}
+
+          {content.challenge && (
+            <div className="mt-4 rounded-[var(--radius-md)] border border-line bg-surface-2 p-3">
+              <p className="mb-1 flex items-center gap-1.5 text-sm font-bold text-fg">
+                <span aria-hidden>🔧</span> Измените и попробуйте сами
+              </p>
+              <div className="text-sm text-muted [&_code]:text-accent">
+                <Markdown>{content.challenge}</Markdown>
+              </div>
+            </div>
+          )}
+
+          {content.debug && (
+            <div className="mt-3 rounded-[var(--radius-md)] border border-line bg-surface-2 p-3">
+              <p className="mb-1 flex items-center gap-1.5 text-sm font-bold text-fg">
+                <span aria-hidden>🐞</span> Если что-то сломалось
+              </p>
+              <div className="text-sm text-muted [&_code]:text-accent">
+                <Markdown>{content.debug}</Markdown>
+              </div>
             </div>
           )}
 
