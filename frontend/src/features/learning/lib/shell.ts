@@ -42,6 +42,14 @@ const APP_LOG = [
   "2026-08-27T09:16:00Z INFO  request completed status=200 path=/api/orders",
 ].join("\n");
 
+const JOURNAL_LOG = [
+  "ERROR disk almost full on /dev/sda1",
+  "INFO nightly backup finished",
+  "WARN memory usage above 80 percent",
+  "ERROR service api crashed: out of memory",
+  "INFO api restarted by systemd",
+].join("\n");
+
 const NGINX_CONF = [
   "server {",
   "    listen 80;",
@@ -244,6 +252,7 @@ export function defaultFs(): FsDir {
         "access.log": file(NGINX_ACCESS),
         "app.txt": file("первая строка приложения\n"),
         "ci.log": file(CI_LOG),
+        "journal.log": file(JOURNAL_LOG),
         ".terraform.lock.hcl": file(TF_LOCK),
         ".github": dir({
           workflows: dir({ "ci.yml": file(CI_WORKFLOW) }),
@@ -591,6 +600,21 @@ export function tokenize(input: string): string[] {
   return tokens;
 }
 
+// matchLine — совпадение строки с шаблоном grep: поддержаны якоря ^ (начало)
+// и $ (конец); без якорей — подстрока. Метасимволы . * [] трактуются буквально.
+function matchLine(row: string, pattern: string, insensitive: boolean): boolean {
+  let r = insensitive ? row.toLowerCase() : row;
+  let p = insensitive ? pattern.toLowerCase() : pattern;
+  const anchorStart = p.startsWith("^");
+  const anchorEnd = p.endsWith("$");
+  if (anchorStart) p = p.slice(1);
+  if (anchorEnd) p = p.slice(0, -1);
+  if (anchorStart && anchorEnd) return r === p;
+  if (anchorStart) return r.startsWith(p);
+  if (anchorEnd) return r.endsWith(p);
+  return r.includes(p);
+}
+
 function listDir(node: FsDir, long: boolean, all: boolean): string {
   const names = Object.keys(node.children).sort();
   const visible = all ? [".", "..", ...names] : names.filter((n) => !n.startsWith("."));
@@ -627,12 +651,11 @@ export function execute(state: ShellState, input: string): CommandResult {
       const pattern = tokens.find((t, i) => i > 0 && !t.startsWith("-")) ?? "";
       const insensitive = flags.some((f) => f.includes("i"));
       const invert = flags.some((f) => f.includes("v"));
-      const needle = insensitive ? pattern.toLowerCase() : pattern;
       result = {
         ...result,
         output: rows
           .filter((row) => {
-            const has = (insensitive ? row.toLowerCase() : row).includes(needle);
+            const has = matchLine(row, pattern, insensitive);
             return invert ? !has : has;
           })
           .join("\n"),
@@ -819,10 +842,9 @@ function executeSingle(state: ShellState, input: string): CommandResult {
       if (!node || node.type !== "file") {
         return { output: `grep: ${target}: нет такого файла или каталога`, state };
       }
-      const needle = insensitive ? pattern.toLowerCase() : pattern;
       const matches: string[] = [];
       node.content.split("\n").forEach((row, i) => {
-        if ((insensitive ? row.toLowerCase() : row).includes(needle)) {
+        if (matchLine(row, pattern, insensitive)) {
           matches.push(numbered ? `${i + 1}:${row}` : row);
         }
       });
