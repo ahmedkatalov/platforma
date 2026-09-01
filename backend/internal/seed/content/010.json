@@ -299,7 +299,7 @@
     "resources": [
      {
       "title": "Microsoft Learn — What is Continuous Delivery?",
-      "url": "https://learn.microsoft.com/en-us/devops/deliver/what-is-continuous-delivery",
+      "url": "https://learn.microsoft.com/ru-ru/devops/deliver/what-is-continuous-delivery",
       "note": "Понятное объяснение CI, Delivery и Deployment (на английском)."
      },
      {
@@ -320,7 +320,7 @@
     "resources": [
      {
       "title": "Microsoft Learn — Key concepts for Pipelines",
-      "url": "https://learn.microsoft.com/en-us/azure/devops/pipelines/get-started/key-pipelines-concepts",
+      "url": "https://learn.microsoft.com/ru-ru/azure/devops/pipelines/get-started/key-pipelines-concepts",
       "note": "Официальное определение pipeline, stage, job, step, agent и trigger (на английском)."
      },
      {
@@ -474,7 +474,7 @@
     "resources": [
      {
       "title": "Microsoft Learn — Key concepts for Pipelines",
-      "url": "https://learn.microsoft.com/en-us/azure/devops/pipelines/get-started/key-pipelines-concepts",
+      "url": "https://learn.microsoft.com/ru-ru/azure/devops/pipelines/get-started/key-pipelines-concepts",
       "note": "Проверить определения pipeline, stage, job, step, agent, trigger."
      },
      {
@@ -546,12 +546,12 @@
     "resources": [
      {
       "title": "Understanding GitHub Actions",
-      "url": "https://docs.github.com/en/actions/learn-github-actions/understanding-github-actions",
+      "url": "https://docs.github.com/ru/actions/learn-github-actions/understanding-github-actions",
       "note": "Что такое workflow, job, step и action — официальный обзор."
      },
      {
       "title": "Workflow syntax for GitHub Actions",
-      "url": "https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions",
+      "url": "https://docs.github.com/ru/actions/using-workflows/workflow-syntax-for-github-actions",
       "note": "Справочник по всем ключам: on, jobs, runs-on, steps, uses, run."
      }
     ]
@@ -627,7 +627,7 @@
     "resources": [
      {
       "title": "git status (Pro Git)",
-      "url": "https://git-scm.com/docs/git-status",
+      "url": "https://git-scm.com/docs/git-status/ru",
       "note": "Что показывает статус и как его читать."
      },
      {
@@ -637,7 +637,7 @@
      },
      {
       "title": "About workflows (GitHub Docs)",
-      "url": "https://docs.github.com/en/actions/using-workflows/about-workflows",
+      "url": "https://docs.github.com/ru/actions/using-workflows/about-workflows",
       "note": "Где GitHub ищет файлы workflow и как они запускаются."
      }
     ]
@@ -689,12 +689,12 @@
     "resources": [
      {
       "title": "Events that trigger workflows",
-      "url": "https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows",
+      "url": "https://docs.github.com/ru/actions/using-workflows/events-that-trigger-workflows",
       "note": "Полный список событий on: push, pull_request, workflow_dispatch, schedule."
      },
      {
       "title": "About protected branches",
-      "url": "https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches",
+      "url": "https://docs.github.com/ru/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches",
       "note": "Как статус-чек CI делают обязательным для слияния в main."
      }
     ]
@@ -751,17 +751,17 @@
     "resources": [
      {
       "title": "Using secrets in GitHub Actions",
-      "url": "https://docs.github.com/en/actions/security-guides/using-secrets-in-github-actions",
+      "url": "https://docs.github.com/ru/actions/security-guides/using-secrets-in-github-actions",
       "note": "Как хранить и подключать секреты, как работает маскирование в логах."
      },
      {
       "title": "Storing workflow data as artifacts",
-      "url": "https://docs.github.com/en/actions/using-workflows/storing-workflow-data-as-artifacts",
+      "url": "https://docs.github.com/ru/actions/using-workflows/storing-workflow-data-as-artifacts",
       "note": "upload-artifact и download-artifact между job."
      },
      {
       "title": "Caching dependencies to speed up workflows",
-      "url": "https://docs.github.com/en/actions/using-workflows/caching-dependencies-to-speed-up-workflows",
+      "url": "https://docs.github.com/ru/actions/using-workflows/caching-dependencies-to-speed-up-workflows",
       "note": "actions/cache, ключ по hashFiles, cache hit и miss."
      }
     ]
@@ -918,12 +918,12 @@
     "resources": [
      {
       "title": "Workflow syntax for GitHub Actions",
-      "url": "https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions",
+      "url": "https://docs.github.com/ru/actions/using-workflows/workflow-syntax-for-github-actions",
       "note": "Справочник по on, jobs, needs, uses, run и другим ключам."
      },
      {
       "title": "Using secrets in GitHub Actions",
-      "url": "https://docs.github.com/en/actions/security-guides/using-secrets-in-github-actions",
+      "url": "https://docs.github.com/ru/actions/security-guides/using-secrets-in-github-actions",
       "note": "Правильная работа с секретами и их маскирование."
      }
     ]
@@ -980,12 +980,12 @@
     "resources": [
      {
       "title": "Using environments for deployment",
-      "url": "https://docs.github.com/en/actions/deployment/targeting-different-environments/using-environments-for-deployment",
+      "url": "https://docs.github.com/ru/actions/deployment/targeting-different-environments/using-environments-for-deployment",
       "note": "environment, required reviewers и ручное подтверждение перед prod."
      },
      {
       "title": "Deployment strategies",
-      "url": "https://docs.github.com/en/actions/deployment/about-deployments/deploying-with-github-actions",
+      "url": "https://docs.github.com/ru/actions/deployment/about-deployments/deploying-with-github-actions",
       "note": "Как GitHub Actions используют для деплоя и разделения окружений."
      },
      {
@@ -1067,7 +1067,7 @@
     "resources": [
      {
       "title": "GitHub Actions: просмотр логов job",
-      "url": "https://docs.github.com/en/actions/monitoring-and-troubleshooting-workflows/using-workflow-run-logs",
+      "url": "https://docs.github.com/ru/actions/monitoring-and-troubleshooting-workflows/using-workflow-run-logs",
       "note": "Как открыть и читать логи прогона в интерфейсе."
      },
      {
@@ -1243,7 +1243,7 @@
     "resources": [
      {
       "title": "GitHub Actions: окружения и защита деплоя",
-      "url": "https://docs.github.com/en/actions/deployment/targeting-different-environments/using-environments-for-deployment",
+      "url": "https://docs.github.com/ru/actions/deployment/targeting-different-environments/using-environments-for-deployment",
       "note": "required reviewers и ручное подтверждение перед prod."
      },
      {
@@ -1274,7 +1274,7 @@
      },
      {
       "title": "GitHub Actions: обзор",
-      "url": "https://docs.github.com/en/actions/learn-github-actions/understanding-github-actions",
+      "url": "https://docs.github.com/ru/actions/learn-github-actions/understanding-github-actions",
       "note": "Сравнить понятия jobs/steps с этапами GitLab."
      }
     ]
@@ -1476,7 +1476,7 @@
     "resources": [
      {
       "title": "GitHub Actions — документация",
-      "url": "https://docs.github.com/en/actions",
+      "url": "https://docs.github.com/ru/actions",
       "note": "Повторить синтаксис workflow и понятия job/step."
      },
      {

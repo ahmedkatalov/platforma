@@ -12,12 +12,12 @@
     "resources": [
      {
       "title": "Kubernetes Components",
-      "url": "https://kubernetes.io/docs/concepts/overview/components/",
+      "url": "https://kubernetes.io/ru/docs/concepts/overview/components/",
       "note": "Официальная схема кластера: control plane и узлы."
      },
      {
       "title": "What is Kubernetes",
-      "url": "https://kubernetes.io/docs/concepts/overview/",
+      "url": "https://kubernetes.io/ru/docs/concepts/overview/",
       "note": "Зачем нужен оркестратор и что он даёт."
      }
     ]
@@ -228,7 +228,7 @@
     "resources": [
      {
       "title": "Kubernetes Components",
-      "url": "https://kubernetes.io/docs/concepts/overview/components/",
+      "url": "https://kubernetes.io/ru/docs/concepts/overview/components/",
       "note": "Проверьте себя по официальной схеме компонентов."
      }
     ]
@@ -280,12 +280,12 @@
     "resources": [
      {
       "title": "Pods",
-      "url": "https://kubernetes.io/docs/concepts/workloads/pods/",
+      "url": "https://kubernetes.io/ru/docs/concepts/workloads/pods/",
       "note": "Что такое Pod и почему это не просто контейнер."
      },
      {
       "title": "Labels and Selectors",
-      "url": "https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/",
+      "url": "https://kubernetes.io/ru/docs/concepts/overview/working-with-objects/labels/",
       "note": "Как метки и селекторы связывают объекты."
      }
     ]
@@ -470,7 +470,7 @@
      },
      {
       "title": "Labels and Selectors",
-      "url": "https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/",
+      "url": "https://kubernetes.io/ru/docs/concepts/overview/working-with-objects/labels/",
       "note": "Разница между метками и селекторами."
      }
     ]
@@ -486,7 +486,7 @@
     "resources": [
      {
       "title": "Kubernetes: Namespaces",
-      "url": "https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/",
+      "url": "https://kubernetes.io/ru/docs/concepts/overview/working-with-objects/namespaces/",
       "note": "Официально про пространства имён и их назначение."
      },
      {
@@ -894,7 +894,7 @@
     "resources": [
      {
       "title": "Configure Liveness, Readiness and Startup Probes",
-      "url": "https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/",
+      "url": "https://kubernetes.io/ru/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/",
       "note": "Официальная инструкция по всем трём пробам с примерами httpGet, tcpSocket и exec."
      },
      {
@@ -987,7 +987,7 @@
      },
      {
       "title": "Jobs и CronJob",
-      "url": "https://kubernetes.io/docs/concepts/workloads/controllers/cron-jobs/",
+      "url": "https://kubernetes.io/ru/docs/concepts/workloads/controllers/cron-jobs/",
       "note": "Разовые и периодические задачи."
      },
      {
@@ -1059,7 +1059,7 @@
      },
      {
       "title": "CronJob",
-      "url": "https://kubernetes.io/docs/concepts/workloads/controllers/cron-jobs/",
+      "url": "https://kubernetes.io/ru/docs/concepts/workloads/controllers/cron-jobs/",
       "note": "Формат поля schedule и структура jobTemplate."
      }
     ]
@@ -1225,7 +1225,7 @@
     "resources": [
      {
       "title": "Kubernetes: обзор контроллеров рабочих нагрузок",
-      "url": "https://kubernetes.io/docs/concepts/workloads/controllers/",
+      "url": "https://kubernetes.io/ru/docs/concepts/workloads/controllers/",
       "note": "Сводка по Deployment, StatefulSet, DaemonSet и Job в одном месте."
      }
     ]
@@ -1455,7 +1455,7 @@
     "resources": [
      {
       "title": "kubectl Cheat Sheet",
-      "url": "https://kubernetes.io/docs/reference/kubectl/cheatsheet/",
+      "url": "https://kubernetes.io/ru/docs/reference/kubectl/cheatsheet/",
       "note": "Короткая шпаргалка по самым частым командам диагностики."
      }
     ]
@@ -1471,7 +1471,7 @@
     "resources": [
      {
       "title": "Kubernetes Concepts",
-      "url": "https://kubernetes.io/docs/concepts/",
+      "url": "https://kubernetes.io/ru/docs/concepts/",
       "note": "Обзорная карта всех понятий Kubernetes для повторения."
      },
      {
@@ -1762,7 +1762,7 @@
     "resources": [
      {
       "title": "Kubernetes — Concepts (обзор)",
-      "url": "https://kubernetes.io/docs/concepts/",
+      "url": "https://kubernetes.io/ru/docs/concepts/",
       "note": "Повторение всех объектов главы."
      },
      {

@@ -33,7 +33,7 @@
     "resources": [
      {
       "title": "PostgreSQL: индексы",
-      "url": "https://www.postgresql.org/docs/current/indexes.html",
+      "url": "https://ru.wikipedia.org/wiki/Индекс_(базы_данных)",
       "note": "Как устроены индексы, когда они помогают и чего стоят."
      },
      {
@@ -198,7 +198,7 @@
      },
      {
       "title": "PostgreSQL: Indexes",
-      "url": "https://www.postgresql.org/docs/current/indexes.html",
+      "url": "https://ru.wikipedia.org/wiki/Индекс_(базы_данных)",
       "note": "Официальное объяснение индексов и их цены"
      }
     ]
@@ -368,7 +368,7 @@
      },
      {
       "title": "PostgreSQL: высокая доступность и репликация",
-      "url": "https://www.postgresql.org/docs/current/high-availability.html",
+      "url": "https://ru.wikipedia.org/wiki/Репликация_(вычислительная_техника)",
       "note": "Обзор репликации primary/replica и режимов синхронности."
      }
     ]
@@ -661,7 +661,7 @@
      },
      {
       "title": "PostgreSQL: Indexes",
-      "url": "https://www.postgresql.org/docs/current/indexes.html",
+      "url": "https://ru.wikipedia.org/wiki/Индекс_(базы_данных)",
       "note": "Зачем нужны индексы и когда они помогают"
      },
      {

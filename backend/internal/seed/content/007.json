@@ -12,7 +12,7 @@
     "resources": [
      {
       "title": "MDN: обзор клиент-серверной модели",
-      "url": "https://developer.mozilla.org/en-US/docs/Learn/Server-side/First_steps/Client-Server_overview",
+      "url": "https://developer.mozilla.org/ru/docs/Learn/Server-side/First_steps/Client-Server_overview",
       "note": "Как frontend и backend обмениваются запросами и ответами."
      },
      {
@@ -33,7 +33,7 @@
     "resources": [
      {
       "title": "Microsoft Learn: стиль архитектуры микросервисов",
-      "url": "https://learn.microsoft.com/en-us/azure/architecture/guide/architecture-styles/microservices",
+      "url": "https://learn.microsoft.com/ru-ru/azure/architecture/guide/architecture-styles/microservices",
       "note": "Когда микросервисы уместны, а когда нет."
      },
      {
@@ -191,7 +191,7 @@
     "resources": [
      {
       "title": "MDN: клиент-серверная модель",
-      "url": "https://developer.mozilla.org/en-US/docs/Learn/Server-side/First_steps/Client-Server_overview",
+      "url": "https://developer.mozilla.org/ru/docs/Learn/Server-side/First_steps/Client-Server_overview",
       "note": "Освежить роли слоёв, если что-то не сошлось."
      }
     ]
@@ -207,17 +207,17 @@
     "resources": [
      {
       "title": "MDN: обзор HTTP",
-      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Overview",
+      "url": "https://developer.mozilla.org/ru/docs/Web/HTTP/Overview",
       "note": "Как устроены запрос и ответ на уровне сообщения."
      },
      {
       "title": "MDN: коды статуса HTTP",
-      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Status",
+      "url": "https://developer.mozilla.org/ru/docs/Web/HTTP/Status",
       "note": "Справочник по всем классам кодов, от 2xx до 5xx."
      },
      {
       "title": "MDN: методы HTTP",
-      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Methods",
+      "url": "https://developer.mozilla.org/ru/docs/Web/HTTP/Methods",
       "note": "Подробно про GET, POST, PUT, PATCH, DELETE."
      }
     ]
@@ -462,17 +462,17 @@
     "resources": [
      {
       "title": "MDN: аутентификация в HTTP",
-      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Authentication",
+      "url": "https://developer.mozilla.org/ru/docs/Web/HTTP/Authentication",
       "note": "Как работает заголовок Authorization и схема Bearer."
      },
      {
       "title": "MDN: cookies",
-      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Cookies",
+      "url": "https://developer.mozilla.org/ru/docs/Web/HTTP/Cookies",
       "note": "Как браузер хранит и шлёт cookie сессии."
      },
      {
       "title": "roadmap.sh: аутентификация",
-      "url": "https://roadmap.sh/guides/session-authentication",
+      "url": "https://roadmap.sh/guides/session-based-authentication",
       "note": "Сессии против токенов простым языком."
      }
     ]
@@ -488,17 +488,17 @@
     "resources": [
      {
       "title": "MDN: The WebSocket API",
-      "url": "https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API",
+      "url": "https://developer.mozilla.org/ru/docs/Web/API/WebSockets_API",
       "note": "Как устроен постоянный двусторонний канал WebSocket."
      },
      {
       "title": "GraphQL — официальный сайт",
-      "url": "https://graphql.org/learn/",
+      "url": "https://ru.wikipedia.org/wiki/GraphQL",
       "note": "Почему клиент сам выбирает поля запроса."
      },
      {
       "title": "gRPC — Introduction",
-      "url": "https://grpc.io/docs/what-is-grpc/introduction/",
+      "url": "https://ru.wikipedia.org/wiki/GRPC",
       "note": "Бинарный быстрый вызов между сервисами."
      }
     ]
@@ -514,7 +514,7 @@
     "resources": [
      {
       "title": "The Twelve-Factor App: Config",
-      "url": "https://12factor.net/config",
+      "url": "https://12factor.net/ru/config",
       "note": "Почему конфигурацию держат в переменных окружения."
      },
      {
@@ -524,7 +524,7 @@
      },
      {
       "title": "Introducing JSON",
-      "url": "https://www.json.org/json-en.html",
+      "url": "https://ru.wikipedia.org/wiki/JSON",
       "note": "Синтаксис объектов, массивов и типов JSON."
      }
     ]
@@ -576,7 +576,7 @@
     "resources": [
      {
       "title": "The Twelve-Factor App: Config",
-      "url": "https://12factor.net/config",
+      "url": "https://12factor.net/ru/config",
       "note": "Почему секреты и настройки выносят в окружение."
      },
      {
@@ -789,12 +789,12 @@
     "resources": [
      {
       "title": "MDN: HTTP response status codes",
-      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Status",
+      "url": "https://developer.mozilla.org/ru/docs/Web/HTTP/Status",
       "note": "Полный справочник по классам кодов 2xx-5xx."
      },
      {
       "title": "The Twelve-Factor App: Config",
-      "url": "https://12factor.net/config",
+      "url": "https://12factor.net/ru/config",
       "note": "Конфигурация и секреты снаружи кода."
      }
     ]

@@ -380,7 +380,7 @@
     "resources": [
      {
       "title": "Azure: обзор виртуальных машин",
-      "url": "https://learn.microsoft.com/en-us/azure/virtual-machines/overview",
+      "url": "https://learn.microsoft.com/ru-ru/azure/virtual-machines/overview",
       "note": "Те же параметры (ядра, память, диск, ОС) в интерфейсе провайдера."
      },
      {

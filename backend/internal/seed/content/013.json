@@ -12,12 +12,12 @@
     "resources": [
      {
       "title": "Terraform: введение и назначение",
-      "url": "https://developer.hashicorp.com/terraform/intro",
+      "url": "https://ru.wikipedia.org/wiki/Terraform",
       "note": "Официальное введение: что такое Terraform и зачем он нужен."
      },
      {
       "title": "Сценарии использования IaC",
-      "url": "https://developer.hashicorp.com/terraform/intro/use-cases",
+      "url": "https://ru.wikipedia.org/wiki/Инфраструктура_как_код",
       "note": "Какие задачи закрывает инфраструктура как код."
      }
     ]
@@ -389,7 +389,7 @@
     "resources": [
      {
       "title": "Terraform: введение",
-      "url": "https://developer.hashicorp.com/terraform/intro",
+      "url": "https://ru.wikipedia.org/wiki/Terraform",
       "note": "Освежить понятия провайдера, ресурса и рабочего цикла."
      }
     ]
@@ -922,7 +922,7 @@
     "resources": [
      {
       "title": "Terraform: обзор языка и рабочего процесса",
-      "url": "https://developer.hashicorp.com/terraform/intro",
+      "url": "https://ru.wikipedia.org/wiki/Terraform",
       "note": "Короткое повторение модели: провайдеры, ресурсы, state, цикл plan/apply."
      },
      {

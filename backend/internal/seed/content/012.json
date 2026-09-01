@@ -12,7 +12,7 @@
     "resources": [
      {
       "title": "Describe cloud service types (IaaS, PaaS, SaaS)",
-      "url": "https://learn.microsoft.com/en-us/training/modules/describe-cloud-service-types/",
+      "url": "https://learn.microsoft.com/ru-ru/training/modules/describe-cloud-service-types/",
       "note": "Официальный разбор трёх моделей услуг и границы ответственности."
      },
      {
@@ -130,7 +130,7 @@
     "resources": [
      {
       "title": "AWS: типы облачных вычислений",
-      "url": "https://aws.amazon.com/types-of-cloud-computing/",
+      "url": "https://aws.amazon.com/ru/types-of-cloud-computing/",
       "note": "Освежить границы IaaS, PaaS и SaaS перед проверкой."
      }
     ]
@@ -146,7 +146,7 @@
     "resources": [
      {
       "title": "AWS: регионы и зоны доступности",
-      "url": "https://aws.amazon.com/about-aws/global-infrastructure/regions_az/",
+      "url": "https://aws.amazon.com/ru/about-aws/global-infrastructure/regions_az/",
       "note": "Официальное объяснение, как устроена глобальная инфраструктура облака."
      },
      {
@@ -167,7 +167,7 @@
     "resources": [
      {
       "title": "Virtual network overview",
-      "url": "https://learn.microsoft.com/en-us/azure/virtual-network/virtual-networks-overview",
+      "url": "https://learn.microsoft.com/ru-ru/azure/virtual-network/virtual-networks-overview",
       "note": "Как устроена виртуальная сеть в облаке: подсети, приватные и публичные адреса."
      },
      {
@@ -188,12 +188,12 @@
     "resources": [
      {
       "title": "AWS S3: что такое объектное хранилище",
-      "url": "https://docs.aws.amazon.com/AmazonS3/latest/userguide/Welcome.html",
+      "url": "https://docs.aws.amazon.com/ru_ru/AmazonS3/latest/userguide/Welcome.html",
       "note": "Каноничный пример объектного хранилища."
      },
      {
       "title": "AWS EBS: блочные диски",
-      "url": "https://docs.aws.amazon.com/ebs/latest/userguide/what-is-ebs.html",
+      "url": "https://docs.aws.amazon.com/ru_ru/ebs/latest/userguide/what-is-ebs.html",
       "note": "Блочное хранилище для одной ВМ."
      }
     ]
@@ -345,12 +345,12 @@
     "resources": [
      {
       "title": "AWS: регионы и зоны доступности",
-      "url": "https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/using-regions-availability-zones.html",
+      "url": "https://docs.aws.amazon.com/ru_ru/AWSEC2/latest/UserGuide/using-regions-availability-zones.html",
       "note": "Повторить географию надёжности."
      },
      {
       "title": "AWS: подсети в VPC",
-      "url": "https://docs.aws.amazon.com/vpc/latest/userguide/configure-subnets.html",
+      "url": "https://docs.aws.amazon.com/ru_ru/vpc/latest/userguide/configure-subnets.html",
       "note": "Публичные и приватные подсети."
      }
     ]
@@ -366,12 +366,12 @@
     "resources": [
      {
       "title": "AWS: security groups",
-      "url": "https://docs.aws.amazon.com/vpc/latest/userguide/vpc-security-groups.html",
+      "url": "https://docs.aws.amazon.com/ru_ru/vpc/latest/userguide/vpc-security-groups.html",
       "note": "Как устроены разрешающие правила и источники."
      },
      {
       "title": "Порты TCP/UDP (обзор)",
-      "url": "https://developer.mozilla.org/en-US/docs/Glossary/Port",
+      "url": "https://developer.mozilla.org/ru/docs/Glossary/Port",
       "note": "Что такое порт простыми словами."
      }
     ]
@@ -387,12 +387,12 @@
     "resources": [
      {
       "title": "AWS IAM: как это работает",
-      "url": "https://docs.aws.amazon.com/IAM/latest/UserGuide/intro-structure.html",
+      "url": "https://docs.aws.amazon.com/ru_ru/IAM/latest/UserGuide/intro-structure.html",
       "note": "Пользователи, роли и политики."
      },
      {
       "title": "Принцип наименьших привилегий",
-      "url": "https://docs.aws.amazon.com/IAM/latest/UserGuide/best-practices.html",
+      "url": "https://docs.aws.amazon.com/ru_ru/IAM/latest/UserGuide/best-practices.html",
       "note": "Официальные рекомендации по доступам."
      }
     ]
@@ -429,7 +429,7 @@
     "resources": [
      {
       "title": "Отказоустойчивость и репликация (PostgreSQL)",
-      "url": "https://www.postgresql.org/docs/current/high-availability.html",
+      "url": "https://ru.wikipedia.org/wiki/Репликация_(вычислительная_техника)",
       "note": "Что такое реплики и зачем они нужны"
      },
      {
@@ -450,7 +450,7 @@
     "resources": [
      {
       "title": "What is cost management (Microsoft Cost Management)",
-      "url": "https://learn.microsoft.com/en-us/azure/cost-management-billing/costs/overview-cost-management",
+      "url": "https://learn.microsoft.com/ru-ru/azure/cost-management-billing/costs/overview-cost-management",
       "note": "Официальный обзор контроля затрат: бюджеты, оповещения и анализ расходов."
      },
      {

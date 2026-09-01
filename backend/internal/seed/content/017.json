@@ -17,12 +17,12 @@
      },
      {
       "title": "Authentication vs authorization",
-      "url": "https://learn.microsoft.com/en-us/entra/identity-platform/authentication-vs-authorization",
+      "url": "https://learn.microsoft.com/ru-ru/entra/identity-platform/authentication-vs-authorization",
       "note": "Разница между «кто ты» и «что тебе можно»."
      },
      {
       "title": "TLS — глоссарий MDN",
-      "url": "https://developer.mozilla.org/en-US/docs/Glossary/TLS",
+      "url": "https://developer.mozilla.org/ru/docs/Glossary/TLS",
       "note": "Что такое TLS и как он защищает канал."
      }
     ]
@@ -940,7 +940,7 @@
     "resources": [
      {
       "title": "Kubernetes: Liveness, Readiness and Startup Probes",
-      "url": "https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/",
+      "url": "https://kubernetes.io/ru/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/",
       "note": "Официальный разбор проб и их полей"
      },
      {

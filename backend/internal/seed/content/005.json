@@ -12,12 +12,12 @@
     "resources": [
      {
       "title": "Git — About Version Control",
-      "url": "https://git-scm.com/book/en/v2/Getting-Started-About-Version-Control",
+      "url": "https://git-scm.com/book/ru/v2/Введение-О-системе-контроля-версий",
       "note": "Первая глава книги Pro Git: зачем нужен контроль версий."
      },
      {
       "title": "Git — What is Git?",
-      "url": "https://git-scm.com/book/en/v2/Getting-Started-What-is-Git%3F",
+      "url": "https://git-scm.com/book/ru/v2/Введение-Что-такое-Git%3F",
       "note": "Как Git хранит данные снимками, а не разницей строк."
      }
     ]
@@ -138,7 +138,7 @@
     "resources": [
      {
       "title": "Git — Recording Changes to the Repository",
-      "url": "https://git-scm.com/book/en/v2/Git-Basics-Recording-Changes-to-the-Repository",
+      "url": "https://git-scm.com/book/ru/v2/Основы-Git-Запись-изменений-в-репозиторий",
       "note": "Как файлы переходят между состояниями и зонами Git."
      }
     ]
@@ -204,12 +204,12 @@
     "resources": [
      {
       "title": "Git — First-Time Git Setup",
-      "url": "https://git-scm.com/book/en/v2/Getting-Started-First-Time-Git-Setup",
+      "url": "https://git-scm.com/book/ru/v2/Введение-Первоначальная-настройка-Git",
       "note": "Настройка user.name и user.email через git config."
      },
      {
       "title": "git init — документация",
-      "url": "https://git-scm.com/docs/git-init",
+      "url": "https://git-scm.com/docs/git-init/ru",
       "note": "Что именно делает инициализация репозитория."
      }
     ]
@@ -274,12 +274,12 @@
     "resources": [
      {
       "title": "Git — Recording Changes to the Repository",
-      "url": "https://git-scm.com/book/en/v2/Git-Basics-Recording-Changes-to-the-Repository",
+      "url": "https://git-scm.com/book/ru/v2/Основы-Git-Запись-изменений-в-репозиторий",
       "note": "Состояния файла и цикл add → commit."
      },
      {
       "title": "Git — Viewing the Commit History",
-      "url": "https://git-scm.com/book/en/v2/Git-Basics-Viewing-the-Commit-History",
+      "url": "https://git-scm.com/book/ru/v2/Основы-Git-Просмотр-истории-коммитов",
       "note": "Чтение истории через git log и его флаги."
      }
     ]
@@ -326,7 +326,7 @@
     "resources": [
      {
       "title": "gitignore — документация",
-      "url": "https://git-scm.com/docs/gitignore",
+      "url": "https://git-scm.com/docs/gitignore/ru",
       "note": "Синтаксис шаблонов: маски, слэши, комментарии."
      },
      {
@@ -457,7 +457,7 @@
     "resources": [
      {
       "title": "git status и жизненный цикл файла",
-      "url": "https://git-scm.com/docs/git-status",
+      "url": "https://git-scm.com/docs/git-status/ru",
       "note": "Официальное описание состояний файлов."
      },
      {
@@ -535,17 +535,17 @@
     "resources": [
      {
       "title": "git restore",
-      "url": "https://git-scm.com/docs/git-restore",
+      "url": "https://git-scm.com/docs/git-restore/ru",
       "note": "Возврат файлов и снятие из индекса."
      },
      {
       "title": "git revert",
-      "url": "https://git-scm.com/docs/git-revert",
+      "url": "https://git-scm.com/docs/git-revert/ru",
       "note": "Безопасная отмена коммита новым коммитом."
      },
      {
       "title": "git stash",
-      "url": "https://git-scm.com/docs/git-stash",
+      "url": "https://git-scm.com/docs/git-stash/ru",
       "note": "Как временно отложить незаконченную работу."
      }
     ]
@@ -561,17 +561,17 @@
     "resources": [
      {
       "title": "Git — ветвление в двух словах",
-      "url": "https://git-scm.com/book/ru/v2/Ветвление-в-Git-Ветки-в-двух-словах",
+      "url": "https://git-scm.com/book/ru/v2/Ветвление-в-Git-О-ветвлении-в-двух-словах",
       "note": "Глава Pro Git про устройство веток на русском."
      },
      {
       "title": "git merge",
-      "url": "https://git-scm.com/docs/git-merge",
+      "url": "https://git-scm.com/docs/git-merge/ru",
       "note": "Fast-forward и merge-коммит в документации."
      },
      {
       "title": "git rebase",
-      "url": "https://git-scm.com/docs/git-rebase",
+      "url": "https://git-scm.com/docs/git-rebase/ru",
       "note": "Как rebase переписывает коммиты."
      }
     ]
@@ -660,7 +660,7 @@
      },
      {
       "title": "git switch",
-      "url": "https://git-scm.com/docs/git-switch",
+      "url": "https://git-scm.com/docs/git-switch/ru",
       "note": "Создание и переключение веток."
      }
     ]
@@ -745,12 +745,12 @@
     "resources": [
      {
       "title": "git push — документация",
-      "url": "https://git-scm.com/docs/git-push",
+      "url": "https://git-scm.com/docs/git-push/ru",
       "note": "Что именно отправляется и почему возникает non-fast-forward."
      },
      {
       "title": "git fetch vs git pull",
-      "url": "https://git-scm.com/docs/git-pull",
+      "url": "https://git-scm.com/docs/git-pull/ru",
       "note": "Официальное объяснение, что pull = fetch + merge."
      }
     ]
@@ -766,7 +766,7 @@
     "resources": [
      {
       "title": "GitHub Flow — наглядное описание",
-      "url": "https://docs.github.com/en/get-started/using-github/github-flow",
+      "url": "https://docs.github.com/ru/get-started/using-github/github-flow",
       "note": "Самая простая стратегия ветвления для команды."
      },
      {
@@ -776,7 +776,7 @@
      },
      {
       "title": "git tag — документация",
-      "url": "https://git-scm.com/docs/git-tag",
+      "url": "https://git-scm.com/docs/git-tag/ru",
       "note": "Аннотированные и лёгкие теги, как их создавать."
      }
     ]
@@ -838,7 +838,7 @@
      },
      {
       "title": "git reflog — документация",
-      "url": "https://git-scm.com/docs/git-reflog",
+      "url": "https://git-scm.com/docs/git-reflog/ru",
       "note": "Журнал перемещений HEAD — спасает после reset --hard и detached HEAD."
      }
     ]

@@ -12,7 +12,7 @@
     "resources": [
      {
       "title": "Docker overview",
-      "url": "https://docs.docker.com/get-started/docker-overview/",
+      "url": "https://ru.wikipedia.org/wiki/Docker",
       "note": "Официальный обзор: образы, контейнеры и движок."
      },
      {
@@ -1240,7 +1240,7 @@
      },
      {
       "title": "Docker: использование Compose в разработке",
-      "url": "https://docs.docker.com/compose/how-tos/",
+      "url": "https://docs.docker.com/compose/how-tos/multiple-compose-files/",
       "note": "bind mount кода и override-файлы для dev-окружения."
      }
     ]

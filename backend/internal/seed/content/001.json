@@ -228,7 +228,7 @@
     "resources": [
      {
       "title": "Git — git log",
-      "url": "https://git-scm.com/docs/git-log",
+      "url": "https://git-scm.com/docs/git-log/ru",
       "note": "Официальная справка по просмотру истории коммитов."
      },
      {
@@ -425,12 +425,12 @@
     "resources": [
      {
       "title": "GitHub Actions — About workflows",
-      "url": "https://docs.github.com/en/actions/using-workflows/about-workflows",
+      "url": "https://docs.github.com/ru/actions/using-workflows/about-workflows",
       "note": "Реальные пайплайны описывают в YAML-файлах."
      },
      {
       "title": "YAML — официальный сайт",
-      "url": "https://yaml.org/",
+      "url": "https://ru.wikipedia.org/wiki/YAML",
       "note": "Формат, в котором удобно описывать шаги как данные."
      }
     ]
@@ -446,7 +446,7 @@
     "resources": [
      {
       "title": "Terraform: введение в инфраструктуру как код",
-      "url": "https://developer.hashicorp.com/terraform/intro",
+      "url": "https://ru.wikipedia.org/wiki/Terraform",
       "note": "Официальное объяснение декларативного описания инфраструктуры."
      },
      {
@@ -477,7 +477,7 @@
      },
      {
       "title": "Microsoft Learn: What is DevOps?",
-      "url": "https://learn.microsoft.com/en-us/devops/what-is-devops",
+      "url": "https://learn.microsoft.com/ru-ru/devops/what-is-devops",
       "note": "Про культуру и совместную работу команд вокруг доставки ПО."
      }
     ]
@@ -744,7 +744,7 @@
      },
      {
       "title": "Microsoft Learn: What is DevOps?",
-      "url": "https://learn.microsoft.com/en-us/devops/what-is-devops",
+      "url": "https://learn.microsoft.com/ru-ru/devops/what-is-devops",
       "note": "Сжатое повторение сути и культуры DevOps."
      }
     ]

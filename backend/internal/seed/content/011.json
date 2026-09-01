@@ -12,12 +12,12 @@
     "resources": [
      {
       "title": "nginx: Beginner's Guide",
-      "url": "https://nginx.org/en/docs/beginners_guide.html",
+      "url": "https://nginx.org/ru/docs/beginners_guide.html",
       "note": "Как nginx устроен и как принимает запросы"
      },
      {
       "title": "MDN: Proxy servers and tunneling",
-      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Proxy_servers_and_tunneling",
+      "url": "https://ru.wikipedia.org/wiki/Прокси-сервер",
       "note": "Роль прокси между клиентом и сервером"
      }
     ]
@@ -88,7 +88,7 @@
      },
      {
       "title": "MDN: DNS (глоссарий)",
-      "url": "https://developer.mozilla.org/en-US/docs/Glossary/DNS",
+      "url": "https://developer.mozilla.org/ru/docs/Glossary/DNS",
       "note": "Что именно проверяет dig, когда спрашивает про домен."
      }
     ]
@@ -104,12 +104,12 @@
     "resources": [
      {
       "title": "nginx: Serving Static Content",
-      "url": "https://nginx.org/en/docs/beginners_guide.html",
+      "url": "https://nginx.org/ru/docs/beginners_guide.html",
       "note": "root, index и раздача файлов сайта"
      },
      {
       "title": "nginx: ngx_http_core_module",
-      "url": "https://nginx.org/en/docs/http/ngx_http_core_module.html",
+      "url": "https://nginx.org/ru/docs/http/ngx_http_core_module.html",
       "note": "Директивы listen, server_name, root, location"
      }
     ]
@@ -161,12 +161,12 @@
     "resources": [
      {
       "title": "nginx: ngx_http_core_module",
-      "url": "https://nginx.org/en/docs/http/ngx_http_core_module.html",
+      "url": "https://nginx.org/ru/docs/http/ngx_http_core_module.html",
       "note": "Справочник директив listen, server_name, root, index."
      },
      {
       "title": "nginx: Beginner's Guide",
-      "url": "https://nginx.org/en/docs/beginners_guide.html",
+      "url": "https://nginx.org/ru/docs/beginners_guide.html",
       "note": "Первый конфиг для новичка."
      }
     ]
@@ -182,7 +182,7 @@
     "resources": [
      {
       "title": "nginx: ngx_http_proxy_module",
-      "url": "https://nginx.org/en/docs/http/ngx_http_proxy_module.html",
+      "url": "https://nginx.org/ru/docs/http/ngx_http_proxy_module.html",
       "note": "Директивы proxy_pass и proxy_set_header"
      },
      {
@@ -244,12 +244,12 @@
     "resources": [
      {
       "title": "nginx: upstream module",
-      "url": "https://nginx.org/en/docs/http/ngx_http_upstream_module.html",
+      "url": "https://nginx.org/ru/docs/http/ngx_http_upstream_module.html",
       "note": "Как описать группу backend."
      },
      {
       "title": "nginx: proxy_pass",
-      "url": "https://nginx.org/en/docs/http/ngx_http_proxy_module.html#proxy_pass",
+      "url": "https://nginx.org/ru/docs/http/ngx_http_proxy_module.html#proxy_pass",
       "note": "Проксирование на имя upstream."
      },
      {
@@ -412,7 +412,7 @@
      },
      {
       "title": "nginx beginners guide",
-      "url": "https://nginx.org/en/docs/beginners_guide.html",
+      "url": "https://nginx.org/ru/docs/beginners_guide.html",
       "note": "Базовый разбор proxy_pass и статики."
      }
     ]
@@ -428,12 +428,12 @@
     "resources": [
      {
       "title": "nginx: настройка HTTPS-серверов",
-      "url": "https://nginx.org/en/docs/http/configuring_https_servers.html",
+      "url": "https://nginx.org/ru/docs/http/configuring_https_servers.html",
       "note": "Официальный разбор listen 443 ssl и сертификатов."
      },
      {
       "title": "MDN: что такое TLS",
-      "url": "https://developer.mozilla.org/en-US/docs/Glossary/TLS",
+      "url": "https://developer.mozilla.org/ru/docs/Glossary/TLS",
       "note": "Простое объяснение шифрования по-человечески."
      }
     ]
@@ -508,7 +508,7 @@
     "resources": [
      {
       "title": "nginx: Controlling nginx (сигналы и -s reload)",
-      "url": "https://nginx.org/en/docs/control.html",
+      "url": "https://nginx.org/ru/docs/control.html",
       "note": "nginx -t, nginx -s reload и другие сигналы"
      },
      {
@@ -529,7 +529,7 @@
     "resources": [
      {
       "title": "nginx beginners guide",
-      "url": "https://nginx.org/en/docs/beginners_guide.html",
+      "url": "https://nginx.org/ru/docs/beginners_guide.html",
       "note": "Обзор reverse proxy и статики одним куском."
      },
      {
@@ -539,7 +539,7 @@
      },
      {
       "title": "MDN: коды состояния HTTP",
-      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Status",
+      "url": "https://developer.mozilla.org/ru/docs/Web/HTTP/Status",
       "note": "Справочник кодов для диагностики."
      }
     ]
@@ -788,7 +788,7 @@
     "resources": [
      {
       "title": "nginx: как работает reverse proxy",
-      "url": "https://nginx.org/en/docs/http/ngx_http_proxy_module.html",
+      "url": "https://nginx.org/ru/docs/http/ngx_http_proxy_module.html",
       "note": "директива proxy_pass и проксирование запросов"
      },
      {

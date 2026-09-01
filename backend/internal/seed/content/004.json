@@ -12,12 +12,12 @@
     "resources": [
      {
       "title": "Как работает интернет (MDN)",
-      "url": "https://developer.mozilla.org/en-US/docs/Learn/Common_questions/Web_mechanics/How_does_the_Internet_work",
+      "url": "https://developer.mozilla.org/ru/docs/Learn/Common_questions/Web_mechanics/How_does_the_Internet_work",
       "note": "Простое объяснение узлов, сетей и того, как данные ходят между компьютерами."
      },
      {
       "title": "Что такое сеть (Cloudflare Learning)",
-      "url": "https://www.cloudflare.com/learning/network-layer/what-is-a-computer-network/",
+      "url": "https://www.cloudflare.com/ru-ru/learning/network-layer/what-is-a-computer-network/",
       "note": "Короткий обзор LAN, WAN и коммутации пакетов."
      }
     ]
@@ -219,7 +219,7 @@
     "resources": [
      {
       "title": "Что такое коммутация пакетов (Cloudflare Learning)",
-      "url": "https://www.cloudflare.com/learning/network-layer/what-is-packet-switching/",
+      "url": "https://www.cloudflare.com/ru-ru/learning/network-layer/what-is-packet-switching/",
       "note": "Если засомневались в вопросах про пакеты — короткое повторение."
      }
     ]
@@ -235,7 +235,7 @@
     "resources": [
      {
       "title": "IP-адреса и подсети (Cloudflare Learning)",
-      "url": "https://www.cloudflare.com/learning/network-layer/what-is-an-ip-address/",
+      "url": "https://www.cloudflare.com/ru-ru/learning/network-layer/what-is-an-ip-address/",
       "note": "Понятное объяснение IPv4, IPv6 и приватных адресов."
      },
      {
@@ -256,12 +256,12 @@
     "resources": [
      {
       "title": "Что такое NAT (Cloudflare Learning)",
-      "url": "https://www.cloudflare.com/learning/network-layer/what-is-nat/",
+      "url": "https://www.cloudflare.com/ru-ru/learning/network-layer/what-is-nat/",
       "note": "Как один публичный адрес обслуживает много приватных устройств."
      },
      {
       "title": "Что такое маршрутизация (Cloudflare Learning)",
-      "url": "https://www.cloudflare.com/learning/network-layer/what-is-routing/",
+      "url": "https://www.cloudflare.com/ru-ru/learning/network-layer/what-is-routing/",
       "note": "Как роутеры по таблицам ведут пакет прыжок за прыжком."
      }
     ]
@@ -472,7 +472,7 @@
     "resources": [
      {
       "title": "MDN: What is an IP address",
-      "url": "https://developer.mozilla.org/en-US/docs/Glossary/IP_Address",
+      "url": "https://developer.mozilla.org/ru/docs/Glossary/IP_Address",
       "note": "Короткое определение IP-адреса простыми словами."
      },
      {
@@ -493,12 +493,12 @@
     "resources": [
      {
       "title": "MDN: DNS",
-      "url": "https://developer.mozilla.org/en-US/docs/Glossary/DNS",
+      "url": "https://developer.mozilla.org/ru/docs/Glossary/DNS",
       "note": "Короткое объяснение, что такое DNS и зачем он нужен."
      },
      {
       "title": "MDN: What is a domain name",
-      "url": "https://developer.mozilla.org/en-US/docs/Learn_web_development/Howto/Web_mechanics/What_is_a_domain_name",
+      "url": "https://developer.mozilla.org/ru/docs/Learn_web_development/Howto/Web_mechanics/What_is_a_domain_name",
       "note": "Как имя домена связано с адресом сервера."
      }
     ]
@@ -597,12 +597,12 @@
     "resources": [
      {
       "title": "MDN: TCP",
-      "url": "https://developer.mozilla.org/en-US/docs/Glossary/TCP",
+      "url": "https://developer.mozilla.org/ru/docs/Glossary/TCP",
       "note": "Короткое определение TCP и его гарантий."
      },
      {
       "title": "MDN: Port",
-      "url": "https://developer.mozilla.org/en-US/docs/Glossary/Port",
+      "url": "https://developer.mozilla.org/ru/docs/Glossary/Port",
       "note": "Что такое сетевой порт и зачем он нужен."
      }
     ]
@@ -741,12 +741,12 @@
     "resources": [
      {
       "title": "MDN: DNS",
-      "url": "https://developer.mozilla.org/en-US/docs/Glossary/DNS",
+      "url": "https://developer.mozilla.org/ru/docs/Glossary/DNS",
       "note": "Повторить, как имя превращается в адрес."
      },
      {
       "title": "MDN: TCP",
-      "url": "https://developer.mozilla.org/en-US/docs/Glossary/TCP",
+      "url": "https://developer.mozilla.org/ru/docs/Glossary/TCP",
       "note": "Повторить гарантии TCP и отличие от UDP."
      }
     ]
@@ -767,12 +767,12 @@
      },
      {
       "title": "MDN: HTTP response status codes",
-      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Status",
+      "url": "https://developer.mozilla.org/ru/docs/Web/HTTP/Status",
       "note": "Полный справочник кодов статуса по классам."
      },
      {
       "title": "MDN: Transport Layer Security (TLS)",
-      "url": "https://developer.mozilla.org/en-US/docs/Web/Security/Transport_Layer_Security",
+      "url": "https://ru.wikipedia.org/wiki/TLS",
       "note": "Как TLS шифрует трафик и роль сертификатов."
      }
     ]
@@ -793,12 +793,12 @@
      },
      {
       "title": "nginx: reverse proxy",
-      "url": "https://nginx.org/en/docs/http/ngx_http_proxy_module.html",
+      "url": "https://nginx.org/ru/docs/http/ngx_http_proxy_module.html",
       "note": "Официальная документация по proxy_pass."
      },
      {
       "title": "MDN: Прокси-серверы",
-      "url": "https://developer.mozilla.org/ru/docs/Web/HTTP/Proxy_servers_and_tunneling",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Proxy_servers_and_tunneling",
       "note": "Роль прокси в передаче HTTP-трафика."
      }
     ]

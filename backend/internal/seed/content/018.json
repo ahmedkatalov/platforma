@@ -765,7 +765,7 @@
      },
      {
       "title": "Nginx: обратный прокси",
-      "url": "https://nginx.org/en/docs/http/ngx_http_proxy_module.html",
+      "url": "https://nginx.org/ru/docs/http/ngx_http_proxy_module.html",
       "note": "Как прокси передаёт запросы приложению."
      }
     ]
@@ -909,7 +909,7 @@
     "resources": [
      {
       "title": "kubectl: шпаргалка команд",
-      "url": "https://kubernetes.io/docs/reference/kubectl/cheatsheet/",
+      "url": "https://kubernetes.io/ru/docs/reference/kubectl/cheatsheet/",
       "note": "get, describe, logs, rollout restart — база диагностики подов"
      },
      {
@@ -1140,7 +1140,7 @@
     "resources": [
      {
       "title": "Platform Engineering Roadmap",
-      "url": "https://roadmap.sh/platform-engineering",
+      "url": "https://habr.com/ru/companies/05-ru/articles/809661/",
       "note": "Что входит в платформенную инженерию и IDP."
      },
      {
@@ -1290,7 +1290,7 @@
     "resources": [
      {
       "title": "Platform engineering (roadmap.sh)",
-      "url": "https://roadmap.sh/platform-engineering",
+      "url": "https://habr.com/ru/companies/05-ru/articles/809661/",
       "note": "Повторить понятия платформы, IDP и self-service."
      },
      {

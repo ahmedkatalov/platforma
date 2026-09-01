@@ -48,7 +48,7 @@
      },
      {
       "title": "chmod (man7.org)",
-      "url": "https://man7.org/linux/man-pages/man1/chmod.1.html",
+      "url": "https://ru.wikipedia.org/wiki/Chmod",
       "note": "Как сделать файл исполняемым: chmod +x"
      }
     ]
@@ -520,7 +520,7 @@
      },
      {
       "title": "chmod (man7.org)",
-      "url": "https://man7.org/linux/man-pages/man1/chmod.1.html",
+      "url": "https://ru.wikipedia.org/wiki/Chmod",
       "note": "Права доступа к файлу секретов: chmod 600"
      }
     ]
@@ -588,7 +588,7 @@
     "resources": [
      {
       "title": "man crontab.5 (формат файла)",
-      "url": "https://man7.org/linux/man-pages/man5/crontab.5.html",
+      "url": "https://ru.wikipedia.org/wiki/Cron",
       "note": "Точное описание пяти полей расписания и синтаксиса."
      },
      {
@@ -665,7 +665,7 @@
      },
      {
       "title": "man crontab.5",
-      "url": "https://man7.org/linux/man-pages/man5/crontab.5.html",
+      "url": "https://ru.wikipedia.org/wiki/Cron",
       "note": "Синтаксис строки расписания для cron."
      }
     ]
@@ -860,7 +860,7 @@
      },
      {
       "title": "man crontab.5",
-      "url": "https://man7.org/linux/man-pages/man5/crontab.5.html",
+      "url": "https://ru.wikipedia.org/wiki/Cron",
       "note": "Синтаксис расписания cron."
      }
     ]
