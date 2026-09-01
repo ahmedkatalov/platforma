@@ -57,7 +57,7 @@ export default function DashboardPage() {
         title={`${greeting}, ${user?.fullName?.split(" ")[0] || "студент"}!`}
         subtitle="Ваш прогресс по курсам DevOps"
         actions={
-          <Link to="/learn/courses" className="btn btn-primary">
+          <Link to="/learn" className="btn btn-primary">
             <Book size={18} />
             К обучению
           </Link>
@@ -154,7 +154,7 @@ export default function DashboardPage() {
       <Card className="mt-[var(--gap)] p-[var(--pad)]">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-base font-bold text-fg">Мои курсы</h2>
-          <Link to="/learn/courses" className="text-xs font-semibold text-accent hover:underline">
+          <Link to="/learn" className="text-xs font-semibold text-accent hover:underline">
             Все курсы
           </Link>
         </div>
@@ -165,7 +165,7 @@ export default function DashboardPage() {
             description="Как только администратор откроет вам курс, он появится здесь"
             icon={<Book size={32} />}
             action={
-              <Link to="/learn/courses" className="btn btn-secondary">
+              <Link to="/learn" className="btn btn-secondary">
                 Посмотреть каталог
               </Link>
             }

@@ -46,8 +46,8 @@ const ADMIN_NAV: NavItem[] = [
 ];
 
 const STUDENT_NAV: NavItem[] = [
-  { to: "/learn", label: "Главная", icon: <LayoutGrid size={18} />, end: true },
-  { to: "/learn/courses", label: "Мои курсы", icon: <Book size={18} /> },
+  { to: "/learn", label: "Курсы", icon: <Book size={18} />, end: true },
+  { to: "/learn/dashboard", label: "Обзор", icon: <LayoutGrid size={18} /> },
   { to: "/learn/sandbox", label: "Песочница", icon: <TerminalSquare size={18} /> },
   { to: "/learn/quizzes", label: "Квизы", icon: <Check size={18} /> },
   { to: "/learn/notes", label: "Заметки", icon: <Edit2 size={18} /> },

@@ -6,6 +6,7 @@ import type {
   Attempt,
   AuditEntry,
   ContactSettings,
+  CourseRequest,
   CreatedStudent,
   Enrollment,
   Paginated,
@@ -143,6 +144,21 @@ export const adminApi = baseApi.injectEndpoints({
       query: (id) => ({ url: `/admin/access-requests/${id}/reject`, method: "POST" }),
       invalidatesTags: ["AccessRequests"],
     }),
+
+    // --- Заявки на курсы (запись) ---
+    getCourseRequests: builder.query<CourseRequest[], string | void>({
+      query: (status) =>
+        status ? `/admin/course-requests?status=${status}` : "/admin/course-requests",
+      providesTags: ["CourseRequests"],
+    }),
+    approveCourseRequest: builder.mutation<{ message: string }, string>({
+      query: (id) => ({ url: `/admin/course-requests/${id}/approve`, method: "POST" }),
+      invalidatesTags: ["CourseRequests", "Users", "Overview"],
+    }),
+    rejectCourseRequest: builder.mutation<{ message: string }, string>({
+      query: (id) => ({ url: `/admin/course-requests/${id}/reject`, method: "POST" }),
+      invalidatesTags: ["CourseRequests"],
+    }),
     getUserModuleAccess: builder.query<{ granted: string[] }, { userId: string; courseId: string }>({
       query: ({ userId, courseId }) => `/admin/users/${userId}/module-access?courseId=${courseId}`,
       providesTags: (_r, _e, { userId }) => [{ type: "Access", id: userId }],
@@ -189,6 +205,9 @@ export const {
   useGetAccessRequestsQuery,
   useApproveAccessRequestMutation,
   useRejectAccessRequestMutation,
+  useGetCourseRequestsQuery,
+  useApproveCourseRequestMutation,
+  useRejectCourseRequestMutation,
   useGetUserModuleAccessQuery,
   useSetModuleAccessMutation,
   useGetContactsQuery,

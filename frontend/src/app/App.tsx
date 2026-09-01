@@ -17,7 +17,7 @@ import StudentsPage from "@/features/admin/ui/StudentsPage";
 import CertificatePage from "@/features/certificates/ui/CertificatePage";
 import LessonPage from "@/features/learning/ui/LessonPage";
 import StudentCoursePage from "@/features/student/ui/CoursePage";
-import StudentCoursesPage from "@/features/student/ui/CoursesPage";
+import CatalogPage from "@/features/student/ui/CatalogPage";
 import StudentDashboardPage from "@/features/student/ui/DashboardPage";
 import ProfilePage from "@/features/student/ui/ProfilePage";
 import NotesPage from "@/features/student/ui/NotesPage";
@@ -125,8 +125,9 @@ export default function App() {
       </Route>
 
       <Route path="/learn" element={<RequireAuth />}>
-        <Route index element={<StudentDashboardPage />} />
-        <Route path="courses" element={<StudentCoursesPage />} />
+        <Route index element={<CatalogPage />} />
+        <Route path="dashboard" element={<StudentDashboardPage />} />
+        <Route path="courses" element={<CatalogPage />} />
         <Route path="courses/:slug" element={<StudentCoursePage />} />
         <Route path="courses/:slug/lessons/:lessonId" element={<LessonPage />} />
         <Route path="quizzes" element={<QuizzesPage />} />

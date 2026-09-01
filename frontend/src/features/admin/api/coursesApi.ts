@@ -36,11 +36,20 @@ export const coursesApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
     // --- Витрина для студента ---
     getStudentCourses: builder.query<
-      { course: Course; enrolled: boolean; completedLessons: number }[],
+      {
+        course: Course;
+        enrolled: boolean;
+        completedLessons: number;
+        requestStatus?: string;
+      }[],
       void
     >({
       query: () => "/courses",
-      providesTags: ["Courses", "Progress"],
+      providesTags: ["Courses", "Progress", "CourseRequests"],
+    }),
+    requestCourseAccess: builder.mutation<{ message: string }, { courseId: string }>({
+      query: (body) => ({ url: "/courses/request-enroll", method: "POST", body }),
+      invalidatesTags: ["Courses", "CourseRequests"],
     }),
     getStudentCourse: builder.query<
       {
@@ -144,6 +153,7 @@ export const coursesApi = baseApi.injectEndpoints({
 
 export const {
   useGetStudentCoursesQuery,
+  useRequestCourseAccessMutation,
   useGetStudentCourseQuery,
   useRequestModuleAccessMutation,
   useGetAdminCoursesQuery,

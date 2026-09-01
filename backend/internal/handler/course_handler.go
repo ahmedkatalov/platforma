@@ -38,6 +38,7 @@ func (h *CourseHandler) StudentRoutes() http.Handler {
 	r := chi.NewRouter()
 	r.Get("/", h.listForStudent)
 	r.Post("/request-access", h.requestAccess)
+	r.Post("/request-enroll", h.requestEnroll)
 	r.Get("/{slug}", h.getForStudent)
 	return r
 }
@@ -83,10 +84,17 @@ func (h *CourseHandler) listForStudent(w http.ResponseWriter, r *http.Request) {
 		enrolled[e.CourseID] = true
 	}
 
+	userID := middleware.UserID(r.Context())
 	// Сколько уроков студент уже прошёл в каждом курсе — для прогресс-баров.
-	completed, err := h.progress.CompletedCountByCourse(r.Context(), middleware.UserID(r.Context()))
+	completed, err := h.progress.CompletedCountByCourse(r.Context(), userID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Не удалось загрузить прогресс")
+		return
+	}
+	// Статусы заявок на запись — чтобы на закрытых курсах показать «заявка отправлена».
+	reqStatus, err := h.access.CourseRequestStatusForUser(r.Context(), userID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Не удалось загрузить заявки")
 		return
 	}
 
@@ -96,6 +104,7 @@ func (h *CourseHandler) listForStudent(w http.ResponseWriter, r *http.Request) {
 			"course":           c,
 			"enrolled":         enrolled[c.ID],
 			"completedLessons": completed[c.ID],
+			"requestStatus":    reqStatus[c.ID],
 		})
 	}
 	writeJSON(w, http.StatusOK, items)
@@ -208,6 +217,39 @@ func (h *CourseHandler) requestAccess(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.access.Create(r.Context(), userID, body.ModuleID, body.Note); err != nil {
+		writeError(w, http.StatusInternalServerError, "Не удалось отправить заявку")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"message": "Заявка отправлена администратору"})
+}
+
+// requestEnroll — студент оставляет заявку на доступ к курсу (из общей витрины).
+func (h *CourseHandler) requestEnroll(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		CourseID string `json:"courseId"`
+		Note     string `json:"note"`
+	}
+	if err := decodeJSON(w, r, &body); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if body.CourseID == "" {
+		writeError(w, http.StatusBadRequest, "Не указан курс")
+		return
+	}
+
+	userID := middleware.UserID(r.Context())
+	enrolled, err := h.courses.IsEnrolled(r.Context(), userID, body.CourseID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Не удалось проверить доступ")
+		return
+	}
+	if enrolled {
+		writeError(w, http.StatusConflict, "Вы уже записаны на этот курс")
+		return
+	}
+
+	if err := h.access.CreateCourseRequest(r.Context(), userID, body.CourseID, body.Note); err != nil {
 		writeError(w, http.StatusInternalServerError, "Не удалось отправить заявку")
 		return
 	}

@@ -142,3 +142,112 @@ func (r *AccessRepo) PendingCount(ctx context.Context) (int, error) {
 		`SELECT count(*) FROM access_requests WHERE status = 'pending'`).Scan(&n)
 	return n, err
 }
+
+// --- Заявки на доступ к КУРСУ (запись на курс) ---
+
+// CourseRequest — заявка на курс в списке администратора.
+type CourseRequest struct {
+	ID          string    `json:"id"`
+	UserID      string    `json:"userId"`
+	UserName    string    `json:"userName"`
+	UserEmail   string    `json:"userEmail"`
+	CourseID    string    `json:"courseId"`
+	CourseTitle string    `json:"courseTitle"`
+	CourseSlug  string    `json:"courseSlug"`
+	Status      string    `json:"status"`
+	Note        string    `json:"note"`
+	CreatedAt   time.Time `json:"createdAt"`
+}
+
+func (r *AccessRepo) CreateCourseRequest(ctx context.Context, userID, courseID, note string) error {
+	_, err := r.db.Exec(ctx, `
+		INSERT INTO course_requests (user_id, course_id, note)
+		VALUES ($1, $2, $3)
+		ON CONFLICT (user_id, course_id) WHERE status = 'pending' DO NOTHING`,
+		userID, courseID, note)
+	return err
+}
+
+func (r *AccessRepo) ListCourseRequests(ctx context.Context, status string, limit int) ([]CourseRequest, error) {
+	if limit <= 0 || limit > 500 {
+		limit = 200
+	}
+	rows, err := r.db.Query(ctx, `
+		SELECT cr.id, cr.user_id, COALESCE(u.full_name, ''), u.email,
+		       cr.course_id, c.title, c.slug,
+		       cr.status, cr.note, cr.created_at
+		  FROM course_requests cr
+		  JOIN users u ON u.id = cr.user_id
+		  JOIN courses c ON c.id = cr.course_id
+		 WHERE ($1 = '' OR cr.status = $1)
+		 ORDER BY cr.created_at DESC
+		 LIMIT $2`, status, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := make([]CourseRequest, 0, limit)
+	for rows.Next() {
+		var a CourseRequest
+		if err := rows.Scan(&a.ID, &a.UserID, &a.UserName, &a.UserEmail,
+			&a.CourseID, &a.CourseTitle, &a.CourseSlug,
+			&a.Status, &a.Note, &a.CreatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, a)
+	}
+	return out, rows.Err()
+}
+
+func (r *AccessRepo) GetCourseRequest(ctx context.Context, id string) (userID, courseID, status string, err error) {
+	err = r.db.QueryRow(ctx,
+		`SELECT user_id, course_id, status FROM course_requests WHERE id = $1`, id).
+		Scan(&userID, &courseID, &status)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", "", "", ErrNotFound
+	}
+	return userID, courseID, status, err
+}
+
+func (r *AccessRepo) DecideCourseRequest(ctx context.Context, id, status, decidedBy string) error {
+	var by *string
+	if decidedBy != "" {
+		by = &decidedBy
+	}
+	tag, err := r.db.Exec(ctx, `
+		UPDATE course_requests
+		   SET status = $2, decided_at = now(), decided_by = $3
+		 WHERE id = $1 AND status = 'pending'`, id, status, by)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// CourseRequestStatusForUser — последний статус заявки по каждому курсу (id курса -> статус).
+// Нужен витрине, чтобы показать «заявка на рассмотрении» на закрытом курсе.
+func (r *AccessRepo) CourseRequestStatusForUser(ctx context.Context, userID string) (map[string]string, error) {
+	rows, err := r.db.Query(ctx, `
+		SELECT DISTINCT ON (course_id) course_id, status
+		  FROM course_requests
+		 WHERE user_id = $1
+		 ORDER BY course_id, created_at DESC`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := make(map[string]string, 8)
+	for rows.Next() {
+		var id, status string
+		if err := rows.Scan(&id, &status); err != nil {
+			return nil, err
+		}
+		out[id] = status
+	}
+	return out, rows.Err()
+}

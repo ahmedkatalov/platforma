@@ -383,6 +383,20 @@ export type AccessRequest = {
   createdAt: string;
 };
 
+// Заявка на доступ к КУРСУ (запись на курс) из общей витрины.
+export type CourseRequest = {
+  id: string;
+  userId: string;
+  userName: string;
+  userEmail: string;
+  courseId: string;
+  courseTitle: string;
+  courseSlug: string;
+  status: AccessRequestStatus;
+  note: string;
+  createdAt: string;
+};
+
 // Контакты для связи (Telegram/WhatsApp), настраиваются администратором.
 export type ContactSettings = {
   enabled?: boolean;

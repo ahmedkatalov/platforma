@@ -81,6 +81,12 @@ func (h *AdminHandler) Routes(courses, certificates, reports, uploads http.Handl
 		r.Post("/{id}/reject", h.rejectAccessRequest)
 	})
 
+	r.Route("/course-requests", func(r chi.Router) {
+		r.Get("/", h.listCourseRequests)
+		r.Post("/{id}/approve", h.approveCourseRequest)
+		r.Post("/{id}/reject", h.rejectCourseRequest)
+	})
+
 	r.Route("/theme", func(r chi.Router) {
 		r.Get("/", h.getTheme)
 		r.Put("/", h.putTheme)
@@ -514,6 +520,58 @@ func (h *AdminHandler) rejectAccessRequest(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	h.audit.Log(r.Context(), actor, "access.reject", "request", id, nil)
+	writeJSON(w, http.StatusOK, map[string]string{"message": "Заявка отклонена"})
+}
+
+// --- Заявки на курсы (запись на курс) ---
+
+func (h *AdminHandler) listCourseRequests(w http.ResponseWriter, r *http.Request) {
+	items, err := h.access.ListCourseRequests(r.Context(), r.URL.Query().Get("status"), queryInt(r, "limit", 200, 1, 500))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Не удалось загрузить заявки")
+		return
+	}
+	writeJSON(w, http.StatusOK, items)
+}
+
+func (h *AdminHandler) approveCourseRequest(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	userID, courseID, status, err := h.access.GetCourseRequest(r.Context(), id)
+	if err != nil {
+		writeError(w, statusForRepoError(err), "Заявка не найдена")
+		return
+	}
+	if status != "pending" {
+		writeError(w, http.StatusConflict, "Заявка уже обработана")
+		return
+	}
+
+	actor := middleware.UserID(r.Context())
+	// Записываем студента на курс и открываем первую главу.
+	if err := h.courses.Enroll(r.Context(), userID, courseID, actor, nil); err != nil {
+		writeError(w, http.StatusInternalServerError, "Не удалось записать на курс")
+		return
+	}
+	if err := h.courses.GrantFirstModuleAccess(r.Context(), userID, courseID, actor); err != nil {
+		writeError(w, http.StatusInternalServerError, "Не удалось открыть первую главу")
+		return
+	}
+	if err := h.access.DecideCourseRequest(r.Context(), id, "approved", actor); err != nil {
+		writeError(w, statusForRepoError(err), "Не удалось обновить заявку")
+		return
+	}
+	h.audit.Log(r.Context(), actor, "course.request.approve", "user", userID, map[string]any{"courseId": courseID})
+	writeJSON(w, http.StatusOK, map[string]string{"message": "Студент записан на курс"})
+}
+
+func (h *AdminHandler) rejectCourseRequest(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	actor := middleware.UserID(r.Context())
+	if err := h.access.DecideCourseRequest(r.Context(), id, "rejected", actor); err != nil {
+		writeError(w, statusForRepoError(err), "Заявка уже обработана или не найдена")
+		return
+	}
+	h.audit.Log(r.Context(), actor, "course.request.reject", "request", id, nil)
 	writeJSON(w, http.StatusOK, map[string]string{"message": "Заявка отклонена"})
 }
 
