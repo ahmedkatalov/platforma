@@ -9,6 +9,7 @@ import {
 } from "@/features/admin/api/adminApi";
 import { apiErrorMessage } from "@/shared/api/baseApi";
 import { downloadFile } from "@/shared/lib/download";
+import { lastSeenLabel } from "@/shared/lib/time";
 import type { CreatedStudent, Role, User, UserStatus } from "@/shared/types";
 import {
   Badge,
@@ -46,7 +47,10 @@ export default function StudentsPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [created, setCreated] = useState<CreatedStudent | null>(null);
 
-  const { data, isLoading, isFetching } = useGetUsersQuery({ search, status, role, limit: 100 });
+  const { data, isLoading, isFetching } = useGetUsersQuery(
+    { search, status, role, limit: 100 },
+    { pollingInterval: 60_000 },
+  );
   const [updateUser] = useUpdateUserMutation();
   const [deleteUser] = useDeleteUserMutation();
   const toast = useToast();
@@ -166,6 +170,7 @@ export default function StudentsPage() {
                   <th className="px-4 py-3 font-semibold">Студент</th>
                   <th className="px-4 py-3 font-semibold">Роль</th>
                   <th className="px-4 py-3 font-semibold">Статус</th>
+                  <th className="px-4 py-3 font-semibold">Активность</th>
                   <th className="px-4 py-3 font-semibold">Последний вход</th>
                   <th className="px-4 py-3 font-semibold">Создан</th>
                   <th className="px-4 py-3" />
@@ -175,11 +180,19 @@ export default function StudentsPage() {
                 {users.map((user) => (
                   <tr key={user.id} className="border-b border-line/60 last:border-0 hover:bg-surface-2">
                     <td className="px-4 py-3">
-                      <Link to={`/admin/students/${user.id}`} className="block">
-                        <span className="block font-semibold text-fg hover:text-accent">
-                          {user.fullName || "Без имени"}
+                      <Link to={`/admin/students/${user.id}`} className="flex items-start gap-2">
+                        <span
+                          className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${
+                            user.online ? "bg-[var(--success)]" : "bg-[var(--border)]"
+                          }`}
+                          title={user.online ? "Онлайн" : "Не в сети"}
+                        />
+                        <span className="min-w-0">
+                          <span className="block font-semibold text-fg hover:text-accent">
+                            {user.fullName || "Без имени"}
+                          </span>
+                          <span className="block text-xs text-faint">{user.email}</span>
                         </span>
-                        <span className="block text-xs text-faint">{user.email}</span>
                       </Link>
                     </td>
                     <td className="px-4 py-3">
@@ -189,6 +202,11 @@ export default function StudentsPage() {
                     </td>
                     <td className="px-4 py-3">
                       <Badge tone={STATUS_TONE[user.status]}>{STATUS_LABEL[user.status]}</Badge>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={user.online ? "font-semibold text-success" : "text-muted"}>
+                        {lastSeenLabel(user.lastSeenAt, user.online)}
+                      </span>
                     </td>
                     <td className="px-4 py-3 text-muted">
                       {user.lastLoginAt ? dateFmt.format(new Date(user.lastLoginAt)) : "—"}

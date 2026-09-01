@@ -35,9 +35,12 @@ export type LessonPayload = {
 export const coursesApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
     // --- Витрина для студента ---
-    getStudentCourses: builder.query<{ course: Course; enrolled: boolean }[], void>({
+    getStudentCourses: builder.query<
+      { course: Course; enrolled: boolean; completedLessons: number }[],
+      void
+    >({
       query: () => "/courses",
-      providesTags: ["Courses"],
+      providesTags: ["Courses", "Progress"],
     }),
     getStudentCourse: builder.query<
       { course: Course; enrolled: boolean; progress: LessonProgress[] },

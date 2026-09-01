@@ -80,11 +80,19 @@ func (h *CourseHandler) listForStudent(w http.ResponseWriter, r *http.Request) {
 		enrolled[e.CourseID] = true
 	}
 
+	// Сколько уроков студент уже прошёл в каждом курсе — для прогресс-баров.
+	completed, err := h.progress.CompletedCountByCourse(r.Context(), middleware.UserID(r.Context()))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Не удалось загрузить прогресс")
+		return
+	}
+
 	items := make([]map[string]any, 0, len(courses))
 	for _, c := range courses {
 		items = append(items, map[string]any{
-			"course":   c,
-			"enrolled": enrolled[c.ID],
+			"course":           c,
+			"enrolled":         enrolled[c.ID],
+			"completedLessons": completed[c.ID],
 		})
 	}
 	writeJSON(w, http.StatusOK, items)

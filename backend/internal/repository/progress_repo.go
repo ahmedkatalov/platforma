@@ -122,7 +122,10 @@ func (r *ProgressRepo) Complete(ctx context.Context, userID, lessonID string, sc
 		ON CONFLICT (user_id, lesson_id) DO UPDATE
 		   SET status = 'completed',
 		       score = EXCLUDED.score,
-		       best_score = GREATEST(COALESCE(lesson_progress.best_score, 0), COALESCE(EXCLUDED.score, 0)),
+		       best_score = CASE
+		           WHEN EXCLUDED.score IS NULL THEN lesson_progress.best_score
+		           ELSE GREATEST(COALESCE(lesson_progress.best_score, 0), EXCLUDED.score)
+		       END,
 		       seconds_spent = lesson_progress.seconds_spent + EXCLUDED.seconds_spent,
 		       attempts = lesson_progress.attempts + 1,
 		       completed_at = COALESCE(lesson_progress.completed_at, now()),
@@ -138,7 +141,10 @@ func (r *ProgressRepo) TouchAttempt(ctx context.Context, userID, lessonID string
 		VALUES ($1, $2, 'in_progress', $3, $3, $4, 1, now())
 		ON CONFLICT (user_id, lesson_id) DO UPDATE
 		   SET score = EXCLUDED.score,
-		       best_score = GREATEST(COALESCE(lesson_progress.best_score, 0), COALESCE(EXCLUDED.score, 0)),
+		       best_score = CASE
+		           WHEN EXCLUDED.score IS NULL THEN lesson_progress.best_score
+		           ELSE GREATEST(COALESCE(lesson_progress.best_score, 0), EXCLUDED.score)
+		       END,
 		       seconds_spent = lesson_progress.seconds_spent + EXCLUDED.seconds_spent,
 		       attempts = lesson_progress.attempts + 1,
 		       updated_at = now()`, userID, lessonID, score, seconds)
@@ -173,6 +179,33 @@ func (r *ProgressRepo) ForUser(ctx context.Context, userID string) ([]LessonProg
 	defer rows.Close()
 
 	return scanProgress(rows)
+}
+
+// CompletedCountByCourse — сколько уроков студент прошёл в каждом курсе.
+// Ключ карты — id курса. Нужен для прогресс-баров в списке «Мои курсы».
+func (r *ProgressRepo) CompletedCountByCourse(ctx context.Context, userID string) (map[string]int, error) {
+	rows, err := r.db.Query(ctx, `
+		SELECT m.course_id, count(*)
+		  FROM lesson_progress p
+		  JOIN lessons l ON l.id = p.lesson_id
+		  JOIN modules m ON m.id = l.module_id
+		 WHERE p.user_id = $1 AND p.status = 'completed'
+		 GROUP BY m.course_id`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := make(map[string]int, 8)
+	for rows.Next() {
+		var courseID string
+		var count int
+		if err := rows.Scan(&courseID, &count); err != nil {
+			return nil, err
+		}
+		out[courseID] = count
+	}
+	return out, rows.Err()
 }
 
 func scanProgress(rows pgx.Rows) ([]LessonProgress, error) {

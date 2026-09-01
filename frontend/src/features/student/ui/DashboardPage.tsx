@@ -130,12 +130,10 @@ export default function DashboardPage() {
           />
         ) : (
           <div className="grid gap-[var(--gap)] md:grid-cols-2">
-            {myCourses.map(({ course }) => {
-              const isActive = course.slug === activeSlug;
-              const done = isActive
-                ? lessons.filter((l) => progressByLesson.get(l.id)?.status === "completed").length
-                : 0;
-              const percent = isActive && lessons.length ? (done / lessons.length) * 100 : 0;
+            {myCourses.map(({ course, completedLessons }) => {
+              const total = course.lessonsCount;
+              const done = Math.min(completedLessons ?? 0, total);
+              const percent = total > 0 ? (done / total) * 100 : 0;
 
               return (
                 <Link
@@ -145,18 +143,18 @@ export default function DashboardPage() {
                 >
                   <div className="mb-2 flex items-start justify-between gap-2">
                     <h3 className="text-sm font-bold text-fg">{course.title}</h3>
-                    {isActive && percent === 100 && <Badge tone="success">Пройден</Badge>}
+                    {total > 0 && percent === 100 && <Badge tone="success">Пройден</Badge>}
                   </div>
 
                   {course.subtitle && (
                     <p className="mb-3 line-clamp-2 text-xs text-muted">{course.subtitle}</p>
                   )}
 
-                  {isActive && lessons.length > 0 && (
+                  {total > 0 && (
                     <div className="mb-3">
                       <div className="mb-1 flex justify-between text-[11px] text-faint">
                         <span>
-                          {done} из {lessons.length} уроков
+                          {done} из {total} уроков
                         </span>
                         <span className="font-bold text-accent">{Math.round(percent)}%</span>
                       </div>

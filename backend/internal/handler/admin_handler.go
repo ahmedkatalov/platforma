@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"time"
 
 	"platforma/backend/internal/domain"
 	"platforma/backend/internal/middleware"
@@ -109,12 +110,41 @@ func (h *AdminHandler) listUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Дополняем каждого пользователя признаком «онлайн» и временем последней активности.
+	ids := make([]string, len(users))
+	for i := range users {
+		ids[i] = users[i].ID
+	}
+	lastSeen, err := h.activity.LastSeenByUsers(r.Context(), ids)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Не удалось загрузить активность")
+		return
+	}
+
+	now := time.Now()
+	items := make([]userListItem, len(users))
+	for i, u := range users {
+		var ls *time.Time
+		if t, ok := lastSeen[u.ID]; ok {
+			ls = &t
+		}
+		items[i] = userListItem{User: u, LastSeenAt: ls, Online: repository.IsOnline(ls, now)}
+	}
+
 	writeJSON(w, http.StatusOK, map[string]any{
-		"items": users,
+		"items": items,
 		"total": total,
 		"page":  page,
 		"limit": limit,
 	})
+}
+
+// userListItem — пользователь в списке админки с признаком онлайна.
+// Анонимное встраивание domain.User поднимает его поля в JSON на верхний уровень.
+type userListItem struct {
+	domain.User
+	LastSeenAt *time.Time `json:"lastSeenAt"`
+	Online     bool       `json:"online"`
 }
 
 func (h *AdminHandler) createUser(w http.ResponseWriter, r *http.Request) {

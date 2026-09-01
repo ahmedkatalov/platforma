@@ -21,8 +21,8 @@ import { Book, BarChart3, Users } from "lucide-react";
 const dateFmt = new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
 
 export default function DashboardPage() {
-  const { data: overview, isLoading } = useGetOverviewQuery();
-  const { data: progress = [] } = useGetStudentsProgressQuery(10);
+  const { data: overview, isLoading } = useGetOverviewQuery(undefined, { pollingInterval: 30_000 });
+  const { data: progress = [] } = useGetStudentsProgressQuery(10, { pollingInterval: 30_000 });
   const { data: courses = [] } = useGetAdminCoursesQuery();
   const { data: audit = [] } = useGetAuditQuery(8);
 
@@ -67,9 +67,9 @@ export default function DashboardPage() {
           icon={<BarChart3 size={20} />}
         />
         <StatCard
-          label="Активность"
-          value={overview.activeToday}
-          hint={`сегодня · ${overview.activeWeek} за неделю`}
+          label="Онлайн сейчас"
+          value={overview.onlineNow}
+          hint={`${overview.activeToday} за сегодня · ${overview.activeWeek} за неделю`}
           icon={<BarChart3 size={20} />}
         />
       </div>
@@ -136,8 +136,16 @@ export default function DashboardPage() {
                     className="block rounded-[var(--radius-md)] p-2 transition-colors hover:bg-surface-2"
                   >
                     <div className="mb-1.5 flex items-center justify-between gap-2">
-                      <span className="truncate text-sm font-semibold text-fg">
-                        {student.fullName || student.email}
+                      <span className="flex min-w-0 items-center gap-2">
+                        <span
+                          className={`h-2 w-2 shrink-0 rounded-full ${
+                            student.online ? "bg-[var(--success)]" : "bg-[var(--border)]"
+                          }`}
+                          title={student.online ? "Онлайн" : "Не в сети"}
+                        />
+                        <span className="truncate text-sm font-semibold text-fg">
+                          {student.fullName || student.email}
+                        </span>
                       </span>
                       <span className="shrink-0 text-xs font-bold text-accent">
                         {Math.round(student.progress)}%

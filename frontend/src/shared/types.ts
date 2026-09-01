@@ -12,6 +12,10 @@ export type User = {
   emailVerified: boolean;
   avatarUrl: string;
   lastLoginAt: string | null;
+  /** Время последней активности; приходит только в списке студентов админки. */
+  lastSeenAt?: string | null;
+  /** Онлайн ли сейчас (активность за последние ~5 минут). */
+  online?: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -95,6 +99,8 @@ export type StudentSummary = {
   fullName: string;
   status: UserStatus;
   lastLoginAt: string | null;
+  lastSeenAt: string | null;
+  online: boolean;
   courses: number;
   lessonsTotal: number;
   lessonsCompleted: number;
@@ -115,6 +121,7 @@ export type AdminOverview = {
   enrollments: number;
   activeToday: number;
   activeWeek: number;
+  onlineNow: number;
 };
 
 export type AuditEntry = {

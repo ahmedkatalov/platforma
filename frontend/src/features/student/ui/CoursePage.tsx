@@ -106,7 +106,7 @@ export default function CoursePage() {
         {deadline && (
           <Badge tone={deadline.overdue ? "danger" : deadline.soon ? "warning" : "default"}>
             <Clock size={12} />
-            {deadline.overdue ? `срок истёк {deadline.label}` : `сдать до {deadline.label}`}
+            {deadline.overdue ? `срок истёк ${deadline.label}` : `сдать до ${deadline.label}`}
           </Badge>
         )}
         {course.tags.map((tag) => (

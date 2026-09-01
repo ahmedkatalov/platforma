@@ -12,6 +12,7 @@ import {
 } from "@/features/admin/api/adminApi";
 import { useGetAdminCoursesQuery } from "@/features/admin/api/coursesApi";
 import { apiErrorMessage } from "@/shared/api/baseApi";
+import { lastSeenLabel } from "@/shared/lib/time";
 import type { Attempt, CreatedStudent, UserStatus } from "@/shared/types";
 import {
   Badge,
@@ -172,6 +173,13 @@ export default function StudentDetailPage() {
           {STATUS_LABEL[user.status]}
         </Badge>
         {user.emailVerified && <Badge tone="success">Почта подтверждена</Badge>}
+        <Badge tone={summary.online ? "success" : "default"}>
+          {summary.online
+            ? "● Онлайн"
+            : summary.lastSeenAt
+              ? `Был в сети ${lastSeenLabel(summary.lastSeenAt)}`
+              : "Ещё не заходил"}
+        </Badge>
       </div>
 
       <div className="grid gap-[var(--gap)] sm:grid-cols-2 xl:grid-cols-4">

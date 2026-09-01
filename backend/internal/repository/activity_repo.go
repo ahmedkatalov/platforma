@@ -29,6 +29,34 @@ func (r *ActivityRepo) Touch(ctx context.Context, userID string, seconds int) er
 	return err
 }
 
+// LastSeenByUsers — время последней активности для набора пользователей.
+// В карте только те, у кого активность была; остальных нет (значит nil).
+func (r *ActivityRepo) LastSeenByUsers(ctx context.Context, userIDs []string) (map[string]time.Time, error) {
+	out := make(map[string]time.Time, len(userIDs))
+	if len(userIDs) == 0 {
+		return out, nil
+	}
+	rows, err := r.db.Query(ctx, `
+		SELECT user_id, max(last_seen_at)
+		  FROM activity_days
+		 WHERE user_id = ANY($1)
+		 GROUP BY user_id`, userIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var id string
+		var ls time.Time
+		if err := rows.Scan(&id, &ls); err != nil {
+			return nil, err
+		}
+		out[id] = ls
+	}
+	return out, rows.Err()
+}
+
 // Days возвращает дни посещения за последние N дней.
 func (r *ActivityRepo) Days(ctx context.Context, userID string, days int) ([]domain.ActivityDay, error) {
 	if days <= 0 {

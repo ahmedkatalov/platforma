@@ -51,6 +51,7 @@ export const lessonApi = baseApi.injectEndpoints({
       { id: string; taskId: string; command: string; usedHint: boolean; seconds: number }
     >({
       query: ({ id, ...body }) => ({ url: `/lessons/${id}/terminal`, method: "POST", body }),
+      invalidatesTags: (_r, _e, { id }) => [{ type: "Lesson", id }, "Course", "Progress", "Me", "Attempts"],
     }),
     checkCode: builder.mutation<CodeCheckResult, { id: string; code: string; seconds: number }>({
       query: ({ id, ...body }) => ({ url: `/lessons/${id}/code`, method: "POST", body }),
