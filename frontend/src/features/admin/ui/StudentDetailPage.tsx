@@ -12,6 +12,7 @@ import {
 } from "@/features/admin/api/adminApi";
 import { useGetAdminCoursesQuery } from "@/features/admin/api/coursesApi";
 import { ChapterAccess } from "@/features/admin/ui/ChapterAccess";
+import { DatePicker } from "@/shared/ui/DatePicker";
 import { apiErrorMessage } from "@/shared/api/baseApi";
 import { lastSeenLabel } from "@/shared/lib/time";
 import type { Attempt, CreatedStudent, UserStatus } from "@/shared/types";
@@ -21,7 +22,6 @@ import {
   Card,
   EmptyState,
   Field,
-  Input,
   Modal,
   PageHeader,
   Progress,
@@ -276,11 +276,7 @@ export default function StudentDetailPage() {
 
             <div className="flex items-end gap-2">
               <Field label="Срок прохождения" hint="Необязательно — напомним студенту письмом">
-                <Input
-                  type="date"
-                  value={dueDate}
-                  onChange={(e) => setDueDate(e.target.value)}
-                />
+                <DatePicker value={dueDate} onChange={setDueDate} />
               </Field>
               <Button variant="primary" onClick={assignCourse} disabled={!courseId} loading={enrolling}>
                 Назначить
@@ -317,12 +313,11 @@ export default function StudentDetailPage() {
                   </div>
 
                   <div className="mt-2 flex items-center gap-2">
-                    <span className="text-xs text-faint">Срок:</span>
-                    <Input
-                      type="date"
+                    <span className="shrink-0 text-xs text-faint">Срок:</span>
+                    <DatePicker
                       value={enrollment.dueDate ? enrollment.dueDate.slice(0, 10) : ""}
-                      onChange={(e) => changeDue(enrollment.courseId, e.target.value)}
-                      className="h-8 text-xs"
+                      onChange={(v) => changeDue(enrollment.courseId, v)}
+                      className="flex-1"
                     />
                   </div>
 
