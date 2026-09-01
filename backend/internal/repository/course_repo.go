@@ -645,6 +645,21 @@ func (r *CourseRepo) GrantFirstModuleAccess(ctx context.Context, userID, courseI
 	return err
 }
 
+// HasTerminalCourse — записан ли студент на курс, где есть уроки-тренажёры
+// (терминал). По этому признаку показываем песочницу-терминал.
+func (r *CourseRepo) HasTerminalCourse(ctx context.Context, userID string) (bool, error) {
+	var exists bool
+	err := r.db.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1
+			  FROM enrollments e
+			  JOIN modules m ON m.course_id = e.course_id
+			  JOIN lessons l ON l.module_id = m.id
+			 WHERE e.user_id = $1 AND l.kind = 'terminal'
+		)`, userID).Scan(&exists)
+	return exists, err
+}
+
 // ModuleCourseID возвращает id курса, которому принадлежит глава.
 func (r *CourseRepo) ModuleCourseID(ctx context.Context, moduleID string) (string, error) {
 	var courseID string

@@ -11,7 +11,11 @@ import type {
   User,
 } from "@/shared/types";
 
-export type MeResponse = { user: User; enrollments: Enrollment[] };
+export type MeResponse = {
+  user: User;
+  enrollments: Enrollment[];
+  sandboxAvailable?: boolean;
+};
 export type MyStats = {
   summary: StudentSummary;
   activity: ActivityDay[];

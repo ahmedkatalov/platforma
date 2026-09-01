@@ -73,9 +73,16 @@ func (h *MeHandler) profile(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "Не удалось загрузить курсы")
 		return
 	}
+	// Песочница-терминал доступна тем, у кого есть курс с уроками-терминалами
+	// (например DevOps). Админ видит её всегда — для превью.
+	sandbox := user.Role == domain.RoleAdmin
+	if !sandbox {
+		sandbox, _ = h.courses.HasTerminalCourse(r.Context(), user.ID)
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"user":        user,
-		"enrollments": enrollments,
+		"user":             user,
+		"enrollments":      enrollments,
+		"sandboxAvailable": sandbox,
 	})
 }
 

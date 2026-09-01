@@ -80,6 +80,16 @@ function PublicOnly({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+// Песочница-терминал доступна только тем, у кого есть курс с терминалом (или админу).
+function RequireSandbox({ children }: { children: React.ReactNode }) {
+  const user = useAppSelector((state) => state.auth.user);
+  const { data: me, isLoading } = useGetMeQuery(undefined, { skip: !user });
+  if (isLoading) return <FullScreenLoader />;
+  const allowed = user?.role === "admin" || Boolean(me?.sandboxAvailable);
+  if (!allowed) return <Navigate to="/learn" replace />;
+  return <>{children}</>;
+}
+
 export default function App() {
   const booting = useBootstrapSession();
   const user = useAppSelector((state) => state.auth.user);
@@ -134,9 +144,11 @@ export default function App() {
         <Route
           path="sandbox"
           element={
-            <Suspense fallback={<FullScreenLoader />}>
-              <SandboxPage />
-            </Suspense>
+            <RequireSandbox>
+              <Suspense fallback={<FullScreenLoader />}>
+                <SandboxPage />
+              </Suspense>
+            </RequireSandbox>
           }
         />
         <Route path="notes" element={<NotesPage />} />

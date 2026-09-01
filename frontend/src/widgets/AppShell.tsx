@@ -6,7 +6,7 @@ import { useAppDispatch, useAppSelector } from "@/app/store";
 import { useLogoutMutation } from "@/features/auth/api/authApi";
 import { useGetPendingRequestsCountQuery } from "@/features/admin/api/adminApi";
 import { sessionEnded } from "@/features/auth/authSlice";
-import { useTrackActivityMutation } from "@/shared/api/meApi";
+import { useGetMeQuery, useTrackActivityMutation } from "@/shared/api/meApi";
 import { tokenStorage } from "@/shared/api/tokenStorage";
 import { useTheme } from "@/shared/theme/ThemeProvider";
 import {
@@ -92,6 +92,10 @@ export default function AppShell() {
   });
   const pendingRequests = reqCount?.total ?? 0;
 
+  // Песочница-терминал видна только тем, у кого есть курс с терминалом (или админу).
+  const { data: me } = useGetMeQuery(undefined, { skip: !user });
+  const sandboxAvailable = user?.role === "admin" || Boolean(me?.sandboxAvailable);
+
   useEffect(() => setMenuOpen(false), [location.pathname]);
   useEffect(() => {
     localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(sidebarCollapsed));
@@ -103,14 +107,17 @@ export default function AppShell() {
   // Навигацию выбираем по разделу, а не только по роли: админ может открыть
   // курс в разделе /learn и пройти его ровно как студент.
   const inStudentArea = location.pathname.startsWith("/learn");
+  const studentNav = STUDENT_NAV.filter(
+    (item) => item.to !== "/learn/sandbox" || sandboxAvailable,
+  );
   const nav =
     isAdmin && inStudentArea
       ? [
           { to: "/admin/courses", label: "← В админку", icon: <ChevronRight size={18} className="rotate-180" />, end: false },
-          ...STUDENT_NAV,
+          ...studentNav,
         ]
       : inStudentArea
-        ? STUDENT_NAV
+        ? studentNav
         : ADMIN_NAV;
 
   const handleLogout = async () => {
