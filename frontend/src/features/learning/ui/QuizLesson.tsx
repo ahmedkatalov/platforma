@@ -11,7 +11,7 @@ import type {
   QuizResult,
 } from "@/shared/types";
 import { Badge, Button, Card, Input, Progress } from "@/shared/ui";
-import { Check, ChevronRight, X, Clock } from "lucide-react";
+import { Check, ChevronRight, X, Clock, GripVertical } from "lucide-react";
 import { useToast } from "@/shared/ui/ToastProvider";
 
 import LessonResources from "./LessonResources";
@@ -43,6 +43,9 @@ export default function QuizLesson({
   const [blanks, setBlanks] = useState<Blanks>({});
   const [timings, setTimings] = useState<Record<string, number>>({});
   const [result, setResult] = useState<QuizResult | null>(null);
+  const [draggedOrderItemId, setDraggedOrderItemId] = useState<string | null>(
+    null,
+  );
 
   const [submitQuiz, { isLoading }] = useSubmitQuizMutation();
   const toast = useToast();
@@ -56,6 +59,7 @@ export default function QuizLesson({
     setBlanks({});
     setTimings({});
     setResult(null);
+    setDraggedOrderItemId(null);
     questionStart.current = Date.now();
     quizStart.current = Date.now();
   };
@@ -73,7 +77,9 @@ export default function QuizLesson({
   if (questions.length === 0) {
     return (
       <Card className="p-[var(--pad)]">
-        <p className="text-sm text-muted">Вопросы для этого квиза ещё не добавлены.</p>
+        <p className="text-sm text-muted">
+          Вопросы для этого квиза ещё не добавлены.
+        </p>
       </Card>
     );
   }
@@ -103,7 +109,10 @@ export default function QuizLesson({
   const rememberTiming = () => {
     if (!question) return;
     const spent = Math.round((Date.now() - questionStart.current) / 1000);
-    setTimings((current) => ({ ...current, [question.id]: (current[question.id] ?? 0) + spent }));
+    setTimings((current) => ({
+      ...current,
+      [question.id]: (current[question.id] ?? 0) + spent,
+    }));
     questionStart.current = Date.now();
   };
 
@@ -133,6 +142,25 @@ export default function QuizLesson({
     setAnswers((current) => ({ ...current, [question.id]: order }));
   };
 
+  const reorderOrderItem = (
+    q: QuizQuestion,
+    draggedItemId: string,
+    targetItemId: string,
+    placeAfter: boolean,
+  ) => {
+    if (draggedItemId === targetItemId) return;
+
+    setAnswers((current) => {
+      const order = current[q.id] ?? seqItems(q).map((item) => item.id);
+      const nextOrder = order.filter((itemId) => itemId !== draggedItemId);
+      const targetIndex = nextOrder.indexOf(targetItemId);
+      if (targetIndex === -1) return current;
+
+      nextOrder.splice(targetIndex + (placeAfter ? 1 : 0), 0, draggedItemId);
+      return { ...current, [q.id]: nextOrder };
+    });
+  };
+
   const goTo = (next: number) => {
     rememberTiming();
     setIndex(Math.max(0, Math.min(questions.length - 1, next)));
@@ -156,13 +184,19 @@ export default function QuizLesson({
     });
 
     try {
-      const data = await submitQuiz({ id: lessonId, answers: payload, seconds: totalSeconds }).unwrap();
+      const data = await submitQuiz({
+        id: lessonId,
+        answers: payload,
+        seconds: totalSeconds,
+      }).unwrap();
       setResult(data);
       if (data.passed) {
         toast.success(`Квиз пройден: ${Math.round(data.score)}%`);
-        onDone(data.certificate);
+        // onDone(data.certificate);
       } else {
-        toast.error(`Набрано ${Math.round(data.score)}% — нужно ${Math.round(data.passScore)}%`);
+        toast.error(
+          `Набрано ${Math.round(data.score)}% — нужно ${Math.round(data.passScore)}%`,
+        );
       }
     } catch (err) {
       toast.error(apiErrorMessage(err));
@@ -177,9 +211,12 @@ export default function QuizLesson({
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
               <p className="text-sm text-muted">Результат</p>
-              <p className="text-4xl font-extrabold text-fg">{Math.round(result.score)}%</p>
+              <p className="text-4xl font-extrabold text-fg">
+                {Math.round(result.score)}%
+              </p>
               <p className="mt-1 text-sm text-muted">
-                {result.correctCount} из {result.totalCount} · порог {Math.round(result.passScore)}%
+                {result.correctCount} из {result.totalCount} · порог{" "}
+                {Math.round(result.passScore)}%
               </p>
             </div>
             <Badge tone={result.passed ? "success" : "danger"}>
@@ -188,7 +225,10 @@ export default function QuizLesson({
           </div>
 
           <div className="mt-4">
-            <Progress value={result.score} tone={result.passed ? "var(--success)" : "var(--danger)"} />
+            <Progress
+              value={result.score}
+              tone={result.passed ? "var(--success)" : "var(--danger)"}
+            />
           </div>
 
           <div className="mt-4 flex flex-wrap gap-2">
@@ -230,7 +270,9 @@ export default function QuizLesson({
                       </span>
                     )}
                   </p>
-                  <span className="shrink-0 text-xs text-faint">{timings[q.id] ?? 0} c</span>
+                  <span className="shrink-0 text-xs text-faint">
+                    {timings[q.id] ?? 0} c
+                  </span>
                 </div>
 
                 {/* Разбор ответа зависит от типа вопроса */}
@@ -252,26 +294,32 @@ export default function QuizLesson({
                         >
                           <span className="flex-1">{option.text}</span>
                           {isCorrect && <Badge tone="success">верно</Badge>}
-                          {isChosen && !isCorrect && <Badge tone="danger">ваш выбор</Badge>}
+                          {isChosen && !isCorrect && (
+                            <Badge tone="danger">ваш выбор</Badge>
+                          )}
                         </li>
                       );
                     })}
                   </ul>
                 )}
 
-                {(kindOf(q) === "order" || kindOf(q) === "blank" || kindOf(q) === "match") &&
+                {(kindOf(q) === "order" ||
+                  kindOf(q) === "blank" ||
+                  kindOf(q) === "match") &&
                   outcome?.correctText && (
-                  <div
-                    className={`rounded-[var(--radius-md)] border px-3 py-2 text-sm ${
-                      outcome.correct
-                        ? "border-[var(--success)] bg-[var(--success-soft)] text-fg"
-                        : "border-line text-muted"
-                    }`}
-                  >
-                    <span className="text-faint">Правильно: </span>
-                    <span className="font-medium text-fg">{outcome.correctText}</span>
-                  </div>
-                )}
+                    <div
+                      className={`rounded-[var(--radius-md)] border px-3 py-2 text-sm ${
+                        outcome.correct
+                          ? "border-[var(--success)] bg-[var(--success-soft)] text-fg"
+                          : "border-line text-muted"
+                      }`}
+                    >
+                      <span className="text-faint">Правильно: </span>
+                      <span className="font-medium text-fg">
+                        {outcome.correctText}
+                      </span>
+                    </div>
+                  )}
 
                 {outcome?.explanation && (
                   <div
@@ -313,7 +361,9 @@ export default function QuizLesson({
           </span>
           <div className="flex items-center gap-2">
             {progress?.bestScore != null && (
-              <Badge tone="accent">лучший: {Math.round(progress.bestScore)}%</Badge>
+              <Badge tone="accent">
+                лучший: {Math.round(progress.bestScore)}%
+              </Badge>
             )}
             <Badge>
               <Clock size={12} /> порог {Math.round(passScore)}%
@@ -334,17 +384,24 @@ export default function QuizLesson({
         <h2 className="mb-1 text-lg font-bold text-fg">{question.text}</h2>
 
         {kind === "choice" && question.multiple && (
-          <p className="mb-3 text-xs text-faint">Можно выбрать несколько вариантов</p>
+          <p className="mb-3 text-xs text-faint">
+            Можно выбрать несколько вариантов
+          </p>
         )}
         {kind === "order" && (
-          <p className="mb-3 text-xs text-faint">Расставьте шаги по порядку кнопками ↑↓</p>
+          <p className="mb-3 text-xs text-faint">
+            Перетащите шаги, чтобы расставить их по порядку
+          </p>
         )}
         {kind === "blank" && (
-          <p className="mb-3 text-xs text-faint">Впишите ответ (команду или слово)</p>
+          <p className="mb-3 text-xs text-faint">
+            Впишите ответ (команду или слово)
+          </p>
         )}
         {kind === "match" && (
           <p className="mb-3 text-xs text-faint">
-            Двигайте правые части кнопками ↑↓, чтобы каждая встала напротив своей левой
+            Двигайте правые части кнопками ↑↓, чтобы каждая встала напротив
+            своей левой
           </p>
         )}
 
@@ -357,7 +414,7 @@ export default function QuizLesson({
                 <li key={option.id}>
                   <button
                     onClick={() => choose(option.id)}
-                    className={`flex w-full items-center gap-3 rounded-[var(--radius-md)] border p-3 text-left text-sm transition-colors ${
+                    className={`choice-btn flex w-full items-center gap-3 rounded-[var(--radius-md)] border p-3 text-left text-sm transition-colors ${
                       active
                         ? "border-[var(--accent)] bg-accent-soft text-fg"
                         : "border-line text-muted hover:bg-surface-2 hover:text-fg"
@@ -382,35 +439,50 @@ export default function QuizLesson({
         {kind === "order" && (
           <ol className="mt-4 space-y-2">
             {orderOf(question).map((itemId, pos) => {
-              const item = (question.items ?? []).find((it) => it.id === itemId);
+              const item = (question.items ?? []).find(
+                (it) => it.id === itemId,
+              );
               if (!item) return null;
               return (
                 <li
                   key={itemId}
-                  className="flex items-center gap-3 rounded-[var(--radius-md)] border border-line bg-surface-2 p-3 text-sm"
+                  draggable
+                  onDragStart={(event) => {
+                    event.dataTransfer.effectAllowed = "move";
+                    event.dataTransfer.setData("text/plain", itemId);
+                    setDraggedOrderItemId(itemId);
+                  }}
+                  onDragOver={(event) => event.preventDefault()}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    const draggedItemId =
+                      event.dataTransfer.getData("text/plain") ||
+                      draggedOrderItemId;
+                    if (!draggedItemId) return;
+
+                    const bounds = event.currentTarget.getBoundingClientRect();
+                    reorderOrderItem(
+                      question,
+                      draggedItemId,
+                      itemId,
+                      event.clientY > bounds.top + bounds.height / 2,
+                    );
+                    setDraggedOrderItemId(null);
+                  }}
+                  onDragEnd={() => setDraggedOrderItemId(null)}
+                  className={`flex cursor-grab items-center gap-3 rounded-[var(--radius-md)] border border-line bg-surface-2 p-3 text-sm transition-opacity active:cursor-grabbing ${
+                    draggedOrderItemId === itemId ? "opacity-50" : ""
+                  }`}
                 >
+                  <GripVertical
+                    size={18}
+                    className="shrink-0 text-faint"
+                    aria-hidden="true"
+                  />
                   <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-accent-soft text-xs font-bold text-accent">
                     {pos + 1}
                   </span>
                   <span className="min-w-0 flex-1 text-fg">{item.text}</span>
-                  <span className="flex shrink-0 gap-1">
-                    <button
-                      className="btn btn-ghost h-7 w-7 !p-0"
-                      onClick={() => moveItem(-1, itemId)}
-                      disabled={pos === 0}
-                      aria-label="Выше"
-                    >
-                      <ChevronRight size={14} className="-rotate-90" />
-                    </button>
-                    <button
-                      className="btn btn-ghost h-7 w-7 !p-0"
-                      onClick={() => moveItem(1, itemId)}
-                      disabled={pos === orderOf(question).length - 1}
-                      aria-label="Ниже"
-                    >
-                      <ChevronRight size={14} className="rotate-90" />
-                    </button>
-                  </span>
                 </li>
               );
             })}
@@ -422,35 +494,71 @@ export default function QuizLesson({
           <ol className="mt-4 space-y-2">
             {orderOf(question).map((rightId, pos) => {
               const left = (question.lefts ?? [])[pos];
-              const right = (question.rights ?? []).find((r) => r.id === rightId);
+              const right = (question.rights ?? []).find(
+                (r) => r.id === rightId,
+              );
+
               if (!right) return null;
+
               return (
                 <li key={rightId} className="flex items-stretch gap-2">
+                  {/* Левая часть — фиксированная */}
                   <div className="flex min-w-0 flex-1 items-center gap-2 rounded-[var(--radius-md)] border border-line bg-surface-2 p-3 text-sm">
                     <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-accent-soft text-xs font-bold text-accent">
                       {pos + 1}
                     </span>
-                    <span className="min-w-0 flex-1 font-medium text-fg">{left?.text}</span>
+
+                    <span className="min-w-0 flex-1 font-medium text-fg">
+                      {left?.text}
+                    </span>
                   </div>
-                  <div className="flex min-w-0 flex-1 items-center gap-2 rounded-[var(--radius-md)] border border-line bg-surface p-3 text-sm">
-                    <span className="min-w-0 flex-1 text-muted">{right.text}</span>
-                    <span className="flex shrink-0 gap-1">
-                      <button
-                        className="btn btn-ghost h-7 w-7 !p-0"
-                        onClick={() => moveItem(-1, rightId)}
-                        disabled={pos === 0}
-                        aria-label="Выше"
-                      >
-                        <ChevronRight size={14} className="-rotate-90" />
-                      </button>
-                      <button
-                        className="btn btn-ghost h-7 w-7 !p-0"
-                        onClick={() => moveItem(1, rightId)}
-                        disabled={pos === orderOf(question).length - 1}
-                        aria-label="Ниже"
-                      >
-                        <ChevronRight size={14} className="rotate-90" />
-                      </button>
+
+                  {/* Правая часть — draggable */}
+                  <div
+                    draggable
+                    onDragStart={(event) => {
+                      event.dataTransfer.effectAllowed = "move";
+                      event.dataTransfer.setData("text/plain", rightId);
+                      setDraggedOrderItemId(rightId);
+                    }}
+                    onDragOver={(event) => {
+                      event.preventDefault();
+                      event.dataTransfer.dropEffect = "move";
+                    }}
+                    onDrop={(event) => {
+                      event.preventDefault();
+
+                      const draggedItemId =
+                        event.dataTransfer.getData("text/plain") ||
+                        draggedOrderItemId;
+
+                      if (!draggedItemId) return;
+
+                      const bounds =
+                        event.currentTarget.getBoundingClientRect();
+
+                      reorderOrderItem(
+                        question,
+                        draggedItemId,
+                        rightId,
+                        event.clientY > bounds.top + bounds.height / 2,
+                      );
+
+                      setDraggedOrderItemId(null);
+                    }}
+                    onDragEnd={() => setDraggedOrderItemId(null)}
+                    className={`flex min-w-0 flex-1 cursor-grab items-center gap-2 rounded-[var(--radius-md)] border border-line bg-surface p-3 text-sm transition-opacity active:cursor-grabbing ${
+                      draggedOrderItemId === rightId ? "opacity-50" : ""
+                    }`}
+                  >
+                    <GripVertical
+                      size={18}
+                      className="shrink-0 text-faint"
+                      aria-hidden="true"
+                    />
+
+                    <span className="min-w-0 flex-1 text-muted">
+                      {right.text}
                     </span>
                   </div>
                 </li>
@@ -464,7 +572,9 @@ export default function QuizLesson({
           <div className="mt-4 max-w-md">
             <Input
               value={blanks[question.id] ?? ""}
-              onChange={(e) => setBlanks((c) => ({ ...c, [question.id]: e.target.value }))}
+              onChange={(e) =>
+                setBlanks((c) => ({ ...c, [question.id]: e.target.value }))
+              }
               placeholder="Введите ответ…"
               className="font-mono"
               autoComplete="off"
@@ -489,7 +599,11 @@ export default function QuizLesson({
           </span>
 
           {index < questions.length - 1 ? (
-            <Button variant="primary" onClick={() => goTo(index + 1)} disabled={!isAnswered(question)}>
+            <Button
+              variant="primary"
+              onClick={() => goTo(index + 1)}
+              disabled={!isAnswered(question)}
+            >
               Далее
             </Button>
           ) : (
