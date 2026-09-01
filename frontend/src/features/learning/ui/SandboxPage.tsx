@@ -98,21 +98,73 @@ function toUtf8Bytes(text: string): string {
   return out;
 }
 
-type Task = { id: string; text: string };
+// Каждое задание проверяется автоматически: check — это sh-условие,
+// которое возвращает 0, если задание выполнено (проверяется прямо в Linux).
+type Task = { id: string; text: string; check: string };
 
 const TASKS: Task[] = [
-  { id: "look", text: "Осмотрись: sh /root/app/status.sh и cat /root/README" },
-  { id: "start", text: "Запусти сервис: sh /root/app/start.sh" },
-  { id: "logs", text: "Смотри логи вживую: tail -f /root/app/app.log (Ctrl+C — выйти)" },
-  { id: "grep", text: "Найди ошибки 500: grep ' 500 ' /root/app/access.log" },
-  { id: "awk", text: "Топ IP: awk '{print $1}' /root/app/access.log | sort | uniq -c | sort -rn" },
-  { id: "vi", text: "В vi /root/app/service.sh поменяй sleep 2 на sleep 1 и перезапусти сервис" },
-  { id: "stop", text: "Останови сервис: sh /root/app/stop.sh, проверь статус" },
-  { id: "own", text: "Напиши свой скрипт в /root и запусти его" },
-  { id: "explore", text: "Изучи систему: ps, top (q), df -h, ip a, uname -a" },
+  {
+    id: "start",
+    text: "Запусти сервис: sh /root/app/start.sh (появится лог)",
+    check: "[ -s /root/app/app.log ]",
+  },
+  {
+    id: "grow",
+    text: "Дай сервису поработать — в логе должно стать ≥3 строк (sh /root/app/status.sh)",
+    check: "[ $(wc -l < /root/app/app.log 2>/dev/null || echo 0) -ge 3 ]",
+  },
+  {
+    id: "grep",
+    text: "Сохрани ошибки 500 в файл: grep ' 500 ' /root/app/access.log > /root/errors.txt",
+    check: "[ -s /root/errors.txt ]",
+  },
+  {
+    id: "awk",
+    text: "Топ IP в файл: awk '{print $1}' /root/app/access.log | sort | uniq -c | sort -rn > /root/top_ip.txt",
+    check: "[ -s /root/top_ip.txt ]",
+  },
+  {
+    id: "vi",
+    text: "Через vi /root/app/service.sh поменяй интервал sleep 2 на sleep 1",
+    check: "grep -q 'sleep 1' /root/app/service.sh",
+  },
+  {
+    id: "own",
+    text: "Создай свой скрипт /root/hello.sh (#!/bin/sh + echo), chmod +x и запусти",
+    check: "[ -x /root/hello.sh ]",
+  },
+  {
+    id: "dir",
+    text: "Создай папку и файл: mkdir /root/project; echo привет > /root/project/notes.txt",
+    check: "[ -f /root/project/notes.txt ]",
+  },
+  {
+    id: "kernel",
+    text: "Запиши версию ядра в файл: uname -a > /root/kernel.txt",
+    check: "[ -s /root/kernel.txt ]",
+  },
+  {
+    id: "stop",
+    text: "Останови сервис: sh /root/app/stop.sh",
+    check: "[ -s /root/app/app.log ] && ! { [ -f /root/app/app.pid ] && kill -0 $(cat /root/app/app.pid) 2>/dev/null; }",
+  },
 ];
 
 const TASKS_KEY = "okvion.sandbox.tasks";
+
+// Сборка скрипта проверки заданий (выполняется внутри Linux).
+// Терминал эхо-отображает саму команду, поэтому маркер результата собираем
+// в рантайме через $(echo ...) — тогда "@@id=PASS@@" встречается ТОЛЬКО в
+// реальном выводе, а не в тексте набранной команды.
+const CHECK_END = "OKV_CHK_END";
+
+function buildCheckScript(): string {
+  const lines = TASKS.map(
+    (t) => `if ${t.check}; then echo "@@${t.id}=$(echo PASS)@@"; else echo "@@${t.id}=$(echo FAIL)@@"; fi`,
+  );
+  // \x03 (Ctrl+C) прерывает возможную запущенную команду (например tail -f).
+  return `\x03\n${lines.join("\n")}\necho "OKV_$(echo CHK_END)"\n`;
+}
 
 const TERM_THEME = {
   background: "#0b0f17",
@@ -136,11 +188,15 @@ export default function SandboxPage() {
     }
   });
 
+  const [checking, setChecking] = useState(false);
+
   const termHostRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
   const emuRef = useRef<V86Instance | null>(null);
   const injectedRef = useRef(false);
+  const outputLogRef = useRef(""); // накопитель вывода терминала — для автопроверки заданий
+  const flushTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const stateInputRef = useRef<HTMLInputElement>(null);
 
@@ -165,8 +221,49 @@ export default function SandboxPage() {
     toast.success("Учебный проект загружен в /root/app");
   }, [send, toast]);
 
+  // Автопроверка: гоняем проверки прямо в Linux и засчитываем выполненное.
+  const runChecks = useCallback(async () => {
+    if (!emuRef.current || checking) return;
+    setChecking(true);
+    const startLen = outputLogRef.current.length;
+    send(buildCheckScript());
+
+    const finished = await new Promise<boolean>((resolve) => {
+      const t0 = Date.now();
+      const iv = setInterval(() => {
+        if (outputLogRef.current.indexOf(CHECK_END, startLen) >= 0) {
+          clearInterval(iv);
+          resolve(true);
+        } else if (Date.now() - t0 > 8000) {
+          clearInterval(iv);
+          resolve(false);
+        }
+      }, 150);
+    });
+
+    if (!finished) {
+      setChecking(false);
+      toast.error("Проверка не завершилась. Закрой запущенную команду (Ctrl+C) и повтори.");
+      return;
+    }
+
+    const slice = outputLogRef.current.slice(startLen);
+    const next = new Set<string>();
+    for (const t of TASKS) if (slice.includes(`@@${t.id}=PASS@@`)) next.add(t.id);
+    setDone(next);
+    localStorage.setItem(TASKS_KEY, JSON.stringify([...next]));
+    setChecking(false);
+
+    if (next.size === TASKS.length) toast.success("Все задания выполнены! 🎉");
+    else toast.success(`Засчитано ${next.size} из ${TASKS.length} заданий`);
+  }, [checking, send, toast]);
+
   // Полностью останавливает и очищает эмулятор и терминал.
   const teardown = useCallback(async () => {
+    if (flushTimerRef.current) {
+      clearInterval(flushTimerRef.current);
+      flushTimerRef.current = null;
+    }
     try {
       await emuRef.current?.destroy?.();
     } catch {
@@ -224,9 +321,17 @@ export default function SandboxPage() {
         scheduled = false;
         if (buf.length) {
           term.write(new Uint8Array(buf));
+          // Дублируем вывод в накопитель (ASCII-маркеры проверки ищем в нём).
+          let chunk = "";
+          for (let i = 0; i < buf.length; i++) chunk += String.fromCharCode(buf[i]);
+          outputLogRef.current = (outputLogRef.current + chunk).slice(-20000);
           buf = [];
         }
       };
+      // Страховочный флаш по таймеру: requestAnimationFrame замирает в скрытой
+      // вкладке, а проверка заданий должна работать в любом случае.
+      if (flushTimerRef.current) clearInterval(flushTimerRef.current);
+      flushTimerRef.current = setInterval(flush, 60);
 
       const options: Record<string, unknown> = {
         wasm_path: V86_ASSETS.wasm_path,
@@ -440,6 +545,7 @@ export default function SandboxPage() {
                 <li>• В <code className="text-accent">/root/app</code> уже лежит учебный «сервис» — приложение, которое пишет логи.</li>
                 <li>• Запустить: <code className="text-accent">sh /root/app/start.sh</code>, статус: <code className="text-accent">sh /root/app/status.sh</code></li>
                 <li>• Логи вживую: <code className="text-accent">tail -f /root/app/app.log</code> (Ctrl+C — выйти).</li>
+                <li>• Выполняй задания ниже и жми <b className="text-fg">«Проверить»</b> — платформа сама зайдёт в Linux и засчитает.</li>
                 <li>• «Файл» — загрузить свой скрипт/приложение в <code className="text-accent">/root</code>.</li>
                 <li>• Сломать ничего нельзя: «Перезапустить» вернёт чистую систему.</li>
               </ul>
@@ -474,7 +580,18 @@ export default function SandboxPage() {
                   );
                 })}
               </ul>
-              <p className="mt-2 text-[11px] text-faint">Отмечайте выполненное вручную — прогресс сохраняется на этом устройстве.</p>
+              <Button
+                variant="secondary"
+                className="mt-3 w-full"
+                onClick={runChecks}
+                loading={checking}
+                disabled={status !== "running" || checking}
+              >
+                <CheckCircle2 size={15} /> Проверить задания
+              </Button>
+              <p className="mt-2 text-[11px] text-faint">
+                Платформа сама зайдёт в Linux и проверит результат. Прогресс сохраняется на этом устройстве.
+              </p>
             </Card>
 
             <Card className="p-[var(--pad)]">

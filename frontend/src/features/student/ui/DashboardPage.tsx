@@ -87,6 +87,27 @@ export default function DashboardPage() {
         />
       </div>
 
+      <Card className="mt-[var(--gap)] flex flex-wrap items-center justify-between gap-4 p-[var(--pad)]">
+        <div className="flex min-w-0 items-start gap-3">
+          <span
+            className="grid h-11 w-11 shrink-0 place-items-center rounded-[var(--radius-md)] text-accent-fg"
+            style={{ background: "var(--gradient)" }}
+          >
+            <Terminal size={22} />
+          </span>
+          <div className="min-w-0">
+            <p className="text-base font-bold text-fg">Песочница — Linux-терминал</p>
+            <p className="mt-0.5 text-sm text-muted">
+              Настоящий Linux прямо в браузере: практикуйся свободно и выполняй задания с автопроверкой.
+            </p>
+          </div>
+        </div>
+        <Link to="/learn/sandbox" className="btn btn-primary shrink-0">
+          <Terminal size={18} />
+          Открыть песочницу
+        </Link>
+      </Card>
+
       {nextLesson && activeCourse && (
         <Card className="mt-[var(--gap)] flex flex-wrap items-center justify-between gap-4 p-[var(--pad)]">
           <div className="min-w-0">
