@@ -151,7 +151,7 @@
       "durationMin": 12,
       "content": {
         "language": "nginx",
-        "task": "Напишите один блок server{} для раздачи статики. Требования:\n1) слушать порт 80 директивой listen;\n2) отвечать на домен shop.local через server_name;\n3) задать корневую папку /var/www/shop директивой root;\n4) файлом по умолчанию сделать index.html через index;\n5) добавить location / с try_files $uri $uri/ =404.",
+        "task": "Напишите один блок server{} для раздачи статики. Требования:\n1) слушать порт 80 директивой listen;\n2) отвечать на домен shop.local через server_name;\n3) задать корневую папку /var/www/shop директивой root;\n4) файлом по умолчанию сделать index.html через index;\n5) добавить location / с try_files $uri $uri/ =404.\n\n## 🔧 Измените одну вещь\n\nЗадание зачтено — теперь закрепите пониманием, а не памятью. Ответьте, не запуская:\n\n- Чтобы блок отвечал ещё и на `www.shop.local`, что допишете в `server_name`? Имена перечисляют через пробел в одной директиве.\n- Чтобы файлом по умолчанию стал `home.html`, что поменяете в `index`?\n- Что вернёт nginx на запрос несуществующего файла — какой код даёт хвост `=404` в `try_files`?",
         "starter": "server {\n    # 1) слушать 80 порт\n    listen 80;\n\n    # 2) домен сайта\n    server_name ___;\n\n    # 3) папка с файлами на диске\n    root ___;\n\n    # 4) файл по умолчанию\n    index ___;\n\n    # 5) правило для всех путей\n    location / {\n        try_files $uri $uri/ =404;\n    }\n}\n",
         "hint": "server_name shop.local; root /var/www/shop; index index.html; — точка с запятой обязательна в конце каждой директивы.",
         "checks": [
@@ -229,8 +229,8 @@
       "durationMin": 13,
       "content": {
         "language": "nginx",
-        "task": "Соберите конфиг обратного прокси с балансировкой. Требования:\n1) блок upstream с именем app и двумя серверами: 127.0.0.1:8090 и 127.0.0.1:8091;\n2) блок server, слушающий порт 80;\n3) внутри location / директива proxy_pass на http://app (по имени группы, не по порту);\n4) передать заголовок Host значением $host;\n5) передать заголовок X-Real-IP значением $remote_addr.",
-        "starter": "upstream app {\n    server ___;\n    server ___;\n}\n\nserver {\n    listen 80;\n    server_name shop.local;\n\n    location / {\n        # проксируем на группу по её имени\n        proxy_pass http://___;\n\n        proxy_set_header Host      ___;\n        proxy_set_header X-Real-IP ___;\n    }\n}\n",
+        "task": "Соберите конфиг обратного прокси с балансировкой. Требования:\n1) блок upstream с именем app и двумя серверами: 127.0.0.1:8090 и 127.0.0.1:8091;\n2) блок server, слушающий порт 80;\n3) внутри location / директива proxy_pass на http://app (по имени группы, не по порту);\n4) передать заголовок Host значением $host;\n5) передать заголовок X-Real-IP значением $remote_addr.\n\n## 🔮 Предскажите (после зачёта)\n\nВ вашем `upstream app` две копии: 8090 и 8091, балансировка по умолчанию (round-robin).\n\n- К какому порту уйдёт 1-й запрос, к какому 2-й, к какому 3-й?\n- Что сделает nginx, если копия на 8090 перестанет отвечать?\n- Ускорит ли `upstream` один тяжёлый запрос — или он делит только поток запросов?",
+        "starter": "upstream app {\n    # два backend-сервера из требований (по одному в строке: server адрес:порт;)\n}\n\nserver {\n    listen 80;\n    server_name shop.local;\n\n    location / {\n        # 1) проксируйте на группу app по её ИМЕНИ (не по порту)\n        # 2) передайте заголовки Host и X-Real-IP из требований\n    }\n}\n",
         "hint": "В proxy_pass идёт имя upstream (http://app), а не порт. Значения заголовков — переменные $host и $remote_addr.",
         "checks": [
           {
