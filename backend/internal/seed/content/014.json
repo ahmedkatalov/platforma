@@ -656,8 +656,8 @@
             "note": "Официальная документация по всем темам главы."
           },
           {
-            "title": "Ansible: обзор (Википедия)",
-            "url": "https://ru.wikipedia.org/wiki/Ansible",
+            "title": "Ansible: введение (документация)",
+            "url": "https://docs.ansible.com/ansible/latest/getting_started/introduction.html",
             "note": "Что такое Ansible и из чего он состоит — краткое повторение перед итоговым квизом."
           }
         ]

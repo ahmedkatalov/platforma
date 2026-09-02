@@ -17,7 +17,7 @@
           },
           {
             "title": "MDN: Proxy servers and tunneling",
-            "url": "https://ru.wikipedia.org/wiki/Прокси-сервер",
+            "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Proxy_servers_and_tunneling",
             "note": "Роль прокси между клиентом и сервером"
           }
         ]

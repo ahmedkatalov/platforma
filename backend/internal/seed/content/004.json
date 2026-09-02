@@ -854,7 +854,7 @@
           },
           {
             "title": "MDN: Transport Layer Security (TLS)",
-            "url": "https://ru.wikipedia.org/wiki/TLS",
+            "url": "https://developer.mozilla.org/ru/docs/Web/Security/Transport_Layer_Security",
             "note": "Как TLS шифрует трафик и роль сертификатов."
           }
         ]

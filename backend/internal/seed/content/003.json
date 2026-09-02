@@ -17,11 +17,11 @@
           },
           {
             "title": "Ubuntu Server documentation",
-            "url": "https://ru.wikipedia.org/wiki/Filesystem_Hierarchy_Standard",
+            "url": "https://man7.org/linux/man-pages/man7/hier.7.html",
             "note": "Официальная документация дистрибутива, который берём для учёбы."
           },
           {
-            "title": "The GNU Operating System",
+            "title": "Википедия: The GNU Operating System",
             "url": "https://ru.wikipedia.org/wiki/GNU",
             "note": "Проект, давший базовые утилиты userland поверх ядра."
           }
@@ -132,12 +132,12 @@
         "resources": [
           {
             "title": "hier(7) — описание иерархии файловой системы Linux",
-            "url": "https://ru.wikipedia.org/wiki/Filesystem_Hierarchy_Standard",
+            "url": "https://man7.org/linux/man-pages/man7/hier.7.html",
             "note": "Официальная справка, что и в каком системном каталоге лежит."
           },
           {
             "title": "Filesystem Hierarchy Standard (Ubuntu)",
-            "url": "https://ru.wikipedia.org/wiki/Filesystem_Hierarchy_Standard",
+            "url": "https://man7.org/linux/man-pages/man7/hier.7.html",
             "note": "Общая логика дерева каталогов в дистрибутиве для учёбы."
           }
         ],
@@ -465,7 +465,7 @@
         "resources": [
           {
             "title": "hier(7) — иерархия файловой системы",
-            "url": "https://ru.wikipedia.org/wiki/Filesystem_Hierarchy_Standard",
+            "url": "https://man7.org/linux/man-pages/man7/hier.7.html",
             "note": "Проверить назначение системных каталогов из первого вопроса."
           },
           {
@@ -1171,7 +1171,7 @@
         "resources": [
           {
             "title": "chmod — изменение прав (man)",
-            "url": "https://ru.wikipedia.org/wiki/Chmod",
+            "url": "https://man7.org/linux/man-pages/man1/chmod.1.html",
             "note": "Символьная (u+x) и числовая (755) запись прав."
           },
           {
@@ -1280,7 +1280,7 @@
           },
           {
             "title": "signal — man7.org",
-            "url": "https://ru.wikipedia.org/wiki/Сигнал_(Unix)",
+            "url": "https://man7.org/linux/man-pages/man7/signal.7.html",
             "note": "Таблица сигналов: SIGTERM (15), SIGKILL (9) и другие."
           }
         ],
@@ -1536,7 +1536,7 @@
         "resources": [
           {
             "title": "chmod — man7.org",
-            "url": "https://ru.wikipedia.org/wiki/Chmod",
+            "url": "https://man7.org/linux/man-pages/man1/chmod.1.html",
             "note": "Повторить символьную и числовую запись прав."
           },
           {
@@ -1912,12 +1912,12 @@
         "resources": [
           {
             "title": "Права доступа Linux (chmod, man7.org)",
-            "url": "https://ru.wikipedia.org/wiki/Chmod",
+            "url": "https://man7.org/linux/man-pages/man1/chmod.1.html",
             "note": "Символьная и числовая запись rwx."
           },
           {
             "title": "Сигналы процессам (man7.org)",
-            "url": "https://ru.wikipedia.org/wiki/Сигнал_(Unix)",
+            "url": "https://man7.org/linux/man-pages/man7/signal.7.html",
             "note": "SIGTERM против SIGKILL и их номера."
           },
           {

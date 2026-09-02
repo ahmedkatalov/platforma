@@ -517,12 +517,12 @@
           },
           {
             "title": "GraphQL — официальный сайт",
-            "url": "https://ru.wikipedia.org/wiki/GraphQL",
+            "url": "https://graphql.org/learn/",
             "note": "Почему клиент сам выбирает поля запроса."
           },
           {
             "title": "gRPC — Introduction",
-            "url": "https://ru.wikipedia.org/wiki/GRPC",
+            "url": "https://grpc.io/docs/what-is-grpc/introduction/",
             "note": "Бинарный быстрый вызов между сервисами."
           }
         ]
@@ -548,7 +548,7 @@
           },
           {
             "title": "Introducing JSON",
-            "url": "https://ru.wikipedia.org/wiki/JSON",
+            "url": "https://www.json.org/json-ru.html",
             "note": "Синтаксис объектов, массивов и типов JSON."
           }
         ]

@@ -48,7 +48,7 @@
           },
           {
             "title": "chmod (man7.org)",
-            "url": "https://ru.wikipedia.org/wiki/Chmod",
+            "url": "https://man7.org/linux/man-pages/man1/chmod.1.html",
             "note": "Как сделать файл исполняемым: chmod +x"
           }
         ]
@@ -502,8 +502,7 @@
             "url": "https://man7.org/linux/man-pages/man1/bash.1.html",
             "note": "разделы Compound Commands и Shell Functions"
           }
-        ],
-        "task": "\n\n### 🔮 Предскажите и отладьте\nЗапустите скрипт в папке, где НЕТ ни одного `.log`-файла. Что он напечатает?\n\nЛовушка: bash раскрывает маску `*.log` ДО цикла. Если файлов нет, в `file` попадёт сама строка `*.log`.\n\nМетод отладки: прочитайте вывод — это реальный файл или текст маски? Проверьте догадку через `ls *.log`. Защита — строка `[[ -e \"$file\" ]] || continue` в начале тела цикла."
+        ]
       }
     },
     {
@@ -521,7 +520,7 @@
           },
           {
             "title": "chmod (man7.org)",
-            "url": "https://ru.wikipedia.org/wiki/Chmod",
+            "url": "https://man7.org/linux/man-pages/man1/chmod.1.html",
             "note": "Права доступа к файлу секретов: chmod 600"
           }
         ]
@@ -589,7 +588,7 @@
         "resources": [
           {
             "title": "man crontab.5 (формат файла)",
-            "url": "https://ru.wikipedia.org/wiki/Cron",
+            "url": "https://man7.org/linux/man-pages/man5/crontab.5.html",
             "note": "Точное описание пяти полей расписания и синтаксиса."
           },
           {
@@ -666,7 +665,7 @@
           },
           {
             "title": "man crontab.5",
-            "url": "https://ru.wikipedia.org/wiki/Cron",
+            "url": "https://man7.org/linux/man-pages/man5/crontab.5.html",
             "note": "Синтаксис строки расписания для cron."
           }
         ]
@@ -861,11 +860,10 @@
           },
           {
             "title": "man crontab.5",
-            "url": "https://ru.wikipedia.org/wiki/Cron",
+            "url": "https://man7.org/linux/man-pages/man5/crontab.5.html",
             "note": "Синтаксис расписания cron."
           }
-        ],
-        "task": "\n\n### 🔧 Измените одну вещь\nПосле рабочего решения поменяйте расписание в комментарии: пусть бэкап идёт каждые 6 часов, а не раз в сутки.\n\nПодумайте, какое из пяти полей cron за это отвечает. Проверьте себя: строка станет `0 */6 * * *`.\n\n### 🔮 Предскажите\nКакое имя получит архив при запуске 1 января 2027 года? Соберите его в уме из шаблона с `date +%F`."
+        ]
       }
     }
   ]
