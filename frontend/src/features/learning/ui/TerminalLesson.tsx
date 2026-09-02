@@ -11,7 +11,7 @@ import { apiErrorMessage } from "@/shared/api/baseApi";
 import type {
   Certificate, LessonProgress, TaskState, TerminalContent } from "@/shared/types";
 import { Badge, Button, Card, Progress } from "@/shared/ui";
-import { Check, CornerDownLeft, Terminal } from "lucide-react";
+import { Check, Terminal } from "lucide-react";
 import { useToast } from "@/shared/ui/ToastProvider";
 
 import LessonResources from "./LessonResources";
@@ -206,8 +206,8 @@ export default function TerminalLesson({
           </div>
         )}
 
-        {/* Терминал */}
-        <Card className="flex flex-col overflow-hidden lg:col-span-3">
+        {/* Терминал — ввод прямо в строке приглашения, как в настоящем терминале. */}
+        <Card className="overflow-hidden lg:col-span-3">
           <div className="flex items-center gap-2 border-b border-line px-4 py-2.5">
             <span className="flex gap-1.5">
               <span className="h-3 w-3 rounded-full bg-[var(--danger)]" />
@@ -220,10 +220,9 @@ export default function TerminalLesson({
             </span>
           </div>
 
-          {/* Область вывода прокручивается сама по себе. */}
           <div
             ref={screenRef}
-            className="h-[15rem] overflow-y-auto overscroll-contain bg-[var(--bg-deep)] p-4 font-mono text-[13px] leading-relaxed sm:h-[20rem] lg:h-[24rem]"
+            className="h-[16rem] overflow-y-auto overscroll-contain bg-[var(--bg-deep)] p-4 font-mono text-[13px] leading-relaxed sm:h-[20rem] lg:h-[26rem]"
             onClick={() => inputRef.current?.focus()}
           >
             {lines.map((line, i) => (
@@ -240,38 +239,24 @@ export default function TerminalLesson({
                 {line.text}
               </pre>
             ))}
-          </div>
 
-          {/* Строка ввода отделена от вывода: всегда видна, дотягивается пальцем,
-              не прячется за клавиатурой (браузер подскроллит её при фокусе). */}
-          <div className="flex items-center gap-2 border-t border-line bg-[var(--bg-deep)] px-3 py-2">
-            <span className="shrink-0 font-mono text-[13px] text-accent">{prompt(shell)}</span>
-            <input
-              ref={inputRef}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={onKeyDown}
-              className="min-w-0 flex-1 bg-transparent py-1.5 font-mono text-[13px] text-fg outline-none placeholder:text-faint"
-              placeholder="команда…"
-              autoComplete="off"
-              autoCapitalize="off"
-              autoCorrect="off"
-              spellCheck={false}
-              enterKeyHint="send"
-              aria-label="Командная строка"
-            />
-            <button
-              className="btn btn-primary btn-sm btn-icon shrink-0"
-              onClick={() => {
-                void run(input);
-                setInput("");
-                inputRef.current?.focus();
-              }}
-              aria-label="Выполнить команду"
-              title="Выполнить (Enter)"
-            >
-              <CornerDownLeft size={16} />
-            </button>
+            {/* Приглашение и курсор ввода — прямо в потоке вывода. */}
+            <div className="flex items-center gap-2">
+              <span className="shrink-0 text-accent">{prompt(shell)}</span>
+              <input
+                ref={inputRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={onKeyDown}
+                className="min-w-0 flex-1 bg-transparent font-mono text-[13px] text-fg outline-none"
+                autoComplete="off"
+                autoCapitalize="off"
+                autoCorrect="off"
+                spellCheck={false}
+                enterKeyHint="send"
+                aria-label="Командная строка"
+              />
+            </div>
           </div>
         </Card>
 

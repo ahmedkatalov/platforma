@@ -513,9 +513,7 @@ export default function LessonPage() {
             панель не перекрывала ввод команд и кнопку проверки. На десктопе — ряд. */}
         <div
           className={`mt-[var(--gap)] flex items-center gap-3 pt-[var(--gap)] ${
-            lesson.kind === "text" || lesson.kind === "quiz"
-              ? "action-bar xl:static xl:bg-none xl:pb-0"
-              : ""
+            lesson.kind === "text" || lesson.kind === "quiz" ? "action-bar" : ""
           }`}
         >
           {data.prevLessonId ? (
