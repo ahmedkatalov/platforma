@@ -95,6 +95,13 @@
 html {
   font-size: calc(16px * var(--font-scale));
   color-scheme: dark;
+  /* Ни один компонент не должен вызывать горизонтальную прокрутку всей страницы. */
+  overflow-x: clip;
+  /* Значения выреза экрана (чёлка/индикатор) — 0 на десктопе, реальные на телефоне. */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
 }
 
 body {
@@ -346,4 +353,77 @@ html.glow-animated body::before {
 
 @media (prefers-reduced-motion: reduce) {
   .anim-pop { animation: none; }
+}
+
+/* ======================================================================
+   МОБИЛЬНЫЙ СЛОЙ — платформа как приложение для телефона, а не сжатый десктоп.
+   ====================================================================== */
+
+/* Утилиты безопасных зон (вырез, домашний индикатор). */
+.pt-safe { padding-top: var(--safe-top); }
+.pb-safe { padding-bottom: var(--safe-bottom); }
+.pl-safe { padding-left: var(--safe-left); }
+.pr-safe { padding-right: var(--safe-right); }
+.top-safe { top: var(--safe-top); }
+.h-safe-top { height: var(--safe-top); }
+
+/* Липкая нижняя панель действий (Далее/Проверить/…): всегда над домашним
+   индикатором, поверх контента, с плотным фоном (без стекла — читаемее). */
+.action-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 20;
+  padding-bottom: calc(0.75rem + var(--safe-bottom));
+  padding-top: 0.75rem;
+  background: linear-gradient(to top, var(--bg) 62%, transparent);
+}
+
+/* Всплывающая снизу «шторка» (bottom sheet) для мобильных: меню, содержание,
+   подсказки. На sm+ такие же поповеры остаются на своих местах. */
+@keyframes sheet-up {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+.sheet-panel {
+  background: var(--surface-modal);
+  border-top-left-radius: var(--radius-xl);
+  border-top-right-radius: var(--radius-xl);
+  border-top: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-lg);
+  padding-bottom: calc(0.5rem + var(--safe-bottom));
+  animation: sheet-up 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+  max-height: 82vh;
+}
+.sheet-grip {
+  width: 2.25rem;
+  height: 0.25rem;
+  border-radius: 999px;
+  background: var(--border-strong);
+  margin: 0.625rem auto 0.25rem;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sheet-panel { animation: none; }
+}
+
+/* Комфортная зона нажатия для мелких сенсорных элементов. */
+.tap { min-height: 2.75rem; min-width: 2.75rem; }
+
+/* Настройки специально для телефонов (узкие экраны). */
+@media (max-width: 640px) {
+  :root {
+    /* Компактнее, но дышит: меньше «мёртвых зон» внутри карточек. */
+    --pad: 1rem;
+    --gap: 0.875rem;
+    /* Контролы дотягиваются до комфортных 44px. */
+    --row-h: 2.75rem;
+    --row-h-sm: 2.5rem;
+    /* Меньше стекла на телефоне — читаемее и быстрее. */
+    --glass-blur: 5px;
+    --radius-lg: 0.875rem;
+    --radius-xl: 1.125rem;
+  }
+  /* Приглушаем фоновое свечение — на маленьком экране оно шумит. */
+  body::before { opacity: calc(var(--glow-opacity) * 0.6); }
+  /* Код и моноширинный текст не должны быть микроскопическими. */
+  pre, code, .font-mono { font-size: 0.8125rem; }
 }
