@@ -2,11 +2,16 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
 import { useAppSelector } from "@/app/store";
-import { useGetStudentCourseQuery } from "@/features/admin/api/coursesApi";
+import {
+  useGetStudentCourseQuery,
+  useRequestModuleAccessMutation,
+} from "@/features/admin/api/coursesApi";
 import {
   useGetLessonQuery,
   useStartLessonMutation,
 } from "@/features/learning/api/lessonApi";
+import { apiErrorMessage } from "@/shared/api/baseApi";
+import { useToast } from "@/shared/ui/ToastProvider";
 import type {
   Certificate,
   CodeContent,
@@ -92,7 +97,25 @@ export default function LessonPage() {
   // Админ видит все главы (превью). Студенту глава открыта только если она в moduleAccess.
   const isAdminView = currentUser?.role === "admin";
   const moduleAccess = courseData?.moduleAccess ?? {};
+  const requests = courseData?.requests ?? {};
   const chapterUnlocked = (moduleId: string) => isAdminView || moduleAccess[moduleId] === true;
+
+  const [requestAccess, { isLoading: requesting }] = useRequestModuleAccessMutation();
+  const toast = useToast();
+
+  // Тап по закрытой главе: если заявки ещё не было — отправляем её админу.
+  const askAccess = async (moduleId: string, chapterNo: number) => {
+    if (requests[moduleId] === "pending") {
+      toast.info(`Заявка на главу ${chapterNo} уже у администратора — ожидайте.`);
+      return;
+    }
+    try {
+      await requestAccess({ slug, moduleId }).unwrap();
+      toast.success(`Заявка на главу ${chapterNo} отправлена — администратор откроет доступ.`);
+    } catch (err) {
+      toast.error(apiErrorMessage(err, "Не удалось отправить заявку"));
+    }
+  };
 
   const totals = useMemo(() => {
     const all = modules.flatMap((module) => module.lessons ?? []);
@@ -292,28 +315,42 @@ export default function LessonPage() {
                 const activeChapter = lessons.some((l) => l.id === lesson.id);
                 const chapterComplete = moduleTotal > 0 && moduleDone === moduleTotal;
 
-                // Закрытая глава: с замком, приглушённая, ведёт на страницу курса
-                // (там можно запросить доступ). Уроки не кликабельны.
+                // Закрытая глава: замок, приглушена, НЕ раскрывается и никуда не
+                // ведёт. Тап отправляет заявку администратору на доступ.
                 if (!chapterUnlocked(module.id)) {
+                  const pending = requests[module.id] === "pending";
                   return (
                     <section key={module.id}>
-                      <Link
-                        to={`/learn/courses/${data.courseSlug}`}
-                        className="flex w-full items-center gap-2.5 rounded-[var(--radius-md)] px-2 py-2 opacity-75 transition-opacity hover:opacity-100"
-                        title="Глава закрыта — запросите доступ на странице курса"
+                      <button
+                        type="button"
+                        onClick={() => askAccess(module.id, moduleIndex + 1)}
+                        disabled={requesting}
+                        className="group flex w-full items-center gap-2.5 rounded-[var(--radius-md)] border border-dashed border-line px-2 py-2 text-left transition-colors hover:bg-surface-2 disabled:cursor-wait"
+                        title={
+                          pending
+                            ? "Заявка на доступ уже у администратора"
+                            : "Глава закрыта — нажмите, чтобы запросить доступ у администратора"
+                        }
                       >
                         <span className="grid h-7 w-7 shrink-0 place-items-center rounded-[var(--radius-md)] bg-surface-2 text-faint">
                           <Lock size={14} />
                         </span>
-                        <span className="min-w-0 flex-1">
+                        <span className="min-w-0 flex-1 opacity-70">
                           <span className="block truncate text-sm font-semibold text-muted">
                             {module.title}
                           </span>
                           <span className="block text-[11px] text-faint">
-                            Глава {moduleIndex + 1} · доступ закрыт
+                            Глава {moduleIndex + 1} · {pending ? "заявка у админа" : "закрыта"}
                           </span>
                         </span>
-                      </Link>
+                        {pending ? (
+                          <Badge tone="warning">Ждём</Badge>
+                        ) : (
+                          <span className="shrink-0 whitespace-nowrap text-[11px] font-semibold text-accent opacity-80 group-hover:opacity-100">
+                            Запросить
+                          </span>
+                        )}
+                      </button>
                     </section>
                   );
                 }
