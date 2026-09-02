@@ -4,6 +4,8 @@ import remarkGfm from "remark-gfm";
 
 import { Check } from "lucide-react";
 
+import { Callout, CodeAnatomy, FlowDiagram, Reveal, parseCalloutType } from "./LessonBlocks";
+
 // Якорь для оглавления: «Права доступа» → prava-dostupa-подобный стабильный id.
 export function headingId(text: string): string {
   return text
@@ -114,14 +116,26 @@ export default function Markdown({ children }: { children: string }) {
               {children}
             </a>
           ),
-          blockquote: ({ children }) => (
-            <blockquote className="flex gap-3 rounded-[var(--radius-md)] border-l-4 border-[var(--accent)] bg-accent-soft px-4 py-3 text-sm leading-relaxed text-fg [&_p]:text-fg">
-              <span aria-hidden="true" className="mt-0.5 shrink-0 text-base">
-                💡
-              </span>
-              <span className="min-w-0">{children}</span>
-            </blockquote>
-          ),
+          blockquote: ({ children }) => {
+            // Типизированная выноска: первая строка вида [!TIP]/[!WARNING]/… на
+            // отдельной строке превращает цитату в цветной блок с иконкой.
+            const kids = (Array.isArray(children) ? children : [children]).filter(
+              (c) => !(typeof c === "string" && !c.trim()),
+            );
+            const firstText = textOf(kids[0]).trim();
+            const type = parseCalloutType(firstText);
+            if (type && /^\[!\w+\]\s*$/i.test(firstText)) {
+              return <Callout type={type}>{kids.slice(1)}</Callout>;
+            }
+            return (
+              <blockquote className="flex gap-3 rounded-[var(--radius-md)] border-l-4 border-[var(--accent)] bg-accent-soft px-4 py-3 text-sm leading-relaxed text-fg [&_p]:text-fg">
+                <span aria-hidden="true" className="mt-0.5 shrink-0 text-base">
+                  💡
+                </span>
+                <span className="min-w-0">{children}</span>
+              </blockquote>
+            );
+          },
           code: ({ className, children }) => {
             // Блок кода — моноширинный с прокруткой, инлайн — подсветка в тексте.
             const isBlock = Boolean(className?.startsWith("language-"));
@@ -138,7 +152,18 @@ export default function Markdown({ children }: { children: string }) {
               </code>
             );
           },
-          pre: ({ children }) => <CodeBlock>{children}</CodeBlock>,
+          pre: ({ children }) => {
+            // Спец-блоки: ```flow (схема), ```anatomy (разбор), ```reveal (предскажи).
+            const codeEl = children as {
+              props?: { className?: string; children?: ReactNode };
+            } | null;
+            const lang = codeEl?.props?.className ?? "";
+            const raw = textOf(codeEl?.props?.children).replace(/\n$/, "");
+            if (lang.includes("language-flow")) return <FlowDiagram source={raw} />;
+            if (lang.includes("language-anatomy")) return <CodeAnatomy source={raw} />;
+            if (lang.includes("language-reveal")) return <Reveal source={raw} />;
+            return <CodeBlock>{children}</CodeBlock>;
+          },
           table: ({ children }) => (
             <div className="overflow-x-auto rounded-[var(--radius-md)] border border-line">
               <table className="w-full text-sm">{children}</table>
