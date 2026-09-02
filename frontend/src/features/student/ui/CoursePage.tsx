@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
 import {
@@ -13,6 +14,7 @@ import { useToast } from "@/shared/ui/ToastProvider";
 import {
   Book,
   Check,
+  ChevronDown,
   ChevronRight,
   Clock,
   Edit2,
@@ -36,6 +38,9 @@ export default function CoursePage() {
   const { data: me } = useGetMeQuery();
   const [requestAccess, { isLoading: requesting }] = useRequestModuleAccessMutation();
   const toast = useToast();
+  // null — пользователь ещё не трогал аккордеон: по умолчанию раскрыта глава,
+  // где лежит ближайший невыполненный урок (остальные свёрнуты).
+  const [openModules, setOpenModules] = useState<Set<string> | null>(null);
 
   if (isLoading) {
     return (
@@ -96,6 +101,21 @@ export default function CoursePage() {
   const nextLesson = allLessons.find((l) => !isDone(l.id));
 
   const lessonHref = (lesson: Lesson) => `/learn/courses/${course.slug}/lessons/${lesson.id}`;
+
+  // Глава, раскрытая по умолчанию, — та, где сейчас учится студент.
+  const nextModuleId =
+    (nextLesson && modules.find((m) => (m.lessons ?? []).some((l) => l.id === nextLesson.id))?.id) ||
+    modules[0]?.id ||
+    "";
+  const defaultOpen = () => new Set(nextModuleId ? [nextModuleId] : []);
+  const isOpen = (id: string) => (openModules ?? defaultOpen()).has(id);
+  const toggleModule = (id: string) =>
+    setOpenModules((prev) => {
+      const next = new Set(prev ?? defaultOpen());
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
 
   return (
     <>
@@ -175,29 +195,52 @@ export default function CoursePage() {
               !prevModule || (prevLessons.length > 0 && prevLessons.every((l) => isDone(l.id)));
             const reqStatus = requests[module.id];
 
+            const open = isOpen(module.id);
+
             return (
               <Card key={module.id} className="overflow-hidden p-0">
-                {/* Шапка главы */}
-                <div className="flex items-center gap-4 border-b border-line p-[var(--pad)]">
-                  <span
-                    className={`grid h-11 w-11 shrink-0 place-items-center rounded-[var(--radius-md)] text-lg font-extrabold ${
-                      locked ? "bg-surface-2 text-faint" : "text-accent-fg"
-                    }`}
-                    style={locked ? undefined : { background: "var(--gradient)" }}
+                {/* Шапка главы — кликабельна, сворачивает/раскрывает список тем */}
+                <div
+                  className={`flex items-center gap-3 p-[var(--pad)] ${
+                    open ? "border-b border-line" : ""
+                  }`}
+                >
+                  <button
+                    type="button"
+                    onClick={() => toggleModule(module.id)}
+                    aria-expanded={open}
+                    className="flex min-w-0 flex-1 items-center gap-4 text-left"
                   >
-                    {locked ? <Lock size={18} /> : index + 1}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[11px] font-bold uppercase tracking-wide text-faint">
-                      Глава {index + 1}
-                    </p>
-                    <h2 className="truncate text-base font-bold text-fg sm:text-lg">
-                      {module.title}
-                    </h2>
-                    {module.summary && (
-                      <p className="mt-0.5 line-clamp-1 text-xs text-muted">{module.summary}</p>
-                    )}
-                  </div>
+                    <span
+                      className={`grid h-11 w-11 shrink-0 place-items-center rounded-[var(--radius-md)] text-lg font-extrabold ${
+                        locked ? "bg-surface-2 text-faint" : "text-accent-fg"
+                      }`}
+                      style={locked ? undefined : { background: "var(--gradient)" }}
+                    >
+                      {locked ? <Lock size={18} /> : index + 1}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[11px] font-bold uppercase tracking-wide text-faint">
+                        Глава {index + 1}
+                      </p>
+                      <h2
+                        title={module.title}
+                        className="truncate text-base font-bold text-fg sm:text-lg"
+                      >
+                        {module.title}
+                      </h2>
+                      {module.summary && (
+                        <p className="mt-0.5 line-clamp-1 text-xs text-muted">{module.summary}</p>
+                      )}
+                    </div>
+                    <ChevronDown
+                      size={18}
+                      className={`shrink-0 text-faint transition-transform duration-200 ${
+                        open ? "rotate-180" : ""
+                      }`}
+                      aria-hidden="true"
+                    />
+                  </button>
 
                   {/* Справа: прогресс (если открыто) или доступ (если закрыто) */}
                   {locked ? (
@@ -235,21 +278,23 @@ export default function CoursePage() {
                   )}
                 </div>
 
-                {/* Темы главы */}
-                <div className="space-y-[var(--gap)] p-[var(--pad)]">
-                  {themes.map((theme, ti) => (
-                    <ThemeCard
-                      key={theme.key}
-                      theme={theme}
-                      index={ti + 1}
-                      enrolled={enrolled}
-                      locked={locked}
-                      isDone={isDone}
-                      progressByLesson={progressByLesson}
-                      lessonHref={lessonHref}
-                    />
-                  ))}
-                </div>
+                {/* Темы главы — показываем только когда глава раскрыта */}
+                {open && (
+                  <div className="space-y-[var(--gap)] p-[var(--pad)]">
+                    {themes.map((theme, ti) => (
+                      <ThemeCard
+                        key={theme.key}
+                        theme={theme}
+                        index={ti + 1}
+                        enrolled={enrolled}
+                        locked={locked}
+                        isDone={isDone}
+                        progressByLesson={progressByLesson}
+                        lessonHref={lessonHref}
+                      />
+                    ))}
+                  </div>
+                )}
               </Card>
             );
           })}
@@ -296,7 +341,10 @@ function ThemeCard({
         >
           {done ? <Check size={13} /> : pageIcon(lesson.kind)}
         </span>
-        <span className={`min-w-0 flex-1 truncate text-sm ${done ? "text-muted" : "text-fg"}`}>
+        <span
+          title={lesson.title}
+          className={`min-w-0 flex-1 truncate text-sm ${done ? "text-muted" : "text-fg"}`}
+        >
           {lesson.title}
         </span>
         {state?.bestScore != null && lesson.kind !== "text" && (
@@ -332,7 +380,12 @@ function ThemeCard({
         <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-surface-2 text-xs font-bold text-muted">
           {index}
         </span>
-        <p className="min-w-0 flex-1 truncate text-sm font-bold text-fg">Тема: {theme.title}</p>
+        <p
+          title={`Тема: ${theme.title}`}
+          className="min-w-0 flex-1 truncate text-sm font-bold text-fg"
+        >
+          Тема: {theme.title}
+        </p>
         {enrolled && (
           <Badge tone={complete ? "success" : "default"}>
             {prog.done}/{prog.total}

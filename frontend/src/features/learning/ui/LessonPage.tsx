@@ -362,7 +362,10 @@ export default function LessonPage() {
                           <Lock size={14} />
                         </span>
                         <span className="min-w-0 flex-1 opacity-70">
-                          <span className="block truncate text-sm font-semibold text-muted">
+                          <span
+                            title={module.title}
+                            className="block truncate text-sm font-semibold text-muted"
+                          >
                             {module.title}
                           </span>
                           <span className="block text-[11px] text-faint">
@@ -405,7 +408,9 @@ export default function LessonPage() {
                         >
                           {done ? <Check size={12} /> : kindIcon(item.kind)}
                         </span>
-                        <span className="min-w-0 flex-1 truncate">{item.title}</span>
+                        <span title={item.title} className="min-w-0 flex-1 truncate">
+                          {item.title}
+                        </span>
                       </Link>
                     </li>
                   );
@@ -441,7 +446,10 @@ export default function LessonPage() {
                         {chapterComplete ? <Check size={15} /> : moduleIndex + 1}
                       </span>
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-semibold text-fg">
+                        <span
+                          title={module.title}
+                          className="block truncate text-sm font-semibold text-fg"
+                        >
                           {module.title}
                         </span>
                         <span className="block text-[11px] text-faint">
@@ -475,7 +483,10 @@ export default function LessonPage() {
                             return (
                               <div key={theme.key}>
                                 <div className="flex items-center justify-between gap-2 px-1 pb-1">
-                                  <span className="min-w-0 truncate text-[11px] font-semibold uppercase tracking-wide text-muted">
+                                  <span
+                                    title={`Тема ${ti + 1} · ${theme.title}`}
+                                    className="min-w-0 truncate text-[11px] font-semibold uppercase tracking-wide text-muted"
+                                  >
                                     Тема {ti + 1} · {theme.title}
                                   </span>
                                   <span className="shrink-0 text-[10px] font-semibold text-faint">
