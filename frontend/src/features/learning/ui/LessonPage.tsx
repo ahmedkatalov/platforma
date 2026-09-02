@@ -23,7 +23,15 @@ import type {
   TerminalContent,
   TextContent,
 } from "@/shared/types";
-import { Badge, Button, Card, EmptyState, Modal, Progress, Spinner } from "@/shared/ui";
+import {
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  Modal,
+  Progress,
+  Spinner,
+} from "@/shared/ui";
 import {
   Book,
   Check,
@@ -60,7 +68,10 @@ const KIND_LABEL: Record<LessonKind, string> = {
   code: "Код",
 };
 
-const KIND_TONE: Record<LessonKind, "default" | "accent" | "success" | "warning"> = {
+const KIND_TONE: Record<
+  LessonKind,
+  "default" | "accent" | "success" | "warning"
+> = {
   text: "default",
   quiz: "accent",
   terminal: "success",
@@ -72,7 +83,9 @@ export default function LessonPage() {
   const { slug = "", lessonId = "" } = useParams();
   const navigate = useNavigate();
 
-  const { data, isLoading, isError, error } = useGetLessonQuery(lessonId, { skip: !lessonId });
+  const { data, isLoading, isError, error } = useGetLessonQuery(lessonId, {
+    skip: !lessonId,
+  });
   const { data: courseData } = useGetStudentCourseQuery(slug, { skip: !slug });
   const [startLesson] = useStartLessonMutation();
   const [completeLesson] = useCompleteLessonMutation();
@@ -123,7 +136,9 @@ export default function LessonPage() {
 
   const totals = useMemo(() => {
     const all = modules.flatMap((module) => module.lessons ?? []);
-    const done = all.filter((lesson) => progressByLesson.get(lesson.id)?.status === "completed");
+    const done = all.filter(
+      (lesson) => progressByLesson.get(lesson.id)?.status === "completed",
+    );
     return { total: all.length, done: done.length };
   }, [modules, progressByLesson]);
 
@@ -179,7 +194,9 @@ export default function LessonPage() {
       return;
     }
     if (data.nextLessonId) {
-      navigate(`/learn/courses/${data.courseSlug}/lessons/${data.nextLessonId}`);
+      navigate(
+        `/learn/courses/${data.courseSlug}/lessons/${data.nextLessonId}`,
+      );
     } else {
       navigate(`/learn/courses/${data.courseSlug}`);
     }
@@ -254,48 +271,44 @@ export default function LessonPage() {
   return (
     <div
       className={`grid gap-[var(--gap)] transition-[grid-template-columns] duration-200 ${
-        contentsCollapsed ? "xl:grid-cols-[4.5rem_1fr]" : "xl:grid-cols-[18rem_1fr]"
+        contentsCollapsed
+          ? "xl:grid-cols-[4.5rem_1fr]"
+          : "xl:grid-cols-[18rem_1fr]"
       }`}
     >
-      {/* Затемнение под мобильной шторкой содержания. */}
-      {asideOpen && (
-        <div
-          className="fixed inset-0 z-40 bg-black/60 xl:hidden"
-          onClick={() => setAsideOpen(false)}
-          aria-hidden="true"
-        />
-      )}
-
-      {/* Содержание курса: на телефоне — шторка снизу, на десктопе — колонка слева. */}
+      {/* Содержание курса */}
       <aside
-        className={
-          asideOpen
-            ? "sheet-panel fixed inset-x-0 bottom-0 z-50 overflow-y-auto xl:static xl:z-auto xl:block xl:max-h-none xl:animate-none xl:overflow-visible xl:rounded-none xl:border-t-0 xl:bg-transparent xl:pb-0 xl:shadow-none"
-            : "hidden xl:block"
-        }
+        className={`
+    xl:block
+    ${asideOpen ? "fixed inset-0 z-50 block bg-black/40 p-3 backdrop-blur-sm" : "hidden"}
+    xl:static xl:z-auto xl:bg-transparent xl:p-0 xl:backdrop-blur-none
+  `}
       >
-        {/* Мобильная шапка шторки: «ручка», заголовок, закрытие. */}
-        <div className="xl:hidden">
-          <div className="sheet-grip" />
-          <div className="flex items-center justify-between px-4 pb-2 pt-1">
-            <p className="text-sm font-bold text-fg">Содержание курса</p>
-            <button
-              className="btn btn-ghost btn-icon btn-sm"
-              onClick={() => setAsideOpen(false)}
-              aria-label="Закрыть содержание"
-            >
-              <X size={18} />
-            </button>
-          </div>
-        </div>
-
         <Card
-          className={`relative p-3 max-xl:border-0 max-xl:bg-transparent max-xl:shadow-none max-xl:backdrop-blur-none xl:sticky xl:top-24 ${contentsCollapsed ? "xl:p-2" : "xl:p-3"}`}
+          className={`
+      relative
+      xl:sticky xl:top-24
+      max-h-[800px]
+      h-vh
+      overflow-hidden
+      p-3
+      ${contentsCollapsed ? "xl:p-2" : "xl:p-3"}
+    `}
         >
+          {/* Мобильная кнопка закрытия */}
+          <button
+            type="button"
+            className="btn btn-ghost absolute right-3 top-3 z-10 h-8 w-8 p-0! xl:hidden"
+            onClick={() => setAsideOpen(false)}
+            aria-label="Закрыть содержание"
+          >
+            <X size={18} />
+          </button>
+
           {contentsCollapsed && (
             <button
               type="button"
-              className="hidden h-16 w-full flex cursor-pointer items-center justify-center gap-1 rounded-[var(--radius-md)] bg-accent-soft text-accent transition-colors hover:bg-surface-2 xl:flex"
+              className="hidden h-16 w-full cursor-pointer items-center justify-center gap-1 rounded-[var(--radius-md)] bg-accent-soft text-accent transition-colors hover:bg-surface-2 xl:flex"
               onClick={() => setContentsCollapsed(false)}
               aria-label="Развернуть содержание"
               title="Содержание курса"
@@ -304,28 +317,46 @@ export default function LessonPage() {
               <ChevronRight size={14} />
             </button>
           )}
+
           <button
             className={`btn btn-ghost btn-icon btn-sm absolute right-2 top-2 hidden ${
               contentsCollapsed ? "xl:hidden" : "xl:inline-flex"
             }`}
             onClick={() => setContentsCollapsed((value) => !value)}
-            aria-label={contentsCollapsed ? "Развернуть содержание" : "Свернуть содержание"}
-            title={contentsCollapsed ? "Развернуть содержание" : "Свернуть содержание"}
+            aria-label={
+              contentsCollapsed
+                ? "Развернуть содержание"
+                : "Свернуть содержание"
+            }
+            title={
+              contentsCollapsed
+                ? "Развернуть содержание"
+                : "Свернуть содержание"
+            }
           >
-            {contentsCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+            {contentsCollapsed ? (
+              <ChevronRight size={18} />
+            ) : (
+              <ChevronLeft size={18} />
+            )}
           </button>
 
           <div className={contentsCollapsed ? "xl:hidden" : undefined}>
             <Link
               to={`/learn/courses/${data.courseSlug}`}
               className="mb-3 block rounded-[var(--radius-md)] p-2 pr-10 transition-colors hover:bg-surface-2"
+              onClick={() => setAsideOpen(false)}
             >
               <p className="text-sm font-bold text-fg">{data.courseTitle}</p>
+
               <p className="mt-0.5 text-xs text-faint">
                 {totals.done} из {totals.total} уроков пройдено
               </p>
+
               <div className="mt-2">
-                <Progress value={totals.total ? (totals.done / totals.total) * 100 : 0} />
+                <Progress
+                  value={totals.total ? (totals.done / totals.total) * 100 : 0}
+                />
               </div>
             </Link>
 
@@ -542,20 +573,26 @@ export default function LessonPage() {
             </span>
 
             <div>
-              <p className="text-lg font-bold text-fg">{certificate.courseTitle}</p>
+              <p className="text-lg font-bold text-fg">
+                {certificate.courseTitle}
+              </p>
               <p className="mt-1 text-sm text-muted">
-                Пройдено {certificate.lessonsCompleted} из {certificate.lessonsTotal} уроков ·
-                средний балл {Math.round(certificate.score)}%
+                Пройдено {certificate.lessonsCompleted} из{" "}
+                {certificate.lessonsTotal} уроков · средний балл{" "}
+                {Math.round(certificate.score)}%
               </p>
             </div>
 
             <div className="card-flat p-3">
               <p className="text-xs text-faint">Номер сертификата</p>
-              <p className="font-mono text-base font-bold text-accent">{certificate.serial}</p>
+              <p className="font-mono text-base font-bold text-accent">
+                {certificate.serial}
+              </p>
             </div>
 
             <p className="text-xs text-muted">
-              Ссылку на сертификат можно отправить работодателю — подлинность проверяется по номеру.
+              Ссылку на сертификат можно отправить работодателю — подлинность
+              проверяется по номеру.
             </p>
           </div>
         )}
@@ -563,7 +600,10 @@ export default function LessonPage() {
 
       <div className="min-w-0">
         <div className="mb-4 flex flex-wrap items-center gap-2">
-          <Button className="xl:hidden" onClick={() => setAsideOpen((v) => !v)}>
+          <Button
+            className="fixed top-[80px] right-[24px] z-40 shadow-lg xl:hidden"
+            onClick={() => setAsideOpen(true)}
+          >
             <Book size={16} />
             Содержание
           </Button>
@@ -579,7 +619,7 @@ export default function LessonPage() {
           {lesson.title}
         </h1>
         {lesson.summary && (
-          <p className="mb-6 text-[0.9375rem] leading-relaxed text-muted">{lesson.summary}</p>
+          <p className="mb-6 text-sm text-muted">{lesson.summary}</p>
         )}
 
         <NoteSelection lessonId={lesson.id}>{body}</NoteSelection>

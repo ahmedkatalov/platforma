@@ -53,7 +53,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         {toasts.map((toast) => (
           <div
             key={toast.id}
-            className={`card pointer-events-auto flex items-start gap-3 border-l-4 p-3 text-sm ${TONE[toast.kind]}`}
+            className={`card anim-rise pointer-events-auto flex items-start gap-3 border-l-4 p-3 text-sm ${TONE[toast.kind]}`}
             role="status"
           >
             {toast.kind === "success" ? <Check size={18} /> : <X size={18} />}
