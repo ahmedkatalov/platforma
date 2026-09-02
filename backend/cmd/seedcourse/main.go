@@ -47,18 +47,7 @@ func main() {
 	data := seed.DevOpsCourse()
 
 	existing, err := courses.GetBySlug(ctx, data.Slug)
-	switch {
-	case err == nil:
-		if !*force {
-			log.Fatalf("курс %q уже существует — запустите с флагом -force, чтобы пересоздать", data.Slug)
-		}
-		if err := courses.Delete(ctx, existing.ID); err != nil {
-			log.Fatalf("удаление старого курса: %v", err)
-		}
-		fmt.Println("Старая версия курса удалена")
-	case errors.Is(err, repository.ErrNotFound):
-		// первая загрузка — всё в порядке
-	default:
+	if err != nil && !errors.Is(err, repository.ErrNotFound) {
 		log.Fatalf("поиск курса: %v", err)
 	}
 
@@ -67,6 +56,50 @@ func main() {
 		status = "draft"
 	}
 
+	// Курс уже есть: обновляем НА МЕСТЕ (id модулей/уроков сохраняются, а значит
+	// прогресс студентов и открытые главы не теряются), а не пересоздаём.
+	if err == nil {
+		if !*force {
+			log.Fatalf("курс %q уже существует — запустите с флагом -force, чтобы обновить", data.Slug)
+		}
+		updStatus := existing.Status
+		if *publish {
+			updStatus = "published"
+		}
+		if _, err := courses.Update(ctx, existing.ID, repository.CourseInput{
+			Slug: data.Slug, Title: data.Title, Subtitle: data.Subtitle,
+			Description: data.Description, Level: data.Level, Tags: data.Tags,
+			Status: updStatus, Position: existing.Position,
+		}); err != nil {
+			log.Fatalf("обновление курса: %v", err)
+		}
+		mods := make([]repository.ModuleSync, 0, len(data.Modules))
+		for _, ms := range data.Modules {
+			m := repository.ModuleSync{Title: ms.Title, Summary: ms.Summary}
+			for _, ls := range ms.Lessons {
+				content, err := json.Marshal(ls.Content)
+				if err != nil {
+					log.Fatalf("сериализация урока %q: %v", ls.Title, err)
+				}
+				m.Lessons = append(m.Lessons, repository.LessonSync{
+					Title: ls.Title, Kind: ls.Kind, Summary: ls.Summary,
+					Content: content, DurationMin: ls.DurationMin,
+				})
+			}
+			mods = append(mods, m)
+		}
+		res, err := courses.SyncContent(ctx, existing.ID, mods)
+		if err != nil {
+			log.Fatalf("обновление содержимого курса: %v", err)
+		}
+		fmt.Printf("\n✓ Курс «%s» обновлён на месте — прогресс студентов сохранён\n", data.Title)
+		fmt.Printf("  Модули: +%d ~%d -%d · Уроки: +%d ~%d -%d\n",
+			res.ModulesAdded, res.ModulesUpdated, res.ModulesRemoved,
+			res.LessonsAdded, res.LessonsUpdated, res.LessonsRemoved)
+		return
+	}
+
+	// Первая загрузка — создаём курс целиком.
 	course, err := courses.Create(ctx, repository.CourseInput{
 		Slug:        data.Slug,
 		Title:       data.Title,

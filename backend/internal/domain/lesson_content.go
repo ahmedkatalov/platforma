@@ -287,6 +287,8 @@ type TerminalTask struct {
 	Expected []string `json:"expected"`          // допустимые команды
 	Pattern  string   `json:"pattern,omitempty"` // либо регулярное выражение
 	Hint     string   `json:"hint,omitempty"`
+	Hints    []string `json:"hints,omitempty"` // прогрессивные подсказки: концепт → синтаксис → команда
+	Predict  string   `json:"predict,omitempty"` // вопрос «предскажи вывод» перед вводом команды
 	Success  string   `json:"success,omitempty"`
 }
 
@@ -298,6 +300,8 @@ func (t *TerminalTask) UnmarshalJSON(data []byte) error {
 		Expected json.RawMessage `json:"expected"`
 		Pattern  string          `json:"pattern"`
 		Hint     string          `json:"hint"`
+		Hints    []string        `json:"hints"`
+		Predict  string          `json:"predict"`
 		Success  string          `json:"success"`
 	}
 
@@ -310,6 +314,8 @@ func (t *TerminalTask) UnmarshalJSON(data []byte) error {
 	t.Prompt = raw.Prompt
 	t.Pattern = raw.Pattern
 	t.Hint = raw.Hint
+	t.Hints = raw.Hints
+	t.Predict = raw.Predict
 	t.Success = raw.Success
 	t.Expected = nil
 
@@ -327,10 +333,12 @@ func (t *TerminalTask) UnmarshalJSON(data []byte) error {
 }
 
 type TerminalLesson struct {
-	Intro string          `json:"intro,omitempty"`
-	Shell string          `json:"shell,omitempty"` // подпись приглашения, по умолчанию student@devops
-	Files json.RawMessage `json:"files,omitempty"` // стартовая файловая система
-	Tasks []TerminalTask  `json:"tasks"`
+	Intro     string          `json:"intro,omitempty"`
+	Shell     string          `json:"shell,omitempty"` // подпись приглашения, по умолчанию student@devops
+	Files     json.RawMessage `json:"files,omitempty"` // стартовая файловая система
+	Tasks     []TerminalTask  `json:"tasks"`
+	Challenge string          `json:"challenge,omitempty"` // «измени одну вещь» — задание на модификацию
+	Debug     string          `json:"debug,omitempty"`     // «если сломалось» — типовая ошибка и как её чинить
 }
 
 func ParseTerminal(raw json.RawMessage) (*TerminalLesson, error) {

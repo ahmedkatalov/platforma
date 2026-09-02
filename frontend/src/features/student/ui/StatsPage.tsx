@@ -60,7 +60,7 @@ export default function StatsPage() {
           <Select
             value={String(days)}
             onChange={(v) => setDays(Number(v))}
-            className="w-44"
+            className="w-full sm:w-44"
           >
             <option value={7}>Неделя</option>
             <option value={30}>30 дней</option>
@@ -306,32 +306,32 @@ export default function StatsPage() {
           />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[40rem] text-sm">
+            <table className="tbl min-w-[40rem]">
               <thead>
-                <tr className="border-b border-line text-left text-xs uppercase tracking-wide text-faint">
-                  <th className="px-4 py-3 font-semibold">Когда</th>
-                  <th className="px-4 py-3 font-semibold">Урок</th>
-                  <th className="px-4 py-3 font-semibold">Тип</th>
-                  <th className="px-4 py-3 font-semibold">Результат</th>
-                  <th className="px-4 py-3 font-semibold">Время</th>
+                <tr>
+                  <th>Когда</th>
+                  <th>Урок</th>
+                  <th>Тип</th>
+                  <th className="num">Результат</th>
+                  <th className="num">Время</th>
                 </tr>
               </thead>
               <tbody>
                 {attempts.map((attempt) => (
-                  <tr key={attempt.id} className="border-b border-line/60 last:border-0">
-                    <td className="whitespace-nowrap px-4 py-3 text-muted">
+                  <tr key={attempt.id}>
+                    <td className="whitespace-nowrap">
                       {stampFmt.format(new Date(attempt.createdAt))}
                     </td>
-                    <td className="px-4 py-3">
+                    <td>
                       <span className="block font-medium text-fg">{attempt.lessonTitle}</span>
                       <span className="block text-xs text-faint">{attempt.courseTitle}</span>
                     </td>
-                    <td className="px-4 py-3">
+                    <td>
                       <Badge tone={attempt.kind === "quiz" ? "accent" : "default"}>
                         {KIND_LABEL[attempt.kind]}
                       </Badge>
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="num">
                       <span
                         className={`font-bold ${attempt.passed ? "text-success" : "text-warning"}`}
                       >
@@ -343,7 +343,7 @@ export default function StatsPage() {
                         </span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-muted">
+                    <td className="num">
                       {Math.floor(attempt.durationSeconds / 60)}:
                       {String(attempt.durationSeconds % 60).padStart(2, "0")}
                     </td>

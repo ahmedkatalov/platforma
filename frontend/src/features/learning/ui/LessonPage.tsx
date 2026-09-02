@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
+import { useAppSelector } from "@/app/store";
 import { useGetStudentCourseQuery } from "@/features/admin/api/coursesApi";
 import {
   useGetLessonQuery,
@@ -31,11 +32,22 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock,
+  Edit2,
+  HelpCircle,
+  Lock,
   Terminal,
   X,
 } from "lucide-react";
 
-import { groupThemes } from "@/features/learning/lib/themes";
+import { groupThemes, themeProgress } from "@/features/learning/lib/themes";
+
+// Иконка типа урока — понятнее короткой подписи вроде «Терм».
+function kindIcon(kind: LessonKind, size = 12) {
+  if (kind === "terminal") return <Terminal size={size} />;
+  if (kind === "code") return <Edit2 size={size} />;
+  if (kind === "quiz") return <HelpCircle size={size} />;
+  return <Book size={size} />;
+}
 
 import CodeLesson from "./CodeLesson";
 import NoteSelection from "./NoteSelection";
@@ -70,6 +82,7 @@ export default function LessonPage() {
   });
   const { data: courseData } = useGetStudentCourseQuery(slug, { skip: !slug });
   const [startLesson] = useStartLessonMutation();
+  const currentUser = useAppSelector((state) => state.auth.user);
 
   const [asideOpen, setAsideOpen] = useState(false);
   const [certificate, setCertificate] = useState<Certificate | null>(null);
@@ -89,6 +102,10 @@ export default function LessonPage() {
   }, [data]);
 
   const modules = courseData?.course.modules ?? [];
+  // Админ видит все главы (превью). Студенту глава открыта только если она в moduleAccess.
+  const isAdminView = currentUser?.role === "admin";
+  const moduleAccess = courseData?.moduleAccess ?? {};
+  const chapterUnlocked = (moduleId: string) => isAdminView || moduleAccess[moduleId] === true;
 
   const totals = useMemo(() => {
     const all = modules.flatMap((module) => module.lessons ?? []);
@@ -222,7 +239,8 @@ export default function LessonPage() {
           className={`
       relative
       xl:sticky xl:top-24
-      h-full max-h-[calc(100vh-1.5rem)]
+      max-h-[800px]
+      h-vh
       overflow-hidden
       p-3
       ${contentsCollapsed ? "xl:p-2" : "xl:p-3"}
@@ -252,7 +270,7 @@ export default function LessonPage() {
           )}
 
           <button
-            className={`btn btn-ghost absolute right-2 top-2 hidden h-8 w-8 p-0! ${
+            className={`btn btn-ghost btn-icon btn-sm absolute right-2 top-2 hidden ${
               contentsCollapsed ? "xl:hidden" : "xl:inline-flex"
             }`}
             onClick={() => setContentsCollapsed((value) => !value)}
@@ -293,126 +311,155 @@ export default function LessonPage() {
               </div>
             </Link>
 
-            <nav className="max-h-[calc(100vh-10rem)] space-y-4 overflow-y-auto overscroll-contain pr-1">
+            <nav className="max-h-[62vh] space-y-1 overflow-y-auto pr-1">
               {modules.map((module, moduleIndex) => {
                 const themes = groupThemes(module);
                 const expanded = openModuleId === module.id;
+                const lessons = module.lessons ?? [];
+                const isDone = (id: string) =>
+                  progressByLesson.get(id)?.status === "completed";
+                const moduleDone = lessons.filter((l) => isDone(l.id)).length;
+                const moduleTotal = lessons.length;
+                const activeChapter = lessons.some((l) => l.id === lesson.id);
+                const chapterComplete = moduleTotal > 0 && moduleDone === moduleTotal;
 
-                const renderRow = (item: Lesson, isQuiz: boolean) => {
-                  const state = progressByLesson.get(item.id);
+                // Закрытая глава: с замком, приглушённая, ведёт на страницу курса
+                // (там можно запросить доступ). Уроки не кликабельны.
+                if (!chapterUnlocked(module.id)) {
+                  return (
+                    <section key={module.id}>
+                      <Link
+                        to={`/learn/courses/${data.courseSlug}`}
+                        className="flex w-full items-center gap-2.5 rounded-[var(--radius-md)] px-2 py-2 opacity-75 transition-opacity hover:opacity-100"
+                        title="Глава закрыта — запросите доступ на странице курса"
+                      >
+                        <span className="grid h-7 w-7 shrink-0 place-items-center rounded-[var(--radius-md)] bg-surface-2 text-faint">
+                          <Lock size={14} />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-semibold text-muted">
+                            {module.title}
+                          </span>
+                          <span className="block text-[11px] text-faint">
+                            Глава {moduleIndex + 1} · доступ закрыт
+                          </span>
+                        </span>
+                      </Link>
+                    </section>
+                  );
+                }
+
+                const renderRow = (item: Lesson) => {
                   const active = item.id === lesson.id;
-                  const done = state?.status === "completed";
-
+                  const done = isDone(item.id);
                   return (
                     <li key={item.id}>
                       <Link
                         to={`/learn/courses/${data.courseSlug}/lessons/${item.id}`}
-                        onClick={() => setAsideOpen(false)}
-                        className={`
-                    flex items-center gap-2 rounded-[var(--radius-md)]
-                    px-2 py-1.5 text-sm transition-colors
-                    ${
-                      active
-                        ? "bg-accent-soft font-semibold text-accent"
-                        : "text-muted hover:bg-surface-2 hover:text-fg"
-                    }
-                  `}
+                        className={`flex items-center gap-2.5 rounded-[var(--radius-md)] px-2 py-1.5 text-sm transition-colors ${
+                          active
+                            ? "bg-accent-soft font-semibold text-accent"
+                            : "text-muted hover:bg-surface-2 hover:text-fg"
+                        }`}
                       >
                         <span
-                          className={`
-                      grid h-4 w-4 shrink-0 place-items-center
-                      rounded-full border text-[10px]
-                      ${
-                        done
-                          ? "border-[var(--success)] bg-[var(--success)] text-white"
-                          : isQuiz
-                            ? "border-accent-border text-accent"
-                            : "border-line"
-                      }
-                    `}
+                          className={`grid h-5 w-5 shrink-0 place-items-center rounded-full ${
+                            done
+                              ? "bg-[var(--success)] text-white"
+                              : active
+                                ? "bg-accent text-accent-fg"
+                                : "bg-surface-2 text-faint"
+                          }`}
                         >
-                          {done && <Check size={10} />}
+                          {done ? <Check size={12} /> : kindIcon(item.kind)}
                         </span>
-
-                        <span className="min-w-0 flex-1 truncate">
-                          {item.title}
-                        </span>
-
-                        {item.kind !== "text" && (
-                          <span className="shrink-0 text-[10px] text-faint">
-                            {KIND_LABEL[item.kind].slice(0, 4)}
-                          </span>
-                        )}
+                        <span className="min-w-0 flex-1 truncate">{item.title}</span>
                       </Link>
                     </li>
                   );
                 };
 
                 return (
-                  <section
-                    key={module.id}
-                    className="rounded-[var(--radius-md)] border border-transparent hover:border-line"
-                  >
+                  <section key={module.id}>
                     <button
                       type="button"
-                      className="flex w-full cursor-pointer items-center gap-2 rounded-[var(--radius-md)] px-2 py-2 text-left transition-colors hover:bg-surface-2"
+                      className={`flex w-full cursor-pointer items-center gap-2.5 rounded-[var(--radius-md)] px-2 py-2 text-left transition-colors ${
+                        activeChapter ? "bg-surface-2" : "hover:bg-surface-2"
+                      }`}
                       onClick={() =>
-                        setOpenModuleId((current) =>
-                          current === module.id ? null : module.id,
-                        )
+                        setOpenModuleId((current) => (current === module.id ? null : module.id))
                       }
                       aria-expanded={expanded}
                       aria-controls={`module-${module.id}`}
                     >
-                      <span className="min-w-0 flex-1 text-[11px] font-bold uppercase tracking-wide text-faint">
-                        Глава {moduleIndex + 1}. {module.title}
+                      <span
+                        className={`grid h-7 w-7 shrink-0 place-items-center rounded-[var(--radius-md)] text-xs font-bold ${
+                          chapterComplete
+                            ? "bg-[var(--success)] text-white"
+                            : activeChapter
+                              ? "text-accent-fg"
+                              : "bg-surface-2 text-muted"
+                        }`}
+                        style={
+                          activeChapter && !chapterComplete
+                            ? { background: "var(--gradient)" }
+                            : undefined
+                        }
+                      >
+                        {chapterComplete ? <Check size={15} /> : moduleIndex + 1}
                       </span>
-
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-semibold text-fg">
+                          {module.title}
+                        </span>
+                        <span className="block text-[11px] text-faint">
+                          Глава {moduleIndex + 1} · {moduleDone}/{moduleTotal} уроков
+                        </span>
+                      </span>
                       <ChevronRight
                         size={16}
-                        className={`
-                    shrink-0 text-faint
-                    transition-transform duration-200
-                    ${expanded ? "rotate-90" : ""}
-                  `}
+                        className={`shrink-0 text-faint transition-transform duration-200 ${
+                          expanded ? "rotate-90" : ""
+                        }`}
                         aria-hidden="true"
                       />
                     </button>
 
-                    {expanded && (
+                    <div
+                      id={`module-${module.id}`}
+                      aria-hidden={!expanded}
+                      className={`grid transition-[grid-template-rows] duration-200 ease-out ${
+                        expanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+                      }`}
+                    >
                       <div
-                        id={`module-${module.id}`}
-                        className="space-y-2 px-1 pb-1.5"
+                        className={`overflow-hidden transition-opacity duration-200 ${
+                          expanded ? "opacity-100" : "opacity-0"
+                        }`}
                       >
-                        {themes.map((theme, ti) => (
-                          <div
-                            key={theme.key}
-                            className="rounded-[var(--radius-md)] bg-surface-2/40 p-1.5"
-                          >
-                            <p className="truncate px-1.5 pb-1 text-[16px] font-semibold text-fg">
-                              <span className="text-faint">{ti + 1}. </span>
-                              {theme.title}
-                            </p>
-
-                            <ul className="space-y-0.5">
-                              {theme.pages.map((page) =>
-                                renderRow(page, false),
-                              )}
-
-                              {theme.quiz && (
-                                <>
-                                  <li className="px-2 pt-0.5 text-[10px] font-bold uppercase tracking-wide text-accent">
-                                    Проверка темы
-                                  </li>
-
-                                  {renderRow(theme.quiz, true)}
-                                </>
-                              )}
-                            </ul>
-                          </div>
-                        ))}
+                        <div className="ml-3.5 space-y-3 border-l border-line pb-2 pl-2 pt-1.5">
+                          {themes.map((theme, ti) => {
+                            const tp = themeProgress(theme, isDone);
+                            return (
+                              <div key={theme.key}>
+                                <div className="flex items-center justify-between gap-2 px-1 pb-1">
+                                  <span className="min-w-0 truncate text-[11px] font-semibold uppercase tracking-wide text-muted">
+                                    Тема {ti + 1} · {theme.title}
+                                  </span>
+                                  <span className="shrink-0 text-[10px] font-semibold text-faint">
+                                    {tp.done}/{tp.total}
+                                  </span>
+                                </div>
+                                <ul className="space-y-0.5">
+                                  {theme.pages.map((page) => renderRow(page))}
+                                  {theme.quiz && renderRow(theme.quiz)}
+                                </ul>
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
-                    )}
+                    </div>
                   </section>
                 );
               })}

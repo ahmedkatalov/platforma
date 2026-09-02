@@ -19,6 +19,7 @@ import (
 const maxPackageSize = 64 << 20 // 64 МБ — курс целиком с квизами и практиками
 
 type pkgLesson struct {
+	ID          string          `json:"id,omitempty"` // для обновления на месте
 	Title       string          `json:"title"`
 	Kind        string          `json:"kind"`
 	Summary     string          `json:"summary"`
@@ -27,12 +28,14 @@ type pkgLesson struct {
 }
 
 type pkgModule struct {
+	ID      string      `json:"id,omitempty"` // для обновления на месте
 	Title   string      `json:"title"`
 	Summary string      `json:"summary"`
 	Lessons []pkgLesson `json:"lessons"`
 }
 
 type pkgCourseMeta struct {
+	ID          string   `json:"id,omitempty"`
 	Slug        string   `json:"slug"`
 	Title       string   `json:"title"`
 	Subtitle    string   `json:"subtitle"`
@@ -105,12 +108,43 @@ func (h *CourseHandler) importCourse(w http.ResponseWriter, r *http.Request) {
 	actor := middleware.UserID(r.Context())
 	replace := r.URL.Query().Get("replace") == "true"
 
-	if existing, err := h.courses.GetBySlug(r.Context(), in.Slug); err == nil {
-		if !replace {
-			writeError(w, http.StatusConflict,
-				"Курс с адресом «"+in.Slug+"» уже существует. Отметьте «заменить», чтобы пересоздать его из файла.")
+	existing, existErr := h.courses.GetBySlug(r.Context(), in.Slug)
+	courseExists := existErr == nil
+
+	// Курс уже есть и «пересоздать» НЕ выбрано — обновляем на месте, сохраняя
+	// прогресс студентов и открытые главы (id модулей и уроков не меняются).
+	if courseExists && !replace {
+		upd := in
+		upd.Status = existing.Status // не трогаем публикацию курса
+		upd.Position = existing.Position
+		if _, err := h.courses.Update(r.Context(), existing.ID, upd); err != nil {
+			writeError(w, http.StatusBadRequest, "Не удалось обновить курс")
 			return
 		}
+		mods, lessonCount, verr := buildModuleSync(pkg.Modules)
+		if verr != "" {
+			writeError(w, http.StatusBadRequest, verr)
+			return
+		}
+		res, err := h.courses.SyncContent(r.Context(), existing.ID, mods)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "Не удалось обновить содержимое курса")
+			return
+		}
+		h.audit.Log(r.Context(), actor, "course.update", "course", existing.ID,
+			map[string]any{"slug": in.Slug})
+		writeJSON(w, http.StatusOK, map[string]any{
+			"course":  existing,
+			"modules": len(pkg.Modules),
+			"lessons": lessonCount,
+			"updated": res,
+			"message": "Курс обновлён на месте — прогресс студентов и открытые главы сохранены.",
+		})
+		return
+	}
+
+	// Пересоздание: при replace удаляем старый курс целиком.
+	if courseExists && replace {
 		if err := h.courses.Delete(r.Context(), existing.ID); err != nil {
 			writeError(w, http.StatusInternalServerError, "Не удалось удалить старую версию курса")
 			return
@@ -194,16 +228,18 @@ func (h *CourseHandler) exportCourse(w http.ResponseWriter, r *http.Request) {
 		Format:  packageFormat,
 		Version: packageVersion,
 		Course: pkgCourseMeta{
-			Slug: course.Slug, Title: course.Title, Subtitle: course.Subtitle,
+			ID: course.ID, Slug: course.Slug, Title: course.Title, Subtitle: course.Subtitle,
 			Description: course.Description, CoverURL: course.CoverURL,
 			Level: course.Level, Tags: course.Tags,
 		},
 	}
+	// id модулей/уроков кладём в файл, чтобы повторная загрузка обновляла их
+	// на месте (не теряя прогресс и доступы), а не пересоздавала.
 	for _, m := range course.Modules {
-		mod := pkgModule{Title: m.Title, Summary: m.Summary}
+		mod := pkgModule{ID: m.ID, Title: m.Title, Summary: m.Summary}
 		for _, l := range m.Lessons {
 			mod.Lessons = append(mod.Lessons, pkgLesson{
-				Title: l.Title, Kind: l.Kind, Summary: l.Summary,
+				ID: l.ID, Title: l.Title, Kind: l.Kind, Summary: l.Summary,
 				Content: l.Content, DurationMin: l.DurationMin,
 			})
 		}
@@ -216,4 +252,33 @@ func (h *CourseHandler) exportCourse(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Disposition", `attachment; filename="`+filename+`.course.json"`)
 	writeJSON(w, http.StatusOK, pkg)
+}
+
+// buildModuleSync собирает и проверяет модули/уроки для обновления курса на месте.
+// Возвращает список, число уроков и текст ошибки (пустой, если всё хорошо).
+func buildModuleSync(modules []pkgModule) ([]repository.ModuleSync, int, string) {
+	out := make([]repository.ModuleSync, 0, len(modules))
+	lessonCount := 0
+	for _, m := range modules {
+		if strings.TrimSpace(m.Title) == "" {
+			return nil, 0, "У модуля нет названия"
+		}
+		ms := repository.ModuleSync{ID: m.ID, Title: m.Title, Summary: m.Summary}
+		for _, l := range m.Lessons {
+			lin := repository.LessonInput{
+				Title: l.Title, Kind: l.Kind, Summary: l.Summary,
+				Content: l.Content, DurationMin: l.DurationMin,
+			}
+			if err := validateLesson(&lin); err != nil {
+				return nil, 0, "Урок «" + l.Title + "»: " + err.Error()
+			}
+			ms.Lessons = append(ms.Lessons, repository.LessonSync{
+				ID: l.ID, Title: lin.Title, Kind: lin.Kind, Summary: lin.Summary,
+				Content: lin.Content, DurationMin: lin.DurationMin,
+			})
+			lessonCount++
+		}
+		out = append(out, ms)
+	}
+	return out, lessonCount, ""
 }

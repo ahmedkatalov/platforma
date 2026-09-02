@@ -83,7 +83,7 @@ export default function QuizzesPage() {
           <Select
             value={filter}
             onChange={(v) => setFilter(v as Filter)}
-            className="w-52"
+            className="w-full sm:w-52"
           >
             <option value="all">Все квизы</option>
             <option value="todo">Не пройдены</option>

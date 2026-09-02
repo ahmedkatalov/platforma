@@ -5,7 +5,7 @@ import {
   useGetStudentCourseQuery,
   useGetStudentCoursesQuery,
 } from "@/features/admin/api/coursesApi";
-import { useGetMyStatsQuery, useGetPublicContactsQuery } from "@/shared/api/meApi";
+import { useGetMeQuery, useGetMyStatsQuery, useGetPublicContactsQuery } from "@/shared/api/meApi";
 import type { LessonKind, LessonProgress } from "@/shared/types";
 import { hasAnyContact } from "@/shared/lib/contacts";
 import { Badge, Card, EmptyState, PageHeader, Progress, Spinner, StatCard } from "@/shared/ui";
@@ -25,6 +25,8 @@ export default function DashboardPage() {
   const { data: catalog = [] } = useGetStudentCoursesQuery();
   const { data: contactsData } = useGetPublicContactsQuery();
   const contacts = contactsData?.contacts;
+  const { data: me } = useGetMeQuery();
+  const sandboxAvailable = Boolean(me?.sandboxAvailable);
 
   const myCourses = catalog.filter((item) => item.enrolled);
   const activeSlug = myCourses[0]?.course.slug ?? "";
@@ -91,26 +93,28 @@ export default function DashboardPage() {
         />
       </div>
 
-      <Card className="mt-[var(--gap)] flex flex-wrap items-center justify-between gap-4 p-[var(--pad)]">
-        <div className="flex min-w-0 items-start gap-3">
-          <span
-            className="grid h-11 w-11 shrink-0 place-items-center rounded-[var(--radius-md)] text-accent-fg"
-            style={{ background: "var(--gradient)" }}
-          >
-            <Terminal size={22} />
-          </span>
-          <div className="min-w-0">
-            <p className="text-base font-bold text-fg">Песочница — Linux-терминал</p>
-            <p className="mt-0.5 text-sm text-muted">
-              Настоящий Linux прямо в браузере: практикуйся свободно и выполняй задания с автопроверкой.
-            </p>
+      {sandboxAvailable && (
+        <Card className="mt-[var(--gap)] flex flex-wrap items-center justify-between gap-4 p-[var(--pad)]">
+          <div className="flex min-w-0 items-start gap-3">
+            <span
+              className="grid h-11 w-11 shrink-0 place-items-center rounded-[var(--radius-md)] text-accent-fg"
+              style={{ background: "var(--gradient)" }}
+            >
+              <Terminal size={22} />
+            </span>
+            <div className="min-w-0">
+              <p className="text-base font-bold text-fg">Песочница — Linux-терминал</p>
+              <p className="mt-0.5 text-sm text-muted">
+                Настоящий Linux прямо в браузере: практикуйся свободно и выполняй задания с автопроверкой.
+              </p>
+            </div>
           </div>
-        </div>
-        <Link to="/learn/sandbox" className="btn btn-primary shrink-0">
-          <Terminal size={18} />
-          Открыть песочницу
-        </Link>
-      </Card>
+          <Link to="/learn/sandbox" className="btn btn-primary shrink-0">
+            <Terminal size={18} />
+            Открыть песочницу
+          </Link>
+        </Card>
+      )}
 
       {hasAnyContact(contacts) && (
         <Card className="mt-[var(--gap)] flex flex-wrap items-center justify-between gap-4 p-[var(--pad)]">

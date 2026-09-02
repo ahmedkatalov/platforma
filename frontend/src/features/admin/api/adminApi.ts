@@ -159,6 +159,13 @@ export const adminApi = baseApi.injectEndpoints({
       query: (id) => ({ url: `/admin/course-requests/${id}/reject`, method: "POST" }),
       invalidatesTags: ["CourseRequests"],
     }),
+    getPendingRequestsCount: builder.query<
+      { chapters: number; courses: number; total: number },
+      void
+    >({
+      query: () => "/admin/requests-count",
+      providesTags: ["AccessRequests", "CourseRequests"],
+    }),
     getUserModuleAccess: builder.query<{ granted: string[] }, { userId: string; courseId: string }>({
       query: ({ userId, courseId }) => `/admin/users/${userId}/module-access?courseId=${courseId}`,
       providesTags: (_r, _e, { userId }) => [{ type: "Access", id: userId }],
@@ -208,6 +215,7 @@ export const {
   useGetCourseRequestsQuery,
   useApproveCourseRequestMutation,
   useRejectCourseRequestMutation,
+  useGetPendingRequestsCountQuery,
   useGetUserModuleAccessQuery,
   useSetModuleAccessMutation,
   useGetContactsQuery,

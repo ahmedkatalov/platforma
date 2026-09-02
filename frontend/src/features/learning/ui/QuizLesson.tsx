@@ -11,7 +11,7 @@ import type {
   QuizResult,
 } from "@/shared/types";
 import { Badge, Button, Card, Input, Progress } from "@/shared/ui";
-import { Check, ChevronRight, X, Clock, GripVertical } from "lucide-react";
+import { Check, X, Clock, GripVertical } from "lucide-react";
 import { useToast } from "@/shared/ui/ToastProvider";
 
 import LessonResources from "./LessonResources";
@@ -132,15 +132,15 @@ export default function QuizLesson({
     });
   };
 
-  const moveItem = (dir: -1 | 1, itemId: string) => {
-    if (!question) return;
-    const order = [...orderOf(question)];
-    const from = order.indexOf(itemId);
-    const to = from + dir;
-    if (to < 0 || to >= order.length) return;
-    [order[from], order[to]] = [order[to], order[from]];
-    setAnswers((current) => ({ ...current, [question.id]: order }));
-  };
+  // const moveItem = (dir: -1 | 1, itemId: string) => {
+  //   if (!question) return;
+  //   const order = [...orderOf(question)];
+  //   const from = order.indexOf(itemId);
+  //   const to = from + dir;
+  //   if (to < 0 || to >= order.length) return;
+  //   [order[from], order[to]] = [order[to], order[from]];
+  //   setAnswers((current) => ({ ...current, [question.id]: order }));
+  // };
 
   const reorderOrderItem = (
     q: QuizQuestion,

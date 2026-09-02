@@ -4,8 +4,9 @@ import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 
 import { useAppDispatch, useAppSelector } from "@/app/store";
 import { useLogoutMutation } from "@/features/auth/api/authApi";
+import { useGetPendingRequestsCountQuery } from "@/features/admin/api/adminApi";
 import { sessionEnded } from "@/features/auth/authSlice";
-import { useTrackActivityMutation } from "@/shared/api/meApi";
+import { useGetMeQuery, useTrackActivityMutation } from "@/shared/api/meApi";
 import { tokenStorage } from "@/shared/api/tokenStorage";
 import { useTheme } from "@/shared/theme/ThemeProvider";
 import {
@@ -28,6 +29,7 @@ import {
   TerminalSquare,
   Inbox,
   MessageSquare,
+  ChevronLeft,
 } from "lucide-react";
 import Logo from "@/shared/images/svg/logo.svg";
 
@@ -97,6 +99,17 @@ export default function AppShell() {
 
   useActivityTracker();
 
+  // Счётчик ожидающих заявок для бейджа в меню (только у администратора).
+  const { data: reqCount } = useGetPendingRequestsCountQuery(undefined, {
+    skip: user?.role !== "admin",
+    pollingInterval: 45_000,
+  });
+  const pendingRequests = reqCount?.total ?? 0;
+
+  // Песочница-терминал видна только тем, у кого есть курс с терминалом (или админу).
+  const { data: me } = useGetMeQuery(undefined, { skip: !user });
+  const sandboxAvailable = user?.role === "admin" || Boolean(me?.sandboxAvailable);
+
   useEffect(() => setMenuOpen(false), [location.pathname]);
   useEffect(() => {
     localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(sidebarCollapsed));
@@ -106,6 +119,9 @@ export default function AppShell() {
 
   const isAdmin = user.role === "admin";
   const inStudentArea = location.pathname.startsWith("/learn");
+  const studentNav = STUDENT_NAV.filter(
+    (item) => item.to !== "/learn/sandbox" || sandboxAvailable,
+  );
   const nav =
     isAdmin && inStudentArea
       ? [
@@ -118,7 +134,7 @@ export default function AppShell() {
           ...STUDENT_NAV,
         ]
       : inStudentArea
-        ? STUDENT_NAV
+        ? studentNav
         : ADMIN_NAV;
 
   const handleLogout = async () => {
@@ -180,7 +196,7 @@ export default function AppShell() {
           </div>
 
           <button
-            className="btn btn-ghost ml-auto h-8 w-8 !p-0 lg:hidden"
+            className="btn btn-ghost btn-icon btn-sm ml-auto lg:hidden"
             onClick={() => setMenuOpen(false)}
             aria-label="Закрыть меню"
           >
@@ -210,10 +226,25 @@ export default function AppShell() {
                 )
               }
             >
-              <span className="shrink-0">{item.icon}</span>
-              <span className={clsx(sidebarCollapsed && "lg:sr-only")}>
+              <span className="relative shrink-0">
+                {item.icon}
+                {item.to === "/admin/requests" && pendingRequests > 0 && sidebarCollapsed && (
+                  <span className="absolute -right-1.5 -top-1.5 hidden h-2 w-2 rounded-full bg-[var(--danger)] lg:block" />
+                )}
+              </span>
+              <span className={clsx("flex-1 truncate", sidebarCollapsed && "lg:sr-only")}>
                 {item.label}
               </span>
+              {item.to === "/admin/requests" && pendingRequests > 0 && (
+                <span
+                  className={clsx(
+                    "grid h-5 min-w-[1.25rem] shrink-0 place-items-center rounded-full bg-[var(--accent)] px-1.5 text-[11px] font-bold text-accent-fg",
+                    sidebarCollapsed && "lg:hidden",
+                  )}
+                >
+                  {pendingRequests}
+                </span>
+              )}
             </NavLink>
           ))}
         </nav>
@@ -312,7 +343,7 @@ export default function AppShell() {
       >
         <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-line bg-surface px-4 backdrop-blur-[var(--glass-blur)] sm:px-6">
           <button
-            className="btn btn-ghost h-9 w-9 !p-0 lg:hidden"
+            className="btn btn-ghost btn-icon lg:hidden"
             onClick={() => setMenuOpen(true)}
             aria-label="Открыть меню"
           >
@@ -325,7 +356,7 @@ export default function AppShell() {
 
           <div className="ml-auto flex items-center gap-2">
             <button
-              className="btn btn-secondary h-9 w-9 !p-0"
+              className="btn btn-secondary btn-icon"
               onClick={toggleMode}
               aria-label={
                 mode === "dark"

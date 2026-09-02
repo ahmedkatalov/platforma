@@ -120,7 +120,7 @@ export default function StudentsPage() {
           </Field>
         </div>
 
-        <div className="w-40">
+        <div className="w-full sm:w-40">
           <Field label="Статус">
             <Select value={status} onChange={(v) => setStatus(v as UserStatus | "")}>
               <option value="">Все</option>
@@ -131,7 +131,7 @@ export default function StudentsPage() {
           </Field>
         </div>
 
-        <div className="w-40">
+        <div className="w-full sm:w-40">
           <Field label="Роль">
             <Select value={role} onChange={(v) => setRole(v as Role | "")}>
               <option value="">Все</option>
@@ -164,22 +164,22 @@ export default function StudentsPage() {
           />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[52rem] text-sm">
+            <table className="tbl min-w-[52rem]">
               <thead>
-                <tr className="border-b border-line text-left text-xs uppercase tracking-wide text-faint">
-                  <th className="px-4 py-3 font-semibold">Студент</th>
-                  <th className="px-4 py-3 font-semibold">Роль</th>
-                  <th className="px-4 py-3 font-semibold">Статус</th>
-                  <th className="px-4 py-3 font-semibold">Активность</th>
-                  <th className="px-4 py-3 font-semibold">Последний вход</th>
-                  <th className="px-4 py-3 font-semibold">Создан</th>
-                  <th className="px-4 py-3" />
+                <tr>
+                  <th>Студент</th>
+                  <th>Роль</th>
+                  <th>Статус</th>
+                  <th>Активность</th>
+                  <th>Последний вход</th>
+                  <th>Создан</th>
+                  <th className="col-actions" />
                 </tr>
               </thead>
               <tbody className={isFetching ? "opacity-60 transition-opacity" : undefined}>
                 {users.map((user) => (
-                  <tr key={user.id} className="border-b border-line/60 last:border-0 hover:bg-surface-2">
-                    <td className="px-4 py-3">
+                  <tr key={user.id}>
+                    <td>
                       <Link to={`/admin/students/${user.id}`} className="flex items-start gap-2">
                         <span
                           className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${
@@ -195,26 +195,22 @@ export default function StudentsPage() {
                         </span>
                       </Link>
                     </td>
-                    <td className="px-4 py-3">
+                    <td>
                       <Badge tone={user.role === "admin" ? "accent" : "default"}>
                         {user.role === "admin" ? "Админ" : "Студент"}
                       </Badge>
                     </td>
-                    <td className="px-4 py-3">
+                    <td>
                       <Badge tone={STATUS_TONE[user.status]}>{STATUS_LABEL[user.status]}</Badge>
                     </td>
-                    <td className="px-4 py-3">
+                    <td>
                       <span className={user.online ? "font-semibold text-success" : "text-muted"}>
                         {lastSeenLabel(user.lastSeenAt, user.online)}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-muted">
-                      {user.lastLoginAt ? dateFmt.format(new Date(user.lastLoginAt)) : "—"}
-                    </td>
-                    <td className="px-4 py-3 text-muted">
-                      {dateFmt.format(new Date(user.createdAt))}
-                    </td>
-                    <td className="px-4 py-3">
+                    <td>{user.lastLoginAt ? dateFmt.format(new Date(user.lastLoginAt)) : "—"}</td>
+                    <td>{dateFmt.format(new Date(user.createdAt))}</td>
+                    <td className="col-actions">
                       <div className="flex justify-end gap-1">
                         <Button
                           variant="ghost"

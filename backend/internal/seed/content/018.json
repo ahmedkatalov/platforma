@@ -1,1305 +1,1374 @@
 {
- "title": "Проекты по нарастанию и капстоун",
- "summary": "Собрать весь пройденный инструментарий в единый конвейер доставки через серию проектов «одна боль — один инструмент»: от ручного деплоя до Kubernetes, наблюдаемости и безопасности. Затем на капстоуне ",
- "lessons": [
-  {
-   "title": "Проект 1: принцип нарастания и ручной деплой",
-   "kind": "code",
-   "summary": "Понять логику всей темы — каждый проект чинит боль предыдущего — и на своей шкуре прожить ручной деплой на сервер через SSH и systemd.",
-   "durationMin": 16,
-   "content": {
-    "language": "bash",
-    "task": "ПРИНЦИП НАРАСТАНИЯ (прочитайте сначала — это карта всей главы)\n\nДальше будет 8 проектов. Это не «выучить 10 модных технологий». Это 10 раз починить ОДНУ И ТУ ЖЕ доставку приложения на сервер. Каждый следующий проект появляется потому, что предыдущий упёрся в конкретную боль, а новый инструмент лечит именно её:\n\n1. Ручной деплой (этот урок) → боль: невоспроизводимо, забываешь шаги, руки трясутся.\n2. Docker → боль «у меня работает, а на сервере нет».\n3. docker-compose → одного контейнера мало: нужны приложение + БД + прокси вместе.\n4. CI/CD → боль: собираешь и выкатываешь руками после каждого коммита.\n5. Terraform → боль: сам сервер тоже создаёшь кликами в облаке.\n6. Ansible → боль: свежий сервер «голый», настраиваешь вручную.\n7. Kubernetes → боль: один контейнер упал/не тянет нагрузку.\n8. Наблюдаемость и безопасность → боль: не видно, что происходит, и всё открыто.\n\nЗапомните ощущение из этого урока — именно оно объясняет, зачем нужен весь остальной путь.\n\nПРОЕКТ 1. ЗАДАНИЕ\n\nНапишите скрипт deploy.sh, который вручную выкатывает приложение на удалённый сервер. По шагам:\n\n1. Первая строка — shebang #!/usr/bin/env bash.\n2. Сразу включите строгий режим: set -euo pipefail (скрипт падает на первой же ошибке, а не молча едет дальше).\n3. Заведите две переменные: SERVER (в формате пользователь@адрес) и APP_DIR (папка приложения на сервере).\n4. Скопируйте файлы приложения на сервер командой scp -r ./app в APP_DIR.\n5. Скопируйте unit-файл myapp.service на сервер, положите его в /etc/systemd/system/ и выполните systemctl daemon-reload (чтобы systemd увидел новую службу).\n6. Включите автозапуск и запустите службу одной командой: systemctl enable --now myapp.\n7. В конце напечатайте, что деплой завершён.\n\nВажно: вход на сервер только по SSH-ключу. Никаких паролей в скрипте и никакого sshpass — это небезопасно (пароль утечёт в историю и логи).\n\nПосле того как напишете — представьте, что сервер переустановили. Вам придётся вспомнить и повторить всё это руками. В следующих проектах мы будем убирать эту боль шаг за шагом.",
-    "starter": "#!/usr/bin/env bash\n# TODO: включите строгий режим одной строкой\n\n# TODO: куда деплоим — пользователь@адрес и папка приложения\nSERVER=\"\"\nAPP_DIR=\"\"\n\n# TODO 1: скопировать папку ./app на сервер (scp -r)\n\n# TODO 2: положить myapp.service в /etc/systemd/system и вызвать daemon-reload\n\n# TODO 3: включить автозапуск и запустить службу (systemctl enable --now)\n\n# TODO 4: напечатать, что всё готово\n",
-    "hint": "Команда на удалённой машине запускается так: ssh \"$SERVER\" 'команда'. Одиночные кавычки не дают bash подставить переменные локально — строка выполнится уже на сервере. Автозапуск и мгновенный старт — это флаг --now у systemctl enable.",
-    "checks": [
-     {
-      "type": "contains",
-      "value": "#!/usr/bin/env bash",
-      "message": "Первая строка — shebang #!/usr/bin/env bash"
-     },
-     {
-      "type": "contains",
-      "value": "set -euo pipefail",
-      "message": "Включён строгий режим set -euo pipefail"
-     },
-     {
-      "type": "regex",
-      "value": "scp\\s+-r",
-      "message": "Файлы приложения копируются рекурсивно через scp -r"
-     },
-     {
-      "type": "regex",
-      "value": "ssh\\s+\"?\\$SERVER",
-      "message": "Команды на сервере запускаются через ssh на переменную SERVER"
-     },
-     {
-      "type": "contains",
-      "value": "systemctl enable --now",
-      "message": "Служба ставится на автозапуск через systemctl enable --now"
-     },
-     {
-      "type": "contains",
-      "value": "daemon-reload",
-      "message": "После установки unit-файла вызывается systemctl daemon-reload"
-     },
-     {
-      "type": "notContains",
-      "value": "sshpass",
-      "message": "Пароль не автоматизируется через sshpass — вход только по ключу"
-     }
-    ],
-    "solution": "#!/usr/bin/env bash\nset -euo pipefail\n\n# Куда деплоим: пользователь@адрес сервера и папка приложения\nSERVER=\"deploy@203.0.113.10\"\nAPP_DIR=\"/opt/myapp\"\n\necho \"1/3 Копируем файлы приложения на сервер\"\nscp -r ./app \"$SERVER:$APP_DIR\"\n\necho \"2/3 Ставим unit-файл службы и перечитываем конфигурацию systemd\"\nscp ./myapp.service \"$SERVER:/tmp/myapp.service\"\nssh \"$SERVER\" 'sudo mv /tmp/myapp.service /etc/systemd/system/myapp.service && sudo systemctl daemon-reload'\n\necho \"3/3 Включаем автозапуск и запускаем службу\"\nssh \"$SERVER\" 'sudo systemctl enable --now myapp'\n\necho \"Деплой завершён. Проверьте: systemctl status myapp\"\n",
-    "resources": [
-     {
-      "title": "scp — копирование файлов по SSH",
-      "url": "https://man7.org/linux/man-pages/man1/scp.1.html",
-      "note": "Флаг -r копирует папки целиком"
-     },
-     {
-      "title": "systemctl — управление службами systemd",
-      "url": "https://man7.org/linux/man-pages/man1/systemctl.1.html",
-      "note": "enable --now = enable + start одной командой"
-     },
-     {
-      "title": "Bash: строгий режим set -euo pipefail",
-      "url": "https://www.gnu.org/software/bash/manual/bash.html#The-Set-Builtin",
-      "note": "Почему скрипт должен падать на первой ошибке"
-     }
-    ]
-   }
-  },
-  {
-   "title": "Проекты 2–3: упаковка в Docker и многоконтейнерное окружение",
-   "kind": "code",
-   "summary": "Убрать боль «у меня работает, а на сервере нет» контейнером и связать приложение, БД и прокси в одном docker-compose.yml через сеть и тома.",
-   "durationMin": 16,
-   "content": {
-    "language": "yaml",
-    "task": "БОЛЬ ИЗ ПРОЕКТА 1. Ручной деплой хрупкий: на вашей машине приложению нужен один набор библиотек, на сервере стоят другие версии — и «у меня работает, а на сервере нет». Лечит это контейнер: он фиксирует окружение приложения целиком.\n\nПРОЕКТ 2 (контекст, разбор — уже знаком по главе про Docker). Сначала рядом с кодом появляется Dockerfile — рецепт образа. Пример и построчный смысл:\n\n  FROM node:20-alpine      # базовый образ: готовый слой с Node.js\n  WORKDIR /app             # рабочая папка внутри контейнера\n  COPY package*.json ./    # сначала только манифест зависимостей\n  RUN npm ci               # ставим зависимости — это отдельный слой (кешируется)\n  COPY . .                 # копируем остальной код\n  EXPOSE 8080              # приложение слушает порт 8080\n  CMD [\"node\", \"server.js\"]  # что запустить при старте контейнера\n\nОбраз (image) — это собранный неизменяемый шаблон из слоёв (layers); слой — результат одной инструкции, слои переиспользуются и кешируются. Тег (tag) — метка версии образа, например myapp:1.0. Собираем: docker build -t myapp:1.0 . Запускаем: docker run.\n\nПРОЕКТ 3 (ваше задание). Одного контейнера мало: настоящему приложению нужны БД и прокси, и запускать три docker run с ручным связыванием — новая боль. Опишите всё окружение в одном файле docker-compose.yml. По пунктам:\n\n1. Корневой ключ services — под ним три сервиса (service — один контейнер с настройками).\n2. Сервис app: соберите его из своего Dockerfile строкой build: ./app; пробросьте порт 8080; задайте depends_on на db (зависимость сервисов — db стартует раньше).\n3. Сервис db: возьмите готовый образ postgres (image: postgres:16), задайте POSTGRES_USER/PASSWORD/DB, и — важно! — подключите именованный том db_data к /var/lib/postgresql/data, чтобы данные не исчезли при пересоздании контейнера (том, volume — постоянное хранилище вне контейнера).\n4. Сервис proxy: образ nginx, проброс порта 80.\n5. Объедините все три сервиса общей сетью networks: backend — так они видят друг друга по имени (app обращается к БД по хосту db, а не по IP).\n6. Внизу объявите раздел volumes с томом db_data и раздел networks с сетью backend.\n\nЗапускается всё это одной командой docker compose up. В этом и смысл: три контейнера, сеть и хранилище — из одного описанного файла.",
-    "starter": "services:\n  app:\n    # TODO: собрать из ./app, порт 8080, зависит от db, сеть backend\n\n  db:\n    # TODO: образ postgres:16, переменные POSTGRES_*, том db_data, сеть backend\n\n  proxy:\n    # TODO: образ nginx, порт 80, зависит от app, сеть backend\n\n# TODO: объявить именованный том db_data\n# TODO: объявить сеть backend\n",
-    "hint": "Порты пишутся списком в кавычках: - \"8080:8080\" (слева порт хоста, справа порт контейнера). Именованный том подключается строкой - db_data:/var/lib/postgresql/data, а сам том db_data объявляется в корневом разделе volumes: — иначе Compose о нём не знает.",
-    "checks": [
-     {
-      "type": "contains",
-      "value": "services:",
-      "message": "Есть корневой ключ services со списком контейнеров"
-     },
-     {
-      "type": "contains",
-      "value": "build: ./app",
-      "message": "Сервис app собирается из своего Dockerfile (build: ./app)"
-     },
-     {
-      "type": "regex",
-      "value": "image:\\s*postgres:",
-      "message": "Сервис db поднимается из готового образа postgres"
-     },
-     {
-      "type": "contains",
-      "value": "depends_on:",
-      "message": "Указана зависимость сервисов через depends_on"
-     },
-     {
-      "type": "regex",
-      "value": "db_data:/var/lib/postgresql/data",
-      "message": "Данные БД лежат в именованном томе db_data"
-     },
-     {
-      "type": "contains",
-      "value": "networks:",
-      "message": "Сервисы объединены общей сетью"
-     },
-     {
-      "type": "contains",
-      "value": "volumes:",
-      "message": "Именованный том db_data объявлен в разделе volumes"
-     }
-    ],
-    "solution": "services:\n  app:\n    build: ./app\n    ports:\n      - \"8080:8080\"\n    environment:\n      DATABASE_URL: \"postgres://user:secret@db:5432/appdb\"\n    depends_on:\n      - db\n    networks:\n      - backend\n\n  db:\n    image: postgres:16\n    environment:\n      POSTGRES_USER: user\n      POSTGRES_PASSWORD: secret\n      POSTGRES_DB: appdb\n    volumes:\n      - db_data:/var/lib/postgresql/data\n    networks:\n      - backend\n\n  proxy:\n    image: nginx:1.27\n    ports:\n      - \"80:80\"\n    depends_on:\n      - app\n    networks:\n      - backend\n\nvolumes:\n  db_data:\n\nnetworks:\n  backend:\n",
-    "resources": [
-     {
-      "title": "Dockerfile reference",
-      "url": "https://docs.docker.com/reference/dockerfile/",
-      "note": "Все инструкции: FROM, COPY, RUN, CMD, EXPOSE"
-     },
-     {
-      "title": "Compose file — services, networks, volumes",
-      "url": "https://docs.docker.com/reference/compose-file/",
-      "note": "Официальный формат docker-compose.yml"
-     },
-     {
-      "title": "Docker: тома и хранение данных",
-      "url": "https://docs.docker.com/engine/storage/volumes/",
-      "note": "Почему данные БД нужно держать в томе"
-     }
-    ]
-   }
-  },
-  {
-   "title": "Микропроверка: ручной деплой, Docker, compose",
-   "kind": "quiz",
-   "summary": "Проверяем, какую проблему решают Docker и docker-compose по сравнению с ручным деплоем.",
-   "durationMin": 8,
-   "content": {
-    "intro": "Короткий тест по первым трём проектам. Вспомни, какую боль лечит каждый шаг.",
-    "passScore": 70,
-    "questions": [
-     {
-      "id": "q1",
-      "type": "order",
-      "text": "Расставь первые три проекта в правильном порядке нарастания:",
-      "items": [
-       {
-        "id": "s1",
-        "text": "Ручной деплой на сервер"
-       },
-       {
-        "id": "s2",
-        "text": "Упаковка приложения в Docker-образ"
-       },
-       {
-        "id": "s3",
-        "text": "Многоконтейнерное окружение через docker-compose"
-       }
-      ],
-      "explanation": "Сначала выкатываем руками и чувствуем боль. Затем Docker делает запуск одинаковым везде. Потом compose связывает несколько контейнеров (приложение и базу) вместе."
-     },
-     {
-      "id": "q2",
-      "type": "match",
-      "text": "Сопоставь инструмент и проблему, которую он решает:",
-      "pairs": [
-       {
-        "id": "p1",
-        "left": "Ручной деплой (systemd)",
-        "right": "Понять боль повторяющихся шагов вручную"
-       },
-       {
-        "id": "p2",
-        "left": "Dockerfile",
-        "right": "«У меня работает, а на сервере нет»"
-       },
-       {
-        "id": "p3",
-        "left": "docker-compose",
-        "right": "Приложению нужны БД и прокси рядом"
-       }
-      ],
-      "explanation": "Каждый инструмент лечит конкретную боль: ручной деплой показывает проблему, Docker делает окружение одинаковым, compose поднимает несколько связанных контейнеров сразу."
-     },
-     {
-      "id": "q3",
-      "text": "Верно или нет: Docker-образ гарантирует, что приложение запустится одинаково на ноутбуке и на сервере.",
-      "options": [
-       {
-        "id": "a",
-        "text": "Верно",
-        "correct": true
-       },
-       {
-        "id": "b",
-        "text": "Неверно",
-        "correct": false
-       }
-      ],
-      "explanation": "Образ упаковывает приложение вместе с зависимостями и окружением. Поэтому запуск в контейнере одинаков везде, где есть Docker. Это и лечит боль «а у меня по-другому»."
-     },
-     {
-      "id": "q4",
-      "type": "blank",
-      "text": "Впиши команду, которая соберёт образ из Dockerfile в текущей папке с тегом myapp:",
-      "accept": [
-       "docker build -t myapp .",
-       "docker build -t myapp:latest .",
-       "docker build --tag myapp ."
-      ],
-      "hint": "docker build, флаг -t для тега, в конце точка — контекст сборки.",
-      "explanation": "docker build собирает образ. Флаг -t задаёт имя (тег) myapp. Точка в конце — это контекст сборки, текущая папка, где лежит Dockerfile."
-     },
-     {
-      "id": "q5",
-      "multiple": true,
-      "text": "Что docker-compose добавляет поверх одиночного контейнера? Выбери всё верное:",
-      "options": [
-       {
-        "id": "a",
-        "text": "Общую сеть, чтобы контейнеры видели друг друга",
-        "correct": true
-       },
-       {
-        "id": "b",
-        "text": "Именованные тома для постоянного хранения данных",
-        "correct": true
-       },
-       {
-        "id": "c",
-        "text": "Порядок запуска через depends_on",
-        "correct": true
-       },
-       {
-        "id": "d",
-        "text": "Автоматическое масштабирование по нагрузке в кластере",
-        "correct": false
-       }
-      ],
-      "explanation": "compose описывает несколько сервисов, их сеть, тома и зависимости в одном файле. А вот автоматическое масштабирование и самовосстановление по нагрузке — это уже задача Kubernetes из проекта 8."
-     }
-    ],
-    "resources": [
-     {
-      "title": "docker build",
-      "url": "https://docs.docker.com/reference/cli/docker/buildx/build/",
-      "note": "Справка по сборке образа и флагу -t."
-     },
-     {
-      "title": "Compose overview",
-      "url": "https://docs.docker.com/compose/",
-      "note": "Что даёт compose поверх одиночных контейнеров."
-     }
-    ]
-   }
-  },
-  {
-   "title": "Проект 4: пайплайн CI/CD",
-   "kind": "code",
-   "summary": "Написать .gitlab-ci.yml, который на каждый пуш собирает образ, гоняет тесты и деплоит — чтобы не выкатывать вручную.",
-   "durationMin": 16,
-   "content": {
-    "language": "yaml",
-    "task": "В проектах 1-3 вы собирали и запускали приложение руками. Проблема: человек забывает шаги, ошибается, деплоит непроверенный код. CI/CD (Continuous Integration / Continuous Delivery — непрерывная интеграция и доставка) убирает ручной труд: сервер сам всё делает на каждый пуш.\n\nНапишите файл .gitlab-ci.yml с тремя стадиями (stages — этапы конвейера):\n1) build — собрать Docker-образ и отправить его в реестр;\n2) test — установить зависимости и прогнать тесты (pytest);\n3) deploy — зайти по ssh на сервер и запустить новую версию.\n\nВажные правила:\n- Секреты (пароль от реестра, адрес сервера) НЕ пишем в файл. Берём их из переменных пайплайна ($CI_REGISTRY_PASSWORD, $SERVER_HOST) — их задают в настройках проекта.\n- Стадия deploy запускается только для ветки main (блок only), чтобы черновые ветки не выкатывались в бой.\n\nТермины: раннер (runner) — машина, которая выполняет задачи; стадия (stage) — этап; артефакт — результат сборки (здесь это образ в реестре); секрет пайплайна — скрытая переменная.",
-    "starter": "# .gitlab-ci.yml — конвейер сборки, тестов и деплоя.\n# 1) Объявите список стадий в нужном порядке.\nstages:\n  # - build\n  # - test\n  # - deploy\n\n# 2) Общая переменная с именем образа (используйте $CI_* переменные GitLab).\nvariables:\n  IMAGE: \"...\"\n\n# 3) Задача build: собрать и запушить образ.\n#    Логиньтесь в реестр паролем из переменной, НЕ хардкодьте его.\n\n# 4) Задача test: поставить зависимости и запустить pytest.\n\n# 5) Задача deploy: по ssh запустить новую версию. Только для ветки main.\n",
-    "hint": "Каждая задача указывает свою stage. Для доступа к секрету пишите $CI_REGISTRY_PASSWORD в кавычках, а не сам пароль. Чтобы deploy шёл только с main, добавьте в задачу блок only: [ - main ].",
-    "checks": [
-     {
-      "type": "contains",
-      "value": "stages:",
-      "message": "Должен быть блок stages со списком этапов"
-     },
-     {
-      "type": "contains",
-      "value": "build",
-      "message": "Нужна стадия/задача build"
-     },
-     {
-      "type": "contains",
-      "value": "test",
-      "message": "Нужна стадия/задача test"
-     },
-     {
-      "type": "contains",
-      "value": "deploy",
-      "message": "Нужна стадия/задача deploy"
-     },
-     {
-      "type": "contains",
-      "value": "docker build",
-      "message": "В стадии build должна собираться Docker-образ командой docker build"
-     },
-     {
-      "type": "contains",
-      "value": "$CI_REGISTRY_PASSWORD",
-      "message": "Пароль от реестра берётся из переменной, а не хардкодится"
-     },
-     {
-      "type": "notContains",
-      "value": "password123",
-      "message": "Нельзя писать настоящий пароль прямо в файл"
-     }
-    ],
-    "solution": "stages:\n  - build\n  - test\n  - deploy\n\nvariables:\n  IMAGE: \"$CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA\"\n\nbuild:\n  stage: build\n  image: docker:24\n  services:\n    - docker:24-dind\n  script:\n    - docker login -u \"$CI_REGISTRY_USER\" -p \"$CI_REGISTRY_PASSWORD\" \"$CI_REGISTRY\"\n    - docker build -t \"$IMAGE\" .\n    - docker push \"$IMAGE\"\n\ntest:\n  stage: test\n  image: python:3.12\n  script:\n    - pip install -r requirements.txt\n    - pytest -q\n\ndeploy:\n  stage: deploy\n  image: alpine:3.20\n  before_script:\n    - apk add --no-cache openssh-client\n  script:\n    - ssh -o StrictHostKeyChecking=accept-new \"deploy@$SERVER_HOST\" \"docker pull $IMAGE && docker compose -f /opt/app/docker-compose.yml up -d\"\n  only:\n    - main\n",
-    "resources": [
-     {
-      "title": "GitLab CI/CD: .gitlab-ci.yml keyword reference",
-      "url": "https://docs.gitlab.com/ee/ci/yaml/",
-      "note": "Полный справочник по stages, script, only и переменным"
-     },
-     {
-      "title": "GitLab CI/CD variables",
-      "url": "https://docs.gitlab.com/ee/ci/variables/",
-      "note": "Как устроены секретные переменные пайплайна ($CI_REGISTRY_PASSWORD и др.)"
-     }
-    ]
-   }
-  },
-  {
-   "title": "Проекты 5–6: облако как код — Terraform и Ansible",
-   "kind": "code",
-   "summary": "Описать облачную ВМ кодом на Terraform (create/destroy одной командой) и понять, как Ansible-плейбук идемпотентно приводит сервер к нужному состоянию.",
-   "durationMin": 16,
-   "content": {
-    "language": "hcl",
-    "task": "БОЛЬ ИЗ ПРОЕКТА 5. В проекте 5 вы подняли виртуальную машину в облаке руками — кликали в веб-консоли, выбирали регион, тип, диск — и выкатили на неё контейнер через пайплайн. Работает. Но: воспроизвести это точь-в-точь нельзя, коллега сделает иначе, а «снести и поднять заново» — снова полчаса кликов. Docker сделал воспроизводимым приложение. Теперь сделаем воспроизводимым сам сервер.\n\nПРОЕКТ 6 (ваше задание): Terraform. Опишите ту же ВМ КОДОМ. Термины: провайдер (provider — плагин под конкретное облако), ресурс (resource — то, что создаём: машина, сеть), state (файл-память Terraform о том, что уже создано), plan (показать, что будет сделано) и apply (сделать). Напишите main.tf по пунктам:\n\n1. Блок terraform { required_providers { ... } } — объявите нужный провайдер (в примере aws).\n2. Блок provider \"aws\" с регионом.\n3. Переменная variable \"ami_id\" — id образа ОС. Не зашивайте его числом в код: образ у каждого свой, поэтому берём его из переменной.\n4. Ресурс resource \"aws_instance\" \"web\": поле ami = var.ami_id и instance_type (тип машины — сколько ядер и памяти, например t3.micro).\n5. Блок output \"public_ip\" — чтобы Terraform показал публичный IP созданной машины.\n\nЖизненный цикл: terraform init (скачать провайдер) → terraform plan (посмотреть, что создастся) → terraform apply (создать) → terraform destroy (снести всё одной командой). Вот она, воспроизводимость: инфраструктура из файла в Git.\n\nПРОЕКТ 7 (контекст, разбор — понадобится ниже): Ansible. Свежая ВМ от Terraform внутри «голая»: нет нужных пакетов, пользователей, конфигов. Настраивать руками — снова невоспроизводимо. Ansible-плейбук описывает ЖЕЛАЕМОЕ состояние сервера. Пример playbook.yml:\n\n  - hosts: web              # к каким серверам из инвентаря применяем\n    become: true            # выполнять с правами root (sudo)\n    tasks:\n      - name: Установить nginx\n        apt:\n          name: nginx\n          state: present     # должен быть установлен\n      - name: Служба запущена и в автозапуске\n        service:\n          name: nginx\n          state: started\n          enabled: true\n\nТермины: инвентарь (inventory — список серверов и групп, например группа web), плейбук (playbook — YAML-описание задач), идемпотентность (запусти хоть 10 раз — результат один: если nginx уже стоит, Ansible ничего не трогает). Именно идемпотентность делает настройку безопасно повторяемой — как plan/apply у Terraform.\n\nИтог связки: Terraform СОЗДАЁТ сервер, Ansible ПРИВОДИТ его к нужному состоянию. Обе боли — ручное создание и ручная настройка — закрыты кодом.",
-    "starter": "terraform {\n  required_providers {\n    # TODO: объявить провайдер aws (source hashicorp/aws)\n  }\n}\n\n# TODO: блок provider \"aws\" с регионом\n\n# TODO: переменная ami_id (тип string)\n\n# TODO: ресурс aws_instance \"web\": ami из переменной, instance_type\n\n# TODO: output public_ip с адресом созданной машины\n",
-    "hint": "К полю ресурса обращаются через var.имя (var.ami_id), а к атрибуту созданного ресурса — через тип.имя.атрибут (aws_instance.web.public_ip). Синтаксис ресурса: resource \"тип\" \"локальное_имя\" { ... }. Строки в HCL — в двойных кавычках.",
-    "checks": [
-     {
-      "type": "contains",
-      "value": "required_providers",
-      "message": "Объявлен нужный провайдер в блоке required_providers"
-     },
-     {
-      "type": "regex",
-      "value": "provider\\s+\"aws\"",
-      "message": "Есть блок provider aws с регионом"
-     },
-     {
-      "type": "regex",
-      "value": "resource\\s+\"aws_instance\"",
-      "message": "Описан ресурс — виртуальная машина aws_instance"
-     },
-     {
-      "type": "contains",
-      "value": "instance_type",
-      "message": "У машины задан тип (instance_type) — ядра и память"
-     },
-     {
-      "type": "contains",
-      "value": "var.ami_id",
-      "message": "Образ берётся из переменной var.ami_id, а не зашит числом"
-     },
-     {
-      "type": "contains",
-      "value": "output",
-      "message": "Публичный IP машины выводится через output"
-     }
-    ],
-    "solution": "terraform {\n  required_providers {\n    aws = {\n      source  = \"hashicorp/aws\"\n      version = \"~> 5.0\"\n    }\n  }\n}\n\nprovider \"aws\" {\n  region = \"eu-central-1\"\n}\n\nvariable \"ami_id\" {\n  type        = string\n  description = \"ID образа операционной системы для виртуальной машины\"\n}\n\nresource \"aws_instance\" \"web\" {\n  ami           = var.ami_id\n  instance_type = \"t3.micro\"\n\n  tags = {\n    Name = \"myapp-web\"\n  }\n}\n\noutput \"public_ip\" {\n  value = aws_instance.web.public_ip\n}\n",
-    "resources": [
-     {
-      "title": "Terraform: создание ресурсов",
-      "url": "https://developer.hashicorp.com/terraform/tutorials/aws-get-started/aws-build",
-      "note": "provider, resource, plan и apply на практике"
-     },
-     {
-      "title": "Terraform: input variables",
-      "url": "https://developer.hashicorp.com/terraform/language/values/variables",
-      "note": "Почему значения выносят в переменные"
-     },
-     {
-      "title": "Ansible: intro to playbooks",
-      "url": "https://docs.ansible.com/ansible/latest/playbook_guide/playbooks_intro.html",
-      "note": "hosts, tasks и идемпотентность модулей"
-     }
-    ]
-   }
-  },
-  {
-   "title": "Проект 7: деплой в Kubernetes и масштабирование",
-   "kind": "code",
-   "summary": "Описать Deployment, Service и Ingress в манифесте и выкатить приложение в кластер с тремя репликами.",
-   "durationMin": 16,
-   "content": {
-    "language": "yaml",
-    "task": "На одной ВМ (проекты 5-7) приложение живёт в единственном экземпляре: упал контейнер — сайт лёг, вырос трафик — некуда масштабировать. Kubernetes (k8s) — оркестратор: он держит нужное число копий приложения на кластере машин, сам перезапускает упавшие и распределяет нагрузку.\n\nОпишите три объекта в одном файле (разделяйте их строкой ---):\n1) Deployment — как запускать приложение: replicas: 3 (три копии = реплики), selector по метке app, шаблон пода (pod — минимальная единица: один или несколько контейнеров) с образом и containerPort: 8080;\n2) Service — стабильный внутренний адрес: направляет трафик с port 80 на targetPort 8080 подов по той же метке;\n3) Ingress — вход снаружи по домену app.example.com на этот Service.\n\nТермины: под (pod) — запущенный контейнер приложения; реплика — одна из копий; манифест — YAML-описание объектов; сервис (Service) — постоянный адрес для набора подов.",
-    "starter": "# app.yaml — три объекта Kubernetes через ---\napiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: app\nspec:\n  # replicas: ...\n  # selector.matchLabels.app: app\n  # template: контейнер с image и containerPort 8080\n---\n# apiVersion: v1 / kind: Service — port 80 -> targetPort 8080\n---\n# apiVersion: networking.k8s.io/v1 / kind: Ingress — host app.example.com -> service app:80\n",
-    "hint": "Три объекта разделяются строкой из трёх дефисов ---. У Deployment selector.matchLabels должен совпадать с labels в template. Service связывается с подами тем же selector: app: app. В Ingress backend указывает service name: app и port number: 80.",
-    "checks": [
-     {
-      "type": "contains",
-      "value": "kind: Deployment",
-      "message": "Нужен объект Deployment"
-     },
-     {
-      "type": "contains",
-      "value": "kind: Service",
-      "message": "Нужен объект Service"
-     },
-     {
-      "type": "contains",
-      "value": "kind: Ingress",
-      "message": "Нужен объект Ingress для входа снаружи"
-     },
-     {
-      "type": "contains",
-      "value": "replicas: 3",
-      "message": "Задайте три реплики: replicas: 3"
-     },
-     {
-      "type": "contains",
-      "value": "containerPort",
-      "message": "У контейнера должен быть указан containerPort"
-     },
-     {
-      "type": "contains",
-      "value": "targetPort",
-      "message": "Service должен направлять трафик на targetPort пода"
-     }
-    ],
-    "solution": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: app\nspec:\n  replicas: 3\n  selector:\n    matchLabels:\n      app: app\n  template:\n    metadata:\n      labels:\n        app: app\n    spec:\n      containers:\n        - name: app\n          image: registry.example.com/app:1.0.0\n          ports:\n            - containerPort: 8080\n---\napiVersion: v1\nkind: Service\nmetadata:\n  name: app\nspec:\n  selector:\n    app: app\n  ports:\n    - port: 80\n      targetPort: 8080\n---\napiVersion: networking.k8s.io/v1\nkind: Ingress\nmetadata:\n  name: app\nspec:\n  rules:\n    - host: app.example.com\n      http:\n        paths:\n          - path: /\n            pathType: Prefix\n            backend:\n              service:\n                name: app\n                port:\n                  number: 80\n",
-    "resources": [
-     {
-      "title": "Kubernetes: Deployments",
-      "url": "https://kubernetes.io/docs/concepts/workloads/controllers/deployment/",
-      "note": "replicas, selector и шаблон пода"
-     },
-     {
-      "title": "Kubernetes: Service",
-      "url": "https://kubernetes.io/docs/concepts/services-networking/service/",
-      "note": "Как Service связывает трафic с подами по метке и targetPort"
-     },
-     {
-      "title": "Kubernetes: Ingress",
-      "url": "https://kubernetes.io/docs/concepts/services-networking/ingress/",
-      "note": "Маршрутизация внешнего трафика по домену на Service"
-     }
-    ]
-   }
-  },
-  {
-   "title": "Проект 8: наблюдаемость и безопасность окружения",
-   "kind": "code",
-   "summary": "Добавляем к рабочему стенду сбор метрик и дашборд и сразу закрываем лишнее наружу — единый шаг «видеть и защищать».",
-   "durationMin": 14,
-   "content": {
-    "language": "yaml",
-    "task": "Соберите файл docker-compose.observability.yml, который поднимает мониторинг рядом с приложением и делает это безопасно. По пунктам:\n\n1. Сервис prometheus (образ prom/prometheus:v2.53.0) — он собирает метрики. Подключите конфиг ./prometheus.yml в /etc/prometheus/prometheus.yml в режиме только чтение (:ro).\n2. Порт Prometheus 9090 откройте ТОЛЬКО на localhost: привязка \"127.0.0.1:9090:9090\". Так метрики не торчат в интернет (принцип least privilege — минимум прав и доступа).\n3. Сервис grafana (образ grafana/grafana:11.1.0) — он рисует дашборды из метрик.\n4. Пароль администратора Grafana задайте через переменную окружения: GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}. Сам пароль лежит в файле .env вне репозитория (роль секрет-менеджера на минималках), а НЕ прямо в compose.\n5. Данные Grafana сохраните в именованном томе grafana-data, смонтированном в /var/lib/grafana, чтобы дашборды пережили перезапуск.\n6. Порт Grafana 3000 тоже привяжите к 127.0.0.1 — снаружи её должен открывать только обратный прокси по HTTPS.\n7. Обоим сервисам добавьте restart: unless-stopped, чтобы после сбоя они поднимались сами.\n8. Не забудьте объявить том grafana-data в секции volumes: на верхнем уровне файла.",
-    "starter": "# docker-compose.observability.yml — мониторинг + базовая защита\n# Дополните файл по пунктам задания. Порты наружу НЕ открываем.\nservices:\n  prometheus:\n    image: prom/prometheus:v2.53.0\n    volumes:\n      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro\n    # TODO: порт 9090 только на 127.0.0.1\n    # TODO: restart: unless-stopped\n\n  grafana:\n    image: grafana/grafana:11.1.0\n    # TODO: environment — пароль админа из ${GRAFANA_ADMIN_PASSWORD}\n    # TODO: том grafana-data -> /var/lib/grafana\n    # TODO: порт 3000 только на 127.0.0.1\n    # TODO: restart: unless-stopped\n\n# TODO: объявите именованный том grafana-data\n",
-    "hint": "Привязка порта к localhost пишется так: \"127.0.0.1:9090:9090\" (первая часть — на каком адресе слушать). Переменная подставляется через ${GRAFANA_ADMIN_PASSWORD} — фигурные скобки обязательны. Именованные тома перечисляют в секции volumes: на верхнем уровне файла, там же где services:.",
-    "checks": [
-     {
-      "type": "contains",
-      "value": "prom/prometheus",
-      "message": "Нужен сервис Prometheus — он собирает метрики."
-     },
-     {
-      "type": "contains",
-      "value": "grafana/grafana",
-      "message": "Нужен сервис Grafana — он рисует дашборды."
-     },
-     {
-      "type": "regex",
-      "value": "127\\.0\\.0\\.1:9090:9090",
-      "message": "Порт Prometheus (9090) должен быть привязан к 127.0.0.1, а не открыт наружу."
-     },
-     {
-      "type": "regex",
-      "value": "127\\.0\\.0\\.1:3000:3000",
-      "message": "Порт Grafana (3000) тоже должен слушать только localhost."
-     },
-     {
-      "type": "contains",
-      "value": "GF_SECURITY_ADMIN_PASSWORD=${",
-      "message": "Пароль админа Grafana берётся из переменной окружения, а не из файла."
-     },
-     {
-      "type": "notContains",
-      "value": "PASSWORD=admin",
-      "message": "Пароль не должен быть захардкожен прямо в compose."
-     },
-     {
-      "type": "contains",
-      "value": "grafana-data",
-      "message": "Данные Grafana должны лежать в именованном томе grafana-data."
-     },
-     {
-      "type": "contains",
-      "value": "restart: unless-stopped",
-      "message": "Сервисы должны сами перезапускаться после сбоя."
-     }
-    ],
-    "solution": "# docker-compose.observability.yml — мониторинг + базовая защита\nservices:\n  prometheus:\n    image: prom/prometheus:v2.53.0\n    volumes:\n      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro\n    ports:\n      - \"127.0.0.1:9090:9090\"   # метрики видны только с самого сервера\n    restart: unless-stopped\n\n  grafana:\n    image: grafana/grafana:11.1.0\n    environment:\n      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}\n    volumes:\n      - grafana-data:/var/lib/grafana\n    ports:\n      - \"127.0.0.1:3000:3000\"   # наружу Grafana отдаёт только прокси по HTTPS\n    depends_on:\n      - prometheus\n    restart: unless-stopped\n\nvolumes:\n  grafana-data:\n",
-    "resources": [
-     {
-      "title": "Prometheus: обзор",
-      "url": "https://prometheus.io/docs/introduction/overview/",
-      "note": "Зачем нужны метрики и как их собирает Prometheus."
-     },
-     {
-      "title": "Docker Compose: справочник файла",
-      "url": "https://docs.docker.com/compose/compose-file/",
-      "note": "Синтаксис services, ports, volumes и environment."
-     }
-    ]
-   }
-  },
-  {
-   "title": "Квиз темы: конвейер доставки целиком",
-   "kind": "quiz",
-   "summary": "Проверяем, как складывается сквозной путь доставки: порядок проектов, зачем появляется каждый инструмент, роли Prometheus и Grafana, шаги усиления безопасности.",
-   "durationMin": 10,
-   "content": {
-    "intro": "Вся глава — это лестница из 10 проектов, где каждый следующий добавляет ровно один инструмент. Проверим, поняли ли вы, зачем каждый шаг и в каком порядке они идут.",
-    "passScore": 70,
-    "questions": [
-     {
-      "id": "q1",
-      "type": "order",
-      "text": "Расставьте проекты в том порядке, в котором мы их проходили — от самого простого к самому сложному:",
-      "items": [
-       {
-        "id": "s1",
-        "text": "Ручной деплой приложения"
-       },
-       {
-        "id": "s2",
-        "text": "Упаковка приложения в Docker"
-       },
-       {
-        "id": "s3",
-        "text": "Пайплайн CI/CD"
-       },
-       {
-        "id": "s4",
-        "text": "Инфраструктура как код на Terraform"
-       },
-       {
-        "id": "s5",
-        "text": "Деплой в Kubernetes"
-       }
-      ],
-      "explanation": "Логика нарастания: сначала руками (чтобы прочувствовать боль), потом Docker убирает «у меня работало», CI/CD автоматизирует сборку и доставку, Terraform создаёт инфраструктуру кодом, а Kubernetes оркестрирует много контейнеров. Каждый шаг решает проблему предыдущего."
-     },
-     {
-      "id": "q2",
-      "type": "match",
-      "text": "Сопоставьте инструмент из проектов 9-10 с его задачей:",
-      "pairs": [
-       {
-        "id": "p1",
-        "left": "Prometheus",
-        "right": "собирает метрики (числа о состоянии)"
-       },
-       {
-        "id": "p2",
-        "left": "Grafana",
-        "right": "рисует дашборды с графиками"
-       },
-       {
-        "id": "p3",
-        "left": "ufw",
-        "right": "firewall: закрывает лишние порты"
-       },
-       {
-        "id": "p4",
-        "left": "fail2ban",
-        "right": "банит IP за перебор паролей"
-       }
-      ],
-      "explanation": "Prometheus и Grafana работают в паре: один хранит числа, другой их показывает. ufw и fail2ban — про безопасность: firewall не пускает на закрытые порты, а fail2ban отбивает попытки подобрать пароль по SSH."
-     },
-     {
-      "id": "q3",
-      "text": "Почему мониторинг (проект 9) мы добавляем уже после того, как приложение задеплоено?",
-      "options": [
-       {
-        "id": "a",
-        "text": "Потому что сначала должно появиться то, за чем наблюдать, — работающее приложение и сервер",
-        "correct": true
-       },
-       {
-        "id": "b",
-        "text": "Потому что Prometheus нельзя запустить в Docker",
-        "correct": false
-       },
-       {
-        "id": "c",
-        "text": "Потому что мониторинг заменяет собой деплой",
-        "correct": false
-       }
-      ],
-      "explanation": "Наблюдаемость имеет смысл только поверх чего-то работающего: метрики CPU, памяти и запросов появляются, когда есть сервер и приложение. Prometheus прекрасно живёт в Docker, а деплой он не заменяет."
-     },
-     {
-      "id": "q4",
-      "text": "Верно или нет: Prometheus сам рисует красивые дашборды с графиками, поэтому Grafana не нужна.",
-      "options": [
-       {
-        "id": "a",
-        "text": "Верно",
-        "correct": false
-       },
-       {
-        "id": "b",
-        "text": "Неверно",
-        "correct": true
-       }
-      ],
-      "explanation": "Неверно. Prometheus — это хранилище метрик и язык запросов к ним. Красивые дашборды строит именно Grafana, которая берёт данные из Prometheus как из источника."
-     },
-     {
-      "id": "q5",
-      "type": "blank",
-      "text": "Впишите строку конфига SSH, которая запрещает вход суперпользователя root по SSH:",
-      "accept": [
-       "PermitRootLogin no",
-       "PermitRootLogin  no"
-      ],
-      "hint": "Директива про root-логин со значением no.",
-      "explanation": "Строка `PermitRootLogin no` в /etc/ssh/sshd_config закрывает прямой вход под root. Дальше администратор заходит обычным пользователем и повышает права через sudo — так безопаснее и остаётся след, кто что делал."
-     },
-     {
-      "id": "q6",
-      "multiple": true,
-      "text": "Что из перечисленного делает наш скрипт усиления безопасности harden.sh? (несколько верных)",
-      "options": [
-       {
-        "id": "a",
-        "text": "По умолчанию запрещает входящие соединения через ufw",
-        "correct": true
-       },
-       {
-        "id": "b",
-        "text": "Отключает вход по паролю, оставляя только SSH-ключи",
-        "correct": true
-       },
-       {
-        "id": "c",
-        "text": "Устанавливает fail2ban против перебора паролей",
-        "correct": true
-       },
-       {
-        "id": "d",
-        "text": "Удаляет все контейнеры и образы Docker",
-        "correct": false
-       }
-      ],
-      "explanation": "Скрипт закрывает лишние порты (deny incoming), запрещает пароль и root-логин по SSH и ставит fail2ban. Docker он не трогает — задача усиления не в том, чтобы всё снести, а в том, чтобы закрыть двери."
-     },
-     {
-      "id": "q7",
-      "review": true,
-      "text": "Проект 2 упаковывает приложение в Docker. Какую главную проблему это решает?",
-      "options": [
-       {
-        "id": "a",
-        "text": "«У меня на машине работало, а на сервере нет» — образ несёт с собой всё окружение",
-        "correct": true
-       },
-       {
-        "id": "b",
-        "text": "Ускоряет интернет на сервере",
-        "correct": false
-       },
-       {
-        "id": "c",
-        "text": "Делает приложение бесплатным",
-        "correct": false
-       }
-      ],
-      "explanation": "Docker-образ упаковывает код вместе с его зависимостями и окружением. Поэтому он ведёт себя одинаково на ноутбуке и на сервере — исчезает классическое «а у меня работало»."
-     }
-    ],
-    "resources": [
-     {
-      "title": "CI/CD: непрерывная доставка",
-      "url": "https://ru.wikipedia.org/wiki/CI/CD",
-      "note": "Как этапы сборки, тестов и деплоя складываются в единый конвейер доставки."
-     },
-     {
-      "title": "Prometheus: обзор",
-      "url": "https://prometheus.io/docs/introduction/overview/",
-      "note": "Что такое метрики и чем Prometheus отличается от логов."
-     },
-     {
-      "title": "Google SRE Book: Monitoring",
-      "url": "https://sre.google/sre-book/monitoring-distributed-systems/",
-      "note": "Зачем наблюдаемость и какие сигналы важно измерять."
-     }
-    ]
-   }
-  },
-  {
-   "title": "Капстоун: разворачиваем окружение с нуля",
-   "kind": "code",
-   "summary": "Собираем весь стенд из кода одним файлом: приложение, база, обратный прокси и мониторинг связаны сетью, томами и HTTPS.",
-   "durationMin": 16,
-   "content": {
-    "language": "yaml",
-    "task": "Пришло время сложить всё вместе. Опишите продоподобный стенд одним файлом docker-compose.yml. Архитектура: обратный прокси принимает HTTPS → приложение обрабатывает запросы → база хранит данные → Prometheus следит за здоровьем. По пунктам:\n\n1. Сервис db (образ postgres:16). Пароль задайте через окружение POSTGRES_PASSWORD=${DB_PASSWORD} (секрет из .env, не из файла). Данные храните в именованном томе db-data в /var/lib/postgresql/data — иначе база исчезнет при пересоздании контейнера.\n2. Сервис app (образ myorg/app:${APP_VERSION}). Версию берём из переменной, чтобы CI/CD подставлял свежий тег. Приложению нужна база: добавьте depends_on: - db, чтобы app стартовал после db.\n3. Сервис proxy (образ nginx:1.27) — обратный прокси. Он единственный смотрит наружу: откройте порты \"80:80\" и \"443:443\" (HTTP и HTTPS). Подключите конфиг ./nginx.conf в /etc/nginx/nginx.conf:ro. Прокси зависит от app: depends_on: - app.\n4. Сервис prometheus (образ prom/prometheus:v2.53.0) для мониторинга. Порт 9090 привяжите к 127.0.0.1 — наружу метрики не отдаём.\n5. Всем четырём сервисам добавьте restart: unless-stopped.\n6. Объявите именованный том db-data в секции volumes: на верхнем уровне.\n\nСеть между сервисами Compose создаёт автоматически, и обращаются они друг к другу по имени (app → db, proxy → app).",
-    "starter": "# docker-compose.yml — финальный стенд из кода\n# Соберите всю картину: proxy -> app -> db, рядом prometheus.\nservices:\n  db:\n    image: postgres:16\n    # TODO: POSTGRES_PASSWORD из ${DB_PASSWORD}\n    # TODO: том db-data -> /var/lib/postgresql/data\n    # TODO: restart\n\n  app:\n    image: myorg/app:${APP_VERSION}\n    # TODO: depends_on db\n    # TODO: restart\n\n  proxy:\n    image: nginx:1.27\n    # TODO: конфиг ./nginx.conf -> /etc/nginx/nginx.conf:ro\n    # TODO: порты 80 и 443 наружу\n    # TODO: depends_on app; restart\n\n  # TODO: сервис prometheus, порт 9090 только на 127.0.0.1\n\n# TODO: том db-data\n",
-    "hint": "Порты наружу пишут как \"443:443\". Зависимость — списком: depends_on: с элементом - app под ним. Пароль базы: POSTGRES_PASSWORD=${DB_PASSWORD}. Именованный том сначала монтируют в сервисе (db-data:/var/lib/postgresql/data), потом объявляют в volumes: внизу файла.",
-    "checks": [
-     {
-      "type": "contains",
-      "value": "postgres:16",
-      "message": "Нужен сервис базы данных на образе postgres:16."
-     },
-     {
-      "type": "contains",
-      "value": "POSTGRES_PASSWORD=${",
-      "message": "Пароль базы берётся из переменной окружения, а не из файла."
-     },
-     {
-      "type": "contains",
-      "value": "db-data",
-      "message": "Данные базы должны лежать в именованном томе db-data."
-     },
-     {
-      "type": "contains",
-      "value": "myorg/app:${APP_VERSION}",
-      "message": "Версия приложения подставляется из переменной APP_VERSION."
-     },
-     {
-      "type": "contains",
-      "value": "depends_on",
-      "message": "Порядок старта важен: app после db, proxy после app."
-     },
-     {
-      "type": "contains",
-      "value": "nginx:1.27",
-      "message": "Обратный прокси на nginx:1.27 отсутствует."
-     },
-     {
-      "type": "contains",
-      "value": "443:443",
-      "message": "Наружу нужен HTTPS-порт 443 на прокси."
-     },
-     {
-      "type": "regex",
-      "value": "127\\.0\\.0\\.1:9090:9090",
-      "message": "Метрики Prometheus должны слушать только localhost."
-     },
-     {
-      "type": "contains",
-      "value": "restart: unless-stopped",
-      "message": "Сервисы должны сами подниматься после сбоя."
-     }
-    ],
-    "solution": "# docker-compose.yml — финальный стенд из кода\nservices:\n  db:\n    image: postgres:16\n    environment:\n      - POSTGRES_PASSWORD=${DB_PASSWORD}\n    volumes:\n      - db-data:/var/lib/postgresql/data\n    restart: unless-stopped\n\n  app:\n    image: myorg/app:${APP_VERSION}\n    environment:\n      - DATABASE_URL=postgres://app:${DB_PASSWORD}@db:5432/app\n    depends_on:\n      - db\n    restart: unless-stopped\n\n  proxy:\n    image: nginx:1.27\n    volumes:\n      - ./nginx.conf:/etc/nginx/nginx.conf:ro\n    ports:\n      - \"80:80\"\n      - \"443:443\"\n    depends_on:\n      - app\n    restart: unless-stopped\n\n  prometheus:\n    image: prom/prometheus:v2.53.0\n    volumes:\n      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro\n    ports:\n      - \"127.0.0.1:9090:9090\"\n    restart: unless-stopped\n\nvolumes:\n  db-data:\n",
-    "resources": [
-     {
-      "title": "Docker Compose: несколько сервисов",
-      "url": "https://docs.docker.com/compose/",
-      "note": "Как связать app, db и прокси в одном файле."
-     },
-     {
-      "title": "Nginx: обратный прокси",
-      "url": "https://nginx.org/ru/docs/http/ngx_http_proxy_module.html",
-      "note": "Как прокси передаёт запросы приложению."
-     }
-    ]
-   }
-  },
-  {
-   "title": "Капстоун: находим и чиним намеренные поломки",
-   "kind": "terminal",
-   "summary": "Проходим по заложенным авариям и чиним каждую по методологии диагностики.",
-   "durationMin": 15,
-   "content": {
-    "intro": "В стенд заранее заложены пять поломок: упавший под, закрытый порт, сломанный TLS, полный диск и красный пайплайн. Идём по методологии из главы 59: сначала собираем улики, потом чиним, потом проверяем. Не чини наугад — сначала посмотри.",
-    "shell": "student@devops",
-    "tasks": [
-     {
-      "id": "t1",
-      "prompt": "Улика 1. Посмотреть все поды и найти проблемный статус.",
-      "expected": [
-       "kubectl get pods"
-      ],
-      "hint": "kubectl, затем get, затем pods",
-      "success": "Виден под в CrashLoopBackOff — он падает по кругу."
-     },
-     {
-      "id": "t2",
-      "prompt": "Посмотреть события и причину падения пода app.",
-      "expected": [
-       "kubectl describe pod app"
-      ],
-      "hint": "kubectl describe pod <имя>",
-      "success": "В events видно, из-за чего под не стартует."
-     },
-     {
-      "id": "t3",
-      "prompt": "Прочитать логи контейнера app, чтобы увидеть ошибку приложения.",
-      "expected": [
-       "kubectl logs app"
-      ],
-      "hint": "kubectl logs <имя пода>",
-      "success": "В логах видна конкретная ошибка запуска."
-     },
-     {
-      "id": "t4",
-      "prompt": "Образ починили. Перезапустить деплой app, чтобы поднять поды заново.",
-      "expected": [
-       "kubectl rollout restart deployment app",
-       "kubectl rollout restart deploy app"
-      ],
-      "hint": "kubectl rollout restart deployment <имя>",
-      "success": "Деплой перезапущен, поды поднимаются с исправленным образом."
-     },
-     {
-      "id": "t5",
-      "prompt": "Улика 2. Проверить, отвечает ли сайт на 80 порту через прокси.",
-      "expected": [
-       "curl http://localhost",
-       "curl http://localhost:80"
-      ],
-      "hint": "curl http://localhost",
-      "success": "Connection refused — порт закрыт, значит прокси не слушает."
-     },
-     {
-      "id": "t6",
-      "prompt": "Проверить, запущена ли служба nginx.",
-      "expected": [
-       "systemctl status nginx"
-      ],
-      "hint": "systemctl status <служба>",
-      "success": "Служба inactive — вот почему порт закрыт."
-     },
-     {
-      "id": "t7",
-      "prompt": "Запустить nginx заново, чтобы открыть порт.",
-      "expected": [
-       "systemctl restart nginx",
-       "systemctl start nginx"
-      ],
-      "hint": "systemctl restart nginx",
-      "success": "nginx поднят, порт 80 снова слушается."
-     },
-     {
-      "id": "t8",
-      "prompt": "Улика 3. Сертификат истёк — посмотреть заголовки по HTTPS и увидеть ошибку TLS.",
-      "expected": [
-       "curl -vI https://localhost",
-       "curl -Iv https://localhost"
-      ],
-      "hint": "curl с флагами -v и -I по адресу https://localhost",
-      "success": "curl ругается на сертификат — подтвердили проблему TLS."
-     },
-     {
-      "id": "t9",
-      "prompt": "Сертификат заменили новым. Перечитать конфиг nginx без остановки службы.",
-      "expected": [
-       "systemctl reload nginx"
-      ],
-      "hint": "systemctl reload <служба> перечитывает конфиг без простоя",
-      "success": "Конфиг перечитан, новый сертификат подхвачен."
-     },
-     {
-      "id": "t10",
-      "prompt": "Улика 4. Проверить, сколько свободного места на дисках.",
-      "expected": [
-       "df -h",
-       "df"
-      ],
-      "hint": "df -h показывает диски в человекочитаемом виде",
-      "success": "Диск заполнен на 100% — вот источник аварии."
-     },
-     {
-      "id": "t11",
-      "prompt": "Найти, какие файлы в /var/log съели место (размеры содержимого каталога).",
-      "expected": [
-       "du -sh /var/log/*",
-       "du -h /var/log"
-      ],
-      "hint": "du -sh /var/log/* покажет размер каждого элемента",
-      "success": "Видно раздутый файл app.log — он и переполнил диск."
-     },
-     {
-      "id": "t12",
-      "prompt": "Удалить раздутый лог /var/log/app.log, чтобы освободить место.",
-      "expected": [
-       "rm /var/log/app.log",
-       "rm -f /var/log/app.log"
-      ],
-      "hint": "rm <путь к файлу>",
-      "success": "Место освобождено; настоящую причину роста логов чиним отдельно."
-     },
-     {
-      "id": "t13",
-      "prompt": "Улика 5. Найти упавшую стадию в логе пайплайна ci.log по слову error.",
-      "expected": [
-       "grep -i error ci.log",
-       "grep error ci.log"
-      ],
-      "hint": "grep -i error <файл> ищет строки с ошибкой без учёта регистра",
-      "success": "Нашли строку с ошибкой — теперь ясно, какая стадия красная."
-     }
-    ],
-    "resources": [
-     {
-      "title": "kubectl: шпаргалка команд",
-      "url": "https://kubernetes.io/ru/docs/reference/kubectl/cheatsheet/",
-      "note": "get, describe, logs, rollout restart — база диагностики подов"
-     },
-     {
-      "title": "systemctl: управление службами",
-      "url": "https://www.man7.org/linux/man-pages/man1/systemctl.1.html",
-      "note": "status, restart, reload — разница между рестартом и перечитыванием конфига"
-     }
-    ]
-   }
-  },
-  {
-   "title": "Финальный квиз участка",
-   "kind": "quiz",
-   "summary": "Сквозной тест по стратегиям деплоя, методологии диагностики и связке инструментов.",
-   "durationMin": 10,
-   "content": {
-    "intro": "Проверим, как всё соединилось: стратегии выката, методология поиска поломок и инструменты стенда. Вопросы разного формата.",
-    "passScore": 70,
-    "questions": [
-     {
-      "id": "q1",
-      "type": "order",
-      "text": "Расставьте шаги диагностики по правильному порядку (по методологии из главы 59):",
-      "items": [
-       {
-        "id": "s1",
-        "text": "Наблюдай симптом и воспроизведи его"
-       },
-       {
-        "id": "s2",
-        "text": "Собери улики (логи, статусы, метрики)"
-       },
-       {
-        "id": "s3",
-        "text": "Определи слой, где проблема"
-       },
-       {
-        "id": "s4",
-        "text": "Проверь гипотезу о корневой причине"
-       },
-       {
-        "id": "s5",
-        "text": "Почини и убедись, что помогло"
-       }
-      ],
-      "explanation": "Сначала наблюдаем и воспроизводим, затем собираем улики, сужаем слой, проверяем гипотезу и только потом чиним. Правка наугад до сбора улик маскирует корневую причину.",
-      "review": true
-     },
-     {
-      "id": "q2",
-      "type": "match",
-      "text": "Сопоставьте симптом с командой, с которой логично начать проверку:",
-      "pairs": [
-       {
-        "id": "p1",
-        "left": "Под перезапускается по кругу",
-        "right": "kubectl logs / kubectl describe"
-       },
-       {
-        "id": "p2",
-        "left": "Сайт не отвечает, порт закрыт",
-        "right": "curl + systemctl status"
-       },
-       {
-        "id": "p3",
-        "left": "Всё тормозит, ничего не пишется",
-        "right": "df -h и du"
-       },
-       {
-        "id": "p4",
-        "left": "Ошибка сертификата в браузере",
-        "right": "проверка TLS/HTTPS"
-       }
-      ],
-      "explanation": "Каждый симптом живёт в своём слое, и у слоя есть своя команда-улика. Правильный первый инструмент экономит время и не даёт чинить не то.",
-      "review": true
-     },
-     {
-      "id": "q3",
-      "text": "Нужно выкатить рискованную фичу сначала на 2% пользователей, посмотреть метрики и лишь потом раскатать на всех. Какая стратегия подходит?",
-      "options": [
-       {
-        "id": "a",
-        "text": "Canary (канареечный выкат)",
-        "correct": true
-       },
-       {
-        "id": "b",
-        "text": "Просто скопировать файлы на прод",
-        "correct": false
-       },
-       {
-        "id": "c",
-        "text": "Удалить все старые поды разом",
-        "correct": false
-       }
-      ],
-      "explanation": "Canary выпускает версию на маленькую долю трафика, даёт понаблюдать за метриками и при проблеме автоматически остановить выкат — минимальный риск.",
-      "review": true
-     },
-     {
-      "id": "q4",
-      "text": "Верно или нет: откат (rollback) — это выкатить исправление вперёд новой версией.",
-      "options": [
-       {
-        "id": "a",
-        "text": "Верно",
-        "correct": false
-       },
-       {
-        "id": "b",
-        "text": "Неверно",
-        "correct": true
-       }
-      ],
-      "explanation": "Rollback — это возврат на предыдущую рабочую версию артефакта или образа. Пофиксить вперёд новой версией — это отдельный подход, не откат.",
-      "review": true
-     },
-     {
-      "id": "q5",
-      "multiple": true,
-      "text": "Что нужно, чтобы деплой прошёл без простоя (zero-downtime)? Выберите всё верное.",
-      "options": [
-       {
-        "id": "a",
-        "text": "Health check (readiness/liveness)",
-        "correct": true
-       },
-       {
-        "id": "b",
-        "text": "Graceful shutdown и дренаж соединений",
-        "correct": true
-       },
-       {
-        "id": "c",
-        "text": "Балансировщик, который шлёт трафик только в готовые поды",
-        "correct": true
-       },
-       {
-        "id": "d",
-        "text": "Одновременно погасить все старые поды",
-        "correct": false
-       }
-      ],
-      "explanation": "Без простоя работает связка: проверки готовности, аккуратное завершение соединений и балансировщик. Если разом убить все старые поды — часть запросов потеряется.",
-      "review": true
-     },
-     {
-      "id": "q6",
-      "type": "blank",
-      "text": "Впишите команду, которая откатывает деплой app в Kubernetes на прошлую ревизию:",
-      "accept": [
-       "kubectl rollout undo deployment app",
-       "kubectl rollout undo deploy app",
-       "kubectl rollout undo deployment/app"
-      ],
-      "hint": "kubectl rollout undo deployment <имя>",
-      "explanation": "kubectl rollout undo возвращает деплой на предыдущую ревизию. Это и есть быстрый откат, если новая версия оказалась плохой."
-     },
-     {
-      "id": "q7",
-      "text": "Сколько одинаковых окружений держат одновременно при стратегии blue-green?",
-      "options": [
-       {
-        "id": "a",
-        "text": "Два: blue и green, трафик переключают между ними",
-        "correct": true
-       },
-       {
-        "id": "b",
-        "text": "Одно, но с разными тегами",
-        "correct": false
-       },
-       {
-        "id": "c",
-        "text": "По одному на каждого пользователя",
-        "correct": false
-       }
-      ],
-      "explanation": "Blue-green держит два одинаковых окружения. Новая версия готовится во втором, затем трафик мгновенно переключают. Откат — просто переключить обратно.",
-      "review": true
-     },
-     {
-      "id": "q8",
-      "text": "Почему нельзя чинить поломку наугад, меняя всё подряд?",
-      "options": [
-       {
-        "id": "a",
-        "text": "Хаотичные правки маскируют корневую причину и ломают ещё больше",
-        "correct": true
-       },
-       {
-        "id": "b",
-        "text": "Так быстрее, поэтому это лучший способ",
-        "correct": false
-       },
-       {
-        "id": "c",
-        "text": "Логи после этого читаются легче",
-        "correct": false
-       }
-      ],
-      "explanation": "Правки наугад скрывают настоящую причину и добавляют новые поломки. Поэтому нужна повторяемая методология: улики, слой, гипотеза, починка, проверка.",
-      "review": true
-     }
-    ],
-    "resources": [
-     {
-      "title": "Google SRE Book: Effective Troubleshooting",
-      "url": "https://sre.google/sre-book/effective-troubleshooting/",
-      "note": "Как профессионалы ищут корневую причину методично"
-     },
-     {
-      "title": "Kubernetes: откат деплоя (rollout undo)",
-      "url": "https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#rolling-back-a-deployment",
-      "note": "Официально про rollout history и undo"
-     }
-    ]
-   }
-  },
-  {
-   "title": "Карта участка и тренды 2026: платформы, self-service и ИИ в эксплуатации",
-   "kind": "text",
-   "summary": "Собираем все проекты в одну карту доставки и смотрим, куда движется индустрия: платформенная инженерия, self-service и ИИ в эксплуатации.",
-   "durationMin": 12,
-   "content": {
-    "body": "## Зачем это нужно\n\nВы прошли восемь проектов и капстоун. За деталями легко потерять общую логику.\n\nЭтот урок собирает всё в одну карту. Затем показывает, куда индустрия идёт в 2026 году.\n\nБез карты знания рассыпаются на отдельные команды. С картой вы видите систему целиком.\n\nКарта важна ещё и на собеседовании. Вас спросят не «какие флаги у docker run», а «зачем вообще Docker».\n\nОтвет «он лечит боль X, которая возникла после Y» звучит как понимание, а не зубрёжка.\n\n## Что это простыми словами\n\nПредставьте стройку дома. Сначала фундамент, потом стены, крыша, проводка, сигнализация.\n\nКаждый этап решает свою задачу и опирается на предыдущий. Наш конвейер устроен так же.\n\nКаждый инструмент появился, потому что предыдущий шаг упёрся в конкретную боль.\n\nНельзя ставить сигнализацию в чистом поле. Нельзя мониторить то, что ещё не задеплоено.\n\nПорядок не случаен. Он повторяет реальную историю развития каждой команды эксплуатации.\n\n## Карта всего участка\n\nВот маршрут, который мы прошли. Читайте сверху вниз — это путь одной боли к её решению.\n\n```\nРучной деплой      -> боль: забытые шаги, простой\nDocker             -> боль: «у меня работает, а на сервере нет»\ndocker-compose     -> боль: связать app + БД + прокси\nCI/CD              -> боль: ручной повторяющийся выкат\nTerraform          -> боль: клики в облачной консоли\nAnsible            -> боль: ручная настройка сервера\nKubernetes         -> боль: одна ВМ не тянет и падает целиком\nМониторинг + защита -> боль: поломку замечают пользователи; сервис взламывают\n```\n\nПоверх этого лежат стратегии выката (rolling, откат) и методология диагностики.\n\nДиагностика — это привычка. Собрать улики, определить слой, проверить гипотезу, починить.\n\nОбратите внимание: каждая строка добавляет ровно один инструмент. Не два, не пять.\n\nЭто и есть принцип нарастания. Один шаг — одна боль — один новый инструмент.\n\n## Как это устроено внутри\n\nВесь конвейер держится на одной идее: состояние системы описано текстом, а не хранится в голове.\n\nРучной деплой держит шаги в памяти человека. Их нельзя повторить точь-в-точь.\n\nDocker переносит окружение приложения в файл (Dockerfile). Compose — связи между сервисами.\n\nTerraform кладёт в код сам сервер. Ansible — его настройку. Kubernetes — желаемое число копий.\n\nПод капотом у каждого инструмента живёт один цикл: сравнить «что есть» с «что должно быть».\n\n```\nжелаемое состояние (код в Git)  ->  инструмент сравнивает  ->  правит только разницу\n```\n\nЭтот цикл называют согласованием (reconciliation). Terraform, Ansible и Kubernetes — все так работают.\n\nИменно поэтому запуск можно повторять безопасно. Уже сделанное инструмент не трогает второй раз.\n\nАналогия: список покупок. Вы не покупаете заново то, что уже лежит в холодильнике.\n\nПлатформа 2026 года — это просто такой же цикл, спрятанный за одной кнопкой для разработчика.\n\n## Чек-лист готовности\n\nПройдитесь по пунктам перед тем, как двигаться дальше.\n\n- Приложение упаковано в образ и запускается одной командой.\n- Инфраструктура описана кодом, а не создаётся кликами в консоли.\n- Каждый пуш автоматически проходит сборку и тесты.\n- Есть метрики, централизованные логи и хотя бы один алерт.\n- Секреты лежат вне репозитория, лишние порты закрыты.\n\nЕсли хоть один пункт «нет» — это не провал, а точка следующего роста.\n\nВыпишите неготовые пункты и превратите каждый в маленький проект по нарастанию.\n\n## Куда идёт индустрия в 2026\n\nВыросло отдельное направление — платформенная инженерия (platform engineering).\n\nКоманда DevOps строит внутреннюю платформу разработчика (IDP — Internal Developer Platform).\n\nIDP даёт «золотые пути» (golden paths) — готовые проверенные способы выкатить сервис.\n\nРазработчик сам создаёт себе окружение через self-service, без тикета в DevOps.\n\nСмысл прост. Рутину прячут за кнопкой, а инженеры занимаются самой платформой.\n\n```\nБыло:  разработчик -> тикет в DevOps -> ждёт -> получает окружение\nСтало: разработчик -> кнопка в IDP (golden path) -> окружение за минуты\n```\n\nВажно понять: платформа не отменяет всё, что вы учили. Она это упаковывает и прячет.\n\nПод кнопкой всё те же Docker, Terraform, Kubernetes и пайплайны. Просто их запускает автоматика.\n\n## Разбор: команда self-service\n\nПосмотрим, как выглядит запуск сервиса через платформу. Имена флагов у разных IDP отличаются.\n\nСмысл одинаков. Разберём типичную команду построчно.\n\n```\nplatform service create \\\n  --name payments \\\n  --template golden-web-service \\\n  --env staging \\\n  --ttl 48h\n```\n\n`platform` — это CLI-клиент внутренней платформы (тот самый IDP).\n\n`service create` — подкоманда: «создай новый сервис по шаблону».\n\n`--name payments` — имя сервиса; из него платформа сделает репозиторий, namespace и адрес.\n\n`--template golden-web-service` — тот самый golden path: проверенный шаблон веб-сервиса.\n\n`--env staging` — окружение: тестовое, а не боевое; лимиты и доступы у него мягче.\n\n`--ttl 48h` — time to live: окружение само удалится через 48 часов и не будет жечь бюджет.\n\nОдна строка — а за ней платформа создаёт репозиторий, пайплайн, манифесты и мониторинг.\n\nРаньше это был тикет и полдня ожидания. Теперь — команда и пара минут.\n\n## Где реально помогает ИИ\n\nИИ разбирает логи и инциденты быстрее человека. Это направление зовут AIOps.\n\nАссистенты помогают писать конфиги и искать причину сбоя в куче метрик.\n\nОтдельно растёт LLMOps — эксплуатация самих ИИ-сервисов как обычной нагрузки.\n\nНо ИИ не заменяет понимание. Он подсказывает гипотезу, а проверяете её всё равно вы.\n\n## Второй пример: диагностика с ИИ\n\nПредставьте другую ситуацию: не создание сервиса, а разбор сбоя. Под приложения падает.\n\nИИ-ассистенту нужно скормить факты. Вы сами собираете улики знакомыми командами.\n\n```\nkubectl logs deploy/app --since=1h | grep -i -E \"error|panic\"\n```\n\n`kubectl logs deploy/app` — берём логи всех подов деплоя app, а не одного случайного пода.\n\n`--since=1h` — только за последний час; старый шум нам не нужен, ищем свежую поломку.\n\n`|` — конвейер: вывод логов передаём дальше на вход следующей команде.\n\n`grep -i -E \"error|panic\"` — фильтр строк: `-i` без учёта регистра, `-E` включает `|` как «или».\n\nВы получаете короткую выжимку ошибок. Её и даёте ассистенту вместе с вопросом.\n\nИИ предложит гипотезу за секунды. Но слой, где искать, определили вы сами командой выше.\n\nВ этом суть 2026 года: ИИ ускоряет шаги, но методологию ведёт по-прежнему инженер.\n\n## Что будет, если…\n\nРазберём три сценария, где карту участка игнорируют.\n\n1. Если поставить мониторинг раньше приложения — наблюдать будет не за чем.\n\nPrometheus поднимется, но метрик сервиса не увидит. Дашборд Grafana окажется пустым.\n\n2. Если довериться платформе вслепую — при сбое golden path вы не поймёте, что сломалось.\n\nКнопка «создать» отработает, а сервис не поднимется. Разбирать придётся всё те же Docker и k8s.\n\n3. Если принять ответ ИИ без проверки — почините не ту причину, а корневая останется.\n\nСбой вернётся через час. Хуже: правка наугад добавит ещё одну поломку поверх старой.\n\nВывод один: карта и методология важнее любого нового инструмента или ассистента.\n\n## Как бывает неправильно\n\nНовичок думает: «раз есть ИИ и платформа, методология больше не нужна».\n\nЭто проваливается на первом же реальном инциденте.\n\nИИ выдаёт правдоподобный, но неверный ответ. Платформа скрывает, что творится под ней.\n\nБез понимания слоёв вы не отличите верную подсказку от ошибочной.\n\n## ❓ Проверьте себя\n\nЧто такое «золотой путь» (golden path) в контексте IDP?\n\n*Ответ: готовый, проверенный и задокументированный способ выкатить сервис, которым разработчик пользуется сам через self-service, без ручных заявок в DevOps.*\n\nВторой вопрос: почему мониторинг в карте стоит после деплоя, а не до него?\n\n*Ответ: наблюдать можно только за тем, что уже работает; без запущенного сервиса метрик и логов просто нет, дашборд будет пустым.*\n\n## Частые ошибки новичка\n\n- Учить инструменты списком, не понимая, какую боль каждый решает.\n\nКак заметить: не можете ответить «зачем», только «как». Лечится вопросом «что было до и какая боль».\n\n- Считать, что платформа и ИИ отменяют базу — Linux, сети, диагностику.\n\nКак заметить: при сбое golden path впадаете в ступор. Лечится разбором того, что кнопка делает внутри.\n\n- Пропускать чек-лист готовности и катить в прод «на авось».\n\nКак заметить: инциденты находят пользователи, а не вы. Лечится закрытием пунктов чек-листа по одному.\n\n- Слепо доверять ответу ИИ и чинить по нему без улик.\n\nКак заметить: сбой возвращается после «починки». Лечится сбором логов и метрик ДО применения совета.\n\n## Запомнить\n\n- Весь участок — это одна доставка, которую мы починили десять раз подряд.\n- В основе всех инструментов один цикл: сравнить желаемое состояние с текущим и править разницу.\n- Тренды 2026: платформенная инженерия, IDP, golden paths, developer self-service.\n- ИИ (AIOps, LLMOps) ускоряет работу, но не заменяет понимание слоёв и методологию диагностики.",
-    "resources": [
-     {
-      "title": "Platform Engineering Roadmap",
-      "url": "https://habr.com/ru/companies/05-ru/articles/809661/",
-      "note": "Что входит в платформенную инженерию и IDP."
-     },
-     {
-      "title": "Google SRE: эффективная диагностика",
-      "url": "https://sre.google/sre-book/effective-troubleshooting/",
-      "note": "Почему методология поиска причины важнее любого инструмента."
-     }
-    ]
-   }
-  },
-  {
-   "title": "Квиз: тренды DevOps 2026",
-   "kind": "quiz",
-   "summary": "Проверка понимания платформенной инженерии, IDP, self-service и разницы между AIOps и LLMOps.",
-   "durationMin": 8,
-   "content": {
-    "intro": "Короткая проверка по трендам DevOps 2026: платформы, self-service и ИИ в эксплуатации.",
-    "passScore": 70,
-    "questions": [
-     {
-      "id": "q1",
-      "text": "Что такое платформенная инженерия (platform engineering)?",
-      "options": [
-       {
-        "id": "a",
-        "text": "Построение внутренней платформы как продукта для своих разработчиков",
-        "correct": true
-       },
-       {
-        "id": "b",
-        "text": "Отдел, который вручную заводит каждое окружение по тикету",
-        "correct": false
-       },
-       {
-        "id": "c",
-        "text": "Замена Kubernetes на что-то более простое",
-        "correct": false
-       }
-      ],
-      "explanation": "Платформенная инженерия собирает повторяющиеся задачи в один внутренний продукт — платформу. Её пользователи — свои же разработчики."
-     },
-     {
-      "id": "q2",
-      "type": "match",
-      "text": "Сопоставьте термин и его смысл:",
-      "pairs": [
-       {
-        "id": "p1",
-        "left": "IDP",
-        "right": "внутренняя платформа разработчика"
-       },
-       {
-        "id": "p2",
-        "left": "golden path",
-        "right": "проверенный способ частой задачи"
-       },
-       {
-        "id": "p3",
-        "left": "AIOps",
-        "right": "ИИ помогает эксплуатировать наши системы"
-       },
-       {
-        "id": "p4",
-        "left": "LLMOps",
-        "right": "эксплуатация самих ИИ-сервисов"
-       }
-      ],
-      "explanation": "IDP — это платформа-продукт. Golden path — готовый маршрут для задачи. AIOps применяет ИИ к нашим системам, а LLMOps — это уход за самими ИИ-сервисами."
-     },
-     {
-      "id": "q3",
-      "text": "Верно или нет: self-service означает, что разработчик может делать что угодно без каких-либо ограничений.",
-      "options": [
-       {
-        "id": "a",
-        "text": "Верно",
-        "correct": false
-       },
-       {
-        "id": "b",
-        "text": "Неверно",
-        "correct": true
-       }
-      ],
-      "explanation": "Self-service убирает ожидание тикета, но действует внутри рамок: лимиты, права и безопасные значения по умолчанию встроены в золотой путь."
-     },
-     {
-      "id": "q4",
-      "multiple": true,
-      "text": "Что обычно относится к developer self-service? Выберите все верные варианты.",
-      "options": [
-       {
-        "id": "a",
-        "text": "Самому создать временное тестовое окружение",
-        "correct": true
-       },
-       {
-        "id": "b",
-        "text": "Самому выкатить свою версию сервиса",
-        "correct": true
-       },
-       {
-        "id": "c",
-        "text": "Получить временную базу данных через платформу",
-        "correct": true
-       },
-       {
-        "id": "d",
-        "text": "Ночью звонить DevOps-инженеру и просить сделать всё вручную",
-        "correct": false
-       }
-      ],
-      "explanation": "Self-service — это самообслуживание через платформу: окружения, деплой, временные БД. Ручные звонки и заявки — как раз то, что self-service убирает."
-     },
-     {
-      "id": "q5",
-      "type": "blank",
-      "text": "Впишите параметр команды создания окружения, который задаёт время жизни, чтобы окружение само удалилось:",
-      "accept": [
-       "--ttl",
-       "ttl"
-      ],
-      "hint": "Три буквы, time to live, обычно с двумя дефисами впереди.",
-      "explanation": "Параметр --ttl (time to live) задаёт время жизни временного окружения. По истечении срока оно удаляется само и не тратит ресурсы зря."
-     },
-     {
-      "id": "q6",
-      "type": "order",
-      "text": "Расставьте по порядку, что происходит при self-service создании сервиса:",
-      "items": [
-       {
-        "id": "s1",
-        "text": "Разработчик выбирает golden path и запускает одну команду"
-       },
-       {
-        "id": "s2",
-        "text": "Платформа автоматически настраивает репозиторий, пайплайн и манифесты"
-       },
-       {
-        "id": "s3",
-        "text": "Сервис запущен в кластере с логами и метриками"
-       }
-      ],
-      "explanation": "Сначала разработчик выбирает золотой путь, затем платформа делает всю рутину сама, и в итоге сервис уже работает в кластере — без ручных тикетов."
-     }
-    ],
-    "resources": [
-     {
-      "title": "Platform engineering (roadmap.sh)",
-      "url": "https://habr.com/ru/companies/05-ru/articles/809661/",
-      "note": "Повторить понятия платформы, IDP и self-service."
-     },
-     {
-      "title": "Google SRE book",
-      "url": "https://sre.google/sre-book/table-of-contents/",
-      "note": "Контекст эксплуатации, на которую опирается AIOps."
-     }
-    ]
-   }
-  }
- ]
+  "title": "Проекты по нарастанию и капстоун",
+  "summary": "Собрать весь пройденный инструментарий в единый конвейер доставки через серию проектов «одна боль — один инструмент»: от ручного деплоя до Kubernetes, наблюдаемости и безопасности. Затем на капстоуне ",
+  "lessons": [
+    {
+      "title": "Проект 1: принцип нарастания и ручной деплой",
+      "kind": "code",
+      "summary": "Понять логику всей темы — каждый проект чинит боль предыдущего — и на своей шкуре прожить ручной деплой на сервер через SSH и systemd.",
+      "durationMin": 16,
+      "content": {
+        "language": "bash",
+        "task": "## Чему вы научитесь в этой главе\n\nПосле этой главы вы сможете:\n- пройти путь от ручного деплоя к упаковке приложения в `Docker` и `compose`\n- собрать пайплайн `CI/CD` и поднять облако как код через `Terraform` и `Ansible`\n- задеплоить приложение в `Kubernetes` с масштабированием\n- добавить наблюдаемость и безопасность в готовое окружение\n- развернуть стенд с нуля и починить намеренные поломки на капстоуне\n\nЭто репетиция работы DevOps-инженера и портфолио-проект, собирающий весь курс в один конвейер доставки.\n\n---\n\nПРИНЦИП НАРАСТАНИЯ (прочитайте сначала — это карта всей главы)\n\nДальше будет 8 проектов. Это не «выучить 8 модных технологий». Это 8 раз починить ОДНУ И ТУ ЖЕ доставку приложения на сервер. Каждый следующий проект появляется потому, что предыдущий упёрся в конкретную боль, а новый инструмент лечит именно её:\n\n1. Ручной деплой (этот урок) → боль: невоспроизводимо, забываешь шаги, руки трясутся.\n2. Docker → боль «у меня работает, а на сервере нет».\n3. docker-compose → одного контейнера мало: нужны приложение + БД + прокси вместе.\n4. CI/CD → боль: собираешь и выкатываешь руками после каждого коммита.\n5. Terraform → боль: сам сервер тоже создаёшь кликами в облаке.\n6. Ansible → боль: свежий сервер «голый», настраиваешь вручную.\n7. Kubernetes → боль: один контейнер упал/не тянет нагрузку.\n8. Наблюдаемость и безопасность → боль: не видно, что происходит, и всё открыто.\n\nЗапомните ощущение из этого урока — именно оно объясняет, зачем нужен весь остальной путь.\n\nПРОЕКТ 1. ЗАДАНИЕ\n\nНапишите скрипт deploy.sh, который вручную выкатывает приложение на удалённый сервер. По шагам:\n\n1. Первая строка — shebang #!/usr/bin/env bash.\n2. Сразу включите строгий режим: set -euo pipefail (скрипт падает на первой же ошибке, а не молча едет дальше).\n3. Заведите две переменные: SERVER (в формате пользователь@адрес) и APP_DIR (папка приложения на сервере).\n4. Скопируйте файлы приложения на сервер командой scp -r ./app в APP_DIR.\n5. Скопируйте unit-файл myapp.service на сервер, положите его в /etc/systemd/system/ и выполните systemctl daemon-reload (чтобы systemd увидел новую службу).\n6. Включите автозапуск и запустите службу одной командой: systemctl enable --now myapp.\n7. В конце напечатайте, что деплой завершён.\n\nВажно: вход на сервер только по SSH-ключу. Никаких паролей в скрипте и никакого sshpass — это небезопасно (пароль утечёт в историю и логи).\n\nПосле того как напишете — представьте, что сервер переустановили. Вам придётся вспомнить и повторить всё это руками. В следующих проектах мы будем убирать эту боль шаг за шагом.",
+        "starter": "#!/usr/bin/env bash\n# TODO: включите строгий режим одной строкой\n\n# TODO: куда деплоим — пользователь@адрес и папка приложения\nSERVER=\"\"\nAPP_DIR=\"\"\n\n# TODO 1: скопировать папку ./app на сервер (scp -r)\n\n# TODO 2: положить myapp.service в /etc/systemd/system и вызвать daemon-reload\n\n# TODO 3: включить автозапуск и запустить службу (systemctl enable --now)\n\n# TODO 4: напечатать, что всё готово\n",
+        "hint": "Команда на удалённой машине запускается так: ssh \"$SERVER\" 'команда'. Одиночные кавычки не дают bash подставить переменные локально — строка выполнится уже на сервере. Автозапуск и мгновенный старт — это флаг --now у systemctl enable.",
+        "checks": [
+          {
+            "type": "contains",
+            "value": "#!/usr/bin/env bash",
+            "message": "Первая строка — shebang #!/usr/bin/env bash"
+          },
+          {
+            "type": "contains",
+            "value": "set -euo pipefail",
+            "message": "Включён строгий режим set -euo pipefail"
+          },
+          {
+            "type": "regex",
+            "value": "scp\\s+-r",
+            "message": "Файлы приложения копируются рекурсивно через scp -r"
+          },
+          {
+            "type": "regex",
+            "value": "ssh\\s+\"?\\$SERVER",
+            "message": "Команды на сервере запускаются через ssh на переменную SERVER"
+          },
+          {
+            "type": "contains",
+            "value": "systemctl enable --now",
+            "message": "Служба ставится на автозапуск через systemctl enable --now"
+          },
+          {
+            "type": "contains",
+            "value": "daemon-reload",
+            "message": "После установки unit-файла вызывается systemctl daemon-reload"
+          },
+          {
+            "type": "notContains",
+            "value": "sshpass",
+            "message": "Пароль не автоматизируется через sshpass — вход только по ключу"
+          }
+        ],
+        "solution": "#!/usr/bin/env bash\nset -euo pipefail\n\n# Куда деплоим: пользователь@адрес сервера и папка приложения\nSERVER=\"deploy@203.0.113.10\"\nAPP_DIR=\"/opt/myapp\"\n\necho \"1/3 Копируем файлы приложения на сервер\"\nscp -r ./app \"$SERVER:$APP_DIR\"\n\necho \"2/3 Ставим unit-файл службы и перечитываем конфигурацию systemd\"\nscp ./myapp.service \"$SERVER:/tmp/myapp.service\"\nssh \"$SERVER\" 'sudo mv /tmp/myapp.service /etc/systemd/system/myapp.service && sudo systemctl daemon-reload'\n\necho \"3/3 Включаем автозапуск и запускаем службу\"\nssh \"$SERVER\" 'sudo systemctl enable --now myapp'\n\necho \"Деплой завершён. Проверьте: systemctl status myapp\"\n",
+        "resources": [
+          {
+            "title": "scp — копирование файлов по SSH",
+            "url": "https://man7.org/linux/man-pages/man1/scp.1.html",
+            "note": "Флаг -r копирует папки целиком"
+          },
+          {
+            "title": "systemctl — управление службами systemd",
+            "url": "https://man7.org/linux/man-pages/man1/systemctl.1.html",
+            "note": "enable --now = enable + start одной командой"
+          },
+          {
+            "title": "Bash: строгий режим set -euo pipefail",
+            "url": "https://www.gnu.org/software/bash/manual/bash.html#The-Set-Builtin",
+            "note": "Почему скрипт должен падать на первой ошибке"
+          }
+        ]
+      }
+    },
+    {
+      "title": "Проекты 2–3: упаковка в Docker и многоконтейнерное окружение",
+      "kind": "code",
+      "summary": "Убрать боль «у меня работает, а на сервере нет» контейнером и связать приложение, БД и прокси в одном docker-compose.yml через сеть и тома.",
+      "durationMin": 16,
+      "content": {
+        "language": "yaml",
+        "task": "БОЛЬ ИЗ ПРОЕКТА 1. Ручной деплой хрупкий: на вашей машине приложению нужен один набор библиотек, на сервере стоят другие версии — и «у меня работает, а на сервере нет». Лечит это контейнер: он фиксирует окружение приложения целиком.\n\nПРОЕКТ 2 (контекст, разбор — уже знаком по главе про Docker). Сначала рядом с кодом появляется Dockerfile — рецепт образа. Пример и построчный смысл:\n\n  FROM node:20-alpine      # базовый образ: готовый слой с Node.js\n  WORKDIR /app             # рабочая папка внутри контейнера\n  COPY package*.json ./    # сначала только манифест зависимостей\n  RUN npm ci               # ставим зависимости — это отдельный слой (кешируется)\n  COPY . .                 # копируем остальной код\n  EXPOSE 8080              # приложение слушает порт 8080\n  CMD [\"node\", \"server.js\"]  # что запустить при старте контейнера\n\nОбраз (image) — это собранный неизменяемый шаблон из слоёв (layers); слой — результат одной инструкции, слои переиспользуются и кешируются. Тег (tag) — метка версии образа, например myapp:1.0. Собираем: docker build -t myapp:1.0 . Запускаем: docker run.\n\nПРОЕКТ 3 (ваше задание). Одного контейнера мало: настоящему приложению нужны БД и прокси, и запускать три docker run с ручным связыванием — новая боль. Опишите всё окружение в одном файле docker-compose.yml. По пунктам:\n\n1. Корневой ключ services — под ним три сервиса (service — один контейнер с настройками).\n2. Сервис app: соберите его из своего Dockerfile строкой build: ./app; пробросьте порт 8080; задайте depends_on на db (зависимость сервисов — db стартует раньше).\n3. Сервис db: возьмите готовый образ postgres (image: postgres:16), задайте POSTGRES_USER/PASSWORD/DB, и — важно! — подключите именованный том db_data к /var/lib/postgresql/data, чтобы данные не исчезли при пересоздании контейнера (том, volume — постоянное хранилище вне контейнера).\n4. Сервис proxy: образ nginx, проброс порта 80.\n5. Объедините все три сервиса общей сетью networks: backend — так они видят друг друга по имени (app обращается к БД по хосту db, а не по IP).\n6. Внизу объявите раздел volumes с томом db_data и раздел networks с сетью backend.\n\nЗапускается всё это одной командой docker compose up. В этом и смысл: три контейнера, сеть и хранилище — из одного описанного файла.",
+        "starter": "services:\n  app:\n    # TODO: собрать из ./app, порт 8080, зависит от db, сеть backend\n\n  db:\n    # TODO: образ postgres:16, переменные POSTGRES_*, том db_data, сеть backend\n\n  proxy:\n    # TODO: образ nginx, порт 80, зависит от app, сеть backend\n\n# TODO: объявить именованный том db_data\n# TODO: объявить сеть backend\n",
+        "hint": "Порты пишутся списком в кавычках: - \"8080:8080\" (слева порт хоста, справа порт контейнера). Именованный том подключается строкой - db_data:/var/lib/postgresql/data, а сам том db_data объявляется в корневом разделе volumes: — иначе Compose о нём не знает.",
+        "checks": [
+          {
+            "type": "contains",
+            "value": "services:",
+            "message": "Есть корневой ключ services со списком контейнеров"
+          },
+          {
+            "type": "contains",
+            "value": "build: ./app",
+            "message": "Сервис app собирается из своего Dockerfile (build: ./app)"
+          },
+          {
+            "type": "regex",
+            "value": "image:\\s*postgres:",
+            "message": "Сервис db поднимается из готового образа postgres"
+          },
+          {
+            "type": "contains",
+            "value": "depends_on:",
+            "message": "Указана зависимость сервисов через depends_on"
+          },
+          {
+            "type": "regex",
+            "value": "db_data:/var/lib/postgresql/data",
+            "message": "Данные БД лежат в именованном томе db_data"
+          },
+          {
+            "type": "contains",
+            "value": "networks:",
+            "message": "Сервисы объединены общей сетью"
+          },
+          {
+            "type": "contains",
+            "value": "volumes:",
+            "message": "Именованный том db_data объявлен в разделе volumes"
+          }
+        ],
+        "solution": "services:\n  app:\n    build: ./app\n    ports:\n      - \"8080:8080\"\n    environment:\n      DATABASE_URL: \"postgres://user:secret@db:5432/appdb\"\n    depends_on:\n      - db\n    networks:\n      - backend\n\n  db:\n    image: postgres:16\n    environment:\n      POSTGRES_USER: user\n      POSTGRES_PASSWORD: secret\n      POSTGRES_DB: appdb\n    volumes:\n      - db_data:/var/lib/postgresql/data\n    networks:\n      - backend\n\n  proxy:\n    image: nginx:1.27\n    ports:\n      - \"80:80\"\n    depends_on:\n      - app\n    networks:\n      - backend\n\nvolumes:\n  db_data:\n\nnetworks:\n  backend:\n",
+        "resources": [
+          {
+            "title": "Dockerfile reference",
+            "url": "https://docs.docker.com/reference/dockerfile/",
+            "note": "Все инструкции: FROM, COPY, RUN, CMD, EXPOSE"
+          },
+          {
+            "title": "Compose file — services, networks, volumes",
+            "url": "https://docs.docker.com/reference/compose-file/",
+            "note": "Официальный формат docker-compose.yml"
+          },
+          {
+            "title": "Docker: тома и хранение данных",
+            "url": "https://docs.docker.com/engine/storage/volumes/",
+            "note": "Почему данные БД нужно держать в томе"
+          }
+        ]
+      }
+    },
+    {
+      "title": "Микропроверка: ручной деплой, Docker, compose",
+      "kind": "quiz",
+      "summary": "Проверяем, какую проблему решают Docker и docker-compose по сравнению с ручным деплоем.",
+      "durationMin": 8,
+      "content": {
+        "intro": "Короткий тест по первым трём проектам. Вспомни, какую боль лечит каждый шаг.",
+        "passScore": 70,
+        "questions": [
+          {
+            "id": "q1",
+            "type": "order",
+            "text": "Расставь первые три проекта в правильном порядке нарастания:",
+            "items": [
+              {
+                "id": "s1",
+                "text": "Ручной деплой на сервер"
+              },
+              {
+                "id": "s2",
+                "text": "Упаковка приложения в Docker-образ"
+              },
+              {
+                "id": "s3",
+                "text": "Многоконтейнерное окружение через docker-compose"
+              }
+            ],
+            "explanation": "Сначала выкатываем руками и чувствуем боль. Затем Docker делает запуск одинаковым везде. Потом compose связывает несколько контейнеров (приложение и базу) вместе."
+          },
+          {
+            "id": "q2",
+            "type": "match",
+            "text": "Сопоставь инструмент и проблему, которую он решает:",
+            "pairs": [
+              {
+                "id": "p1",
+                "left": "Ручной деплой (systemd)",
+                "right": "Понять боль повторяющихся шагов вручную"
+              },
+              {
+                "id": "p2",
+                "left": "Dockerfile",
+                "right": "«У меня работает, а на сервере нет»"
+              },
+              {
+                "id": "p3",
+                "left": "docker-compose",
+                "right": "Приложению нужны БД и прокси рядом"
+              }
+            ],
+            "explanation": "Каждый инструмент лечит конкретную боль: ручной деплой показывает проблему, Docker делает окружение одинаковым, compose поднимает несколько связанных контейнеров сразу."
+          },
+          {
+            "id": "q3",
+            "text": "Верно или нет: Docker-образ гарантирует, что приложение запустится одинаково на ноутбуке и на сервере.",
+            "options": [
+              {
+                "id": "a",
+                "text": "Верно",
+                "correct": true
+              },
+              {
+                "id": "b",
+                "text": "Неверно",
+                "correct": false
+              }
+            ],
+            "explanation": "Образ упаковывает приложение вместе с зависимостями и окружением. Поэтому запуск в контейнере одинаков везде, где есть Docker. Это и лечит боль «а у меня по-другому»."
+          },
+          {
+            "id": "q4",
+            "type": "blank",
+            "text": "Впиши команду, которая соберёт образ из Dockerfile в текущей папке с тегом myapp:",
+            "accept": [
+              "docker build -t myapp .",
+              "docker build -t myapp:latest .",
+              "docker build --tag myapp ."
+            ],
+            "hint": "docker build, флаг -t для тега, в конце точка — контекст сборки.",
+            "explanation": "docker build собирает образ. Флаг -t задаёт имя (тег) myapp. Точка в конце — это контекст сборки, текущая папка, где лежит Dockerfile."
+          },
+          {
+            "id": "q5",
+            "multiple": true,
+            "text": "Что docker-compose добавляет поверх одиночного контейнера? Выбери всё верное:",
+            "options": [
+              {
+                "id": "a",
+                "text": "Общую сеть, чтобы контейнеры видели друг друга",
+                "correct": true
+              },
+              {
+                "id": "b",
+                "text": "Именованные тома для постоянного хранения данных",
+                "correct": true
+              },
+              {
+                "id": "c",
+                "text": "Порядок запуска через depends_on",
+                "correct": true
+              },
+              {
+                "id": "d",
+                "text": "Автоматическое масштабирование по нагрузке в кластере",
+                "correct": false
+              }
+            ],
+            "explanation": "compose описывает несколько сервисов, их сеть, тома и зависимости в одном файле. А вот автоматическое масштабирование и самовосстановление по нагрузке — это уже задача Kubernetes из проекта 8."
+          }
+        ],
+        "resources": [
+          {
+            "title": "docker build",
+            "url": "https://docs.docker.com/reference/cli/docker/buildx/build/",
+            "note": "Справка по сборке образа и флагу -t."
+          },
+          {
+            "title": "Compose overview",
+            "url": "https://docs.docker.com/compose/",
+            "note": "Что даёт compose поверх одиночных контейнеров."
+          }
+        ]
+      }
+    },
+    {
+      "title": "Проект 4: пайплайн CI/CD",
+      "kind": "code",
+      "summary": "Написать .gitlab-ci.yml, который на каждый пуш собирает образ, гоняет тесты и деплоит — чтобы не выкатывать вручную.",
+      "durationMin": 16,
+      "content": {
+        "language": "yaml",
+        "task": "В проектах 1-3 вы собирали и запускали приложение руками. Проблема: человек забывает шаги, ошибается, деплоит непроверенный код. CI/CD (Continuous Integration / Continuous Delivery — непрерывная интеграция и доставка) убирает ручной труд: сервер сам всё делает на каждый пуш.\n\nНапишите файл .gitlab-ci.yml с тремя стадиями (stages — этапы конвейера):\n1) build — собрать Docker-образ и отправить его в реестр;\n2) test — установить зависимости и прогнать тесты (pytest);\n3) deploy — зайти по ssh на сервер и запустить новую версию.\n\nВажные правила:\n- Секреты (пароль от реестра, адрес сервера) НЕ пишем в файл. Берём их из переменных пайплайна ($CI_REGISTRY_PASSWORD, $SERVER_HOST) — их задают в настройках проекта.\n- Стадия deploy запускается только для ветки main (блок only), чтобы черновые ветки не выкатывались в бой.\n\nТермины: раннер (runner) — машина, которая выполняет задачи; стадия (stage) — этап; артефакт — результат сборки (здесь это образ в реестре); секрет пайплайна — скрытая переменная.",
+        "starter": "# .gitlab-ci.yml — конвейер сборки, тестов и деплоя.\n# 1) Объявите список стадий в нужном порядке.\nstages:\n  # - build\n  # - test\n  # - deploy\n\n# 2) Общая переменная с именем образа (используйте $CI_* переменные GitLab).\nvariables:\n  IMAGE: \"...\"\n\n# 3) Задача build: собрать и запушить образ.\n#    Логиньтесь в реестр паролем из переменной, НЕ хардкодьте его.\n\n# 4) Задача test: поставить зависимости и запустить pytest.\n\n# 5) Задача deploy: по ssh запустить новую версию. Только для ветки main.\n",
+        "hint": "Каждая задача указывает свою stage. Для доступа к секрету пишите $CI_REGISTRY_PASSWORD в кавычках, а не сам пароль. Чтобы deploy шёл только с main, добавьте в задачу блок only: [ - main ].",
+        "checks": [
+          {
+            "type": "contains",
+            "value": "stages:",
+            "message": "Должен быть блок stages со списком этапов"
+          },
+          {
+            "type": "contains",
+            "value": "build",
+            "message": "Нужна стадия/задача build"
+          },
+          {
+            "type": "contains",
+            "value": "test",
+            "message": "Нужна стадия/задача test"
+          },
+          {
+            "type": "contains",
+            "value": "deploy",
+            "message": "Нужна стадия/задача deploy"
+          },
+          {
+            "type": "contains",
+            "value": "docker build",
+            "message": "В стадии build должна собираться Docker-образ командой docker build"
+          },
+          {
+            "type": "contains",
+            "value": "$CI_REGISTRY_PASSWORD",
+            "message": "Пароль от реестра берётся из переменной, а не хардкодится"
+          },
+          {
+            "type": "notContains",
+            "value": "password123",
+            "message": "Нельзя писать настоящий пароль прямо в файл"
+          }
+        ],
+        "solution": "stages:\n  - build\n  - test\n  - deploy\n\nvariables:\n  IMAGE: \"$CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA\"\n\nbuild:\n  stage: build\n  image: docker:24\n  services:\n    - docker:24-dind\n  script:\n    - docker login -u \"$CI_REGISTRY_USER\" -p \"$CI_REGISTRY_PASSWORD\" \"$CI_REGISTRY\"\n    - docker build -t \"$IMAGE\" .\n    - docker push \"$IMAGE\"\n\ntest:\n  stage: test\n  image: python:3.12\n  script:\n    - pip install -r requirements.txt\n    - pytest -q\n\ndeploy:\n  stage: deploy\n  image: alpine:3.20\n  before_script:\n    - apk add --no-cache openssh-client\n  script:\n    - ssh -o StrictHostKeyChecking=accept-new \"deploy@$SERVER_HOST\" \"docker pull $IMAGE && docker compose -f /opt/app/docker-compose.yml up -d\"\n  only:\n    - main\n",
+        "resources": [
+          {
+            "title": "GitLab CI/CD: .gitlab-ci.yml keyword reference",
+            "url": "https://docs.gitlab.com/ee/ci/yaml/",
+            "note": "Полный справочник по stages, script, only и переменным"
+          },
+          {
+            "title": "GitLab CI/CD variables",
+            "url": "https://docs.gitlab.com/ee/ci/variables/",
+            "note": "Как устроены секретные переменные пайплайна ($CI_REGISTRY_PASSWORD и др.)"
+          }
+        ]
+      }
+    },
+    {
+      "title": "Проекты 5–6: облако как код — Terraform и Ansible",
+      "kind": "code",
+      "summary": "Описать облачную ВМ кодом на Terraform (create/destroy одной командой) и понять, как Ansible-плейбук идемпотентно приводит сервер к нужному состоянию.",
+      "durationMin": 16,
+      "content": {
+        "language": "hcl",
+        "task": "БОЛЬ. Раньше вы поднимали виртуальную машину в облаке руками — кликали в веб-консоли, выбирали регион, тип, диск — и выкатили на неё контейнер через пайплайн. Работает. Но: воспроизвести это точь-в-точь нельзя, коллега сделает иначе, а «снести и поднять заново» — снова полчаса кликов. Docker сделал воспроизводимым приложение. Теперь сделаем воспроизводимым сам сервер.\n\nПРОЕКТ 5 (ваше задание): Terraform. Опишите ту же ВМ КОДОМ. Термины: провайдер (provider — плагин под конкретное облако), ресурс (resource — то, что создаём: машина, сеть), state (файл-память Terraform о том, что уже создано), plan (показать, что будет сделано) и apply (сделать). Напишите main.tf по пунктам:\n\n1. Блок terraform { required_providers { ... } } — объявите нужный провайдер (в примере aws).\n2. Блок provider \"aws\" с регионом.\n3. Переменная variable \"ami_id\" — id образа ОС. Не зашивайте его числом в код: образ у каждого свой, поэтому берём его из переменной.\n4. Ресурс resource \"aws_instance\" \"web\": поле ami = var.ami_id и instance_type (тип машины — сколько ядер и памяти, например t3.micro).\n5. Блок output \"public_ip\" — чтобы Terraform показал публичный IP созданной машины.\n\nЖизненный цикл: terraform init (скачать провайдер) → terraform plan (посмотреть, что создастся) → terraform apply (создать) → terraform destroy (снести всё одной командой). Вот она, воспроизводимость: инфраструктура из файла в Git.\n\nПРОЕКТ 6 (контекст, разбор — понадобится ниже): Ansible. Свежая ВМ от Terraform внутри «голая»: нет нужных пакетов, пользователей, конфигов. Настраивать руками — снова невоспроизводимо. Ansible-плейбук описывает ЖЕЛАЕМОЕ состояние сервера. Пример playbook.yml:\n\n  - hosts: web              # к каким серверам из инвентаря применяем\n    become: true            # выполнять с правами root (sudo)\n    tasks:\n      - name: Установить nginx\n        apt:\n          name: nginx\n          state: present     # должен быть установлен\n      - name: Служба запущена и в автозапуске\n        service:\n          name: nginx\n          state: started\n          enabled: true\n\nТермины: инвентарь (inventory — список серверов и групп, например группа web), плейбук (playbook — YAML-описание задач), идемпотентность (запусти хоть 10 раз — результат один: если nginx уже стоит, Ansible ничего не трогает). Именно идемпотентность делает настройку безопасно повторяемой — как plan/apply у Terraform.\n\nИтог связки: Terraform СОЗДАЁТ сервер, Ansible ПРИВОДИТ его к нужному состоянию. Обе боли — ручное создание и ручная настройка — закрыты кодом.",
+        "starter": "terraform {\n  required_providers {\n    # TODO: объявить провайдер aws (source hashicorp/aws)\n  }\n}\n\n# TODO: блок provider \"aws\" с регионом\n\n# TODO: переменная ami_id (тип string)\n\n# TODO: ресурс aws_instance \"web\": ami из переменной, instance_type\n\n# TODO: output public_ip с адресом созданной машины\n",
+        "hint": "К полю ресурса обращаются через var.имя (var.ami_id), а к атрибуту созданного ресурса — через тип.имя.атрибут (aws_instance.web.public_ip). Синтаксис ресурса: resource \"тип\" \"локальное_имя\" { ... }. Строки в HCL — в двойных кавычках.",
+        "checks": [
+          {
+            "type": "contains",
+            "value": "required_providers",
+            "message": "Объявлен нужный провайдер в блоке required_providers"
+          },
+          {
+            "type": "regex",
+            "value": "provider\\s+\"aws\"",
+            "message": "Есть блок provider aws с регионом"
+          },
+          {
+            "type": "regex",
+            "value": "resource\\s+\"aws_instance\"",
+            "message": "Описан ресурс — виртуальная машина aws_instance"
+          },
+          {
+            "type": "contains",
+            "value": "instance_type",
+            "message": "У машины задан тип (instance_type) — ядра и память"
+          },
+          {
+            "type": "contains",
+            "value": "var.ami_id",
+            "message": "Образ берётся из переменной var.ami_id, а не зашит числом"
+          },
+          {
+            "type": "contains",
+            "value": "output",
+            "message": "Публичный IP машины выводится через output"
+          }
+        ],
+        "solution": "terraform {\n  required_providers {\n    aws = {\n      source  = \"hashicorp/aws\"\n      version = \"~> 5.0\"\n    }\n  }\n}\n\nprovider \"aws\" {\n  region = \"eu-central-1\"\n}\n\nvariable \"ami_id\" {\n  type        = string\n  description = \"ID образа операционной системы для виртуальной машины\"\n}\n\nresource \"aws_instance\" \"web\" {\n  ami           = var.ami_id\n  instance_type = \"t3.micro\"\n\n  tags = {\n    Name = \"myapp-web\"\n  }\n}\n\noutput \"public_ip\" {\n  value = aws_instance.web.public_ip\n}\n",
+        "resources": [
+          {
+            "title": "Terraform: создание ресурсов",
+            "url": "https://developer.hashicorp.com/terraform/tutorials/aws-get-started/aws-build",
+            "note": "provider, resource, plan и apply на практике"
+          },
+          {
+            "title": "Terraform: input variables",
+            "url": "https://developer.hashicorp.com/terraform/language/values/variables",
+            "note": "Почему значения выносят в переменные"
+          },
+          {
+            "title": "Ansible: intro to playbooks",
+            "url": "https://docs.ansible.com/ansible/latest/playbook_guide/playbooks_intro.html",
+            "note": "hosts, tasks и идемпотентность модулей"
+          }
+        ]
+      }
+    },
+    {
+      "title": "Проект 7: деплой в Kubernetes и масштабирование",
+      "kind": "code",
+      "summary": "Описать Deployment, Service и Ingress в манифесте и выкатить приложение в кластер с тремя репликами.",
+      "durationMin": 16,
+      "content": {
+        "language": "yaml",
+        "task": "На одной ВМ (проекты 5-7) приложение живёт в единственном экземпляре: упал контейнер — сайт лёг, вырос трафик — некуда масштабировать. Kubernetes (k8s) — оркестратор: он держит нужное число копий приложения на кластере машин, сам перезапускает упавшие и распределяет нагрузку.\n\nОпишите три объекта в одном файле (разделяйте их строкой ---):\n1) Deployment — как запускать приложение: replicas: 3 (три копии = реплики), selector по метке app, шаблон пода (pod — минимальная единица: один или несколько контейнеров) с образом и containerPort: 8080;\n2) Service — стабильный внутренний адрес: направляет трафик с port 80 на targetPort 8080 подов по той же метке;\n3) Ingress — вход снаружи по домену app.example.com на этот Service.\n\nТермины: под (pod) — запущенный контейнер приложения; реплика — одна из копий; манифест — YAML-описание объектов; сервис (Service) — постоянный адрес для набора подов.",
+        "starter": "# app.yaml — три объекта Kubernetes через ---\napiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: app\nspec:\n  # replicas: ...\n  # selector.matchLabels.app: app\n  # template: контейнер с image и containerPort 8080\n---\n# apiVersion: v1 / kind: Service — port 80 -> targetPort 8080\n---\n# apiVersion: networking.k8s.io/v1 / kind: Ingress — host app.example.com -> service app:80\n",
+        "hint": "Три объекта разделяются строкой из трёх дефисов ---. У Deployment selector.matchLabels должен совпадать с labels в template. Service связывается с подами тем же selector: app: app. В Ingress backend указывает service name: app и port number: 80.",
+        "checks": [
+          {
+            "type": "contains",
+            "value": "kind: Deployment",
+            "message": "Нужен объект Deployment"
+          },
+          {
+            "type": "contains",
+            "value": "kind: Service",
+            "message": "Нужен объект Service"
+          },
+          {
+            "type": "contains",
+            "value": "kind: Ingress",
+            "message": "Нужен объект Ingress для входа снаружи"
+          },
+          {
+            "type": "contains",
+            "value": "replicas: 3",
+            "message": "Задайте три реплики: replicas: 3"
+          },
+          {
+            "type": "contains",
+            "value": "containerPort",
+            "message": "У контейнера должен быть указан containerPort"
+          },
+          {
+            "type": "contains",
+            "value": "targetPort",
+            "message": "Service должен направлять трафик на targetPort пода"
+          }
+        ],
+        "solution": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: app\nspec:\n  replicas: 3\n  selector:\n    matchLabels:\n      app: app\n  template:\n    metadata:\n      labels:\n        app: app\n    spec:\n      containers:\n        - name: app\n          image: registry.example.com/app:1.0.0\n          ports:\n            - containerPort: 8080\n---\napiVersion: v1\nkind: Service\nmetadata:\n  name: app\nspec:\n  selector:\n    app: app\n  ports:\n    - port: 80\n      targetPort: 8080\n---\napiVersion: networking.k8s.io/v1\nkind: Ingress\nmetadata:\n  name: app\nspec:\n  rules:\n    - host: app.example.com\n      http:\n        paths:\n          - path: /\n            pathType: Prefix\n            backend:\n              service:\n                name: app\n                port:\n                  number: 80\n",
+        "resources": [
+          {
+            "title": "Kubernetes: Deployments",
+            "url": "https://kubernetes.io/docs/concepts/workloads/controllers/deployment/",
+            "note": "replicas, selector и шаблон пода"
+          },
+          {
+            "title": "Kubernetes: Service",
+            "url": "https://kubernetes.io/docs/concepts/services-networking/service/",
+            "note": "Как Service связывает трафic с подами по метке и targetPort"
+          },
+          {
+            "title": "Kubernetes: Ingress",
+            "url": "https://kubernetes.io/docs/concepts/services-networking/ingress/",
+            "note": "Маршрутизация внешнего трафика по домену на Service"
+          }
+        ]
+      }
+    },
+    {
+      "title": "Проект 8: наблюдаемость и безопасность окружения",
+      "kind": "code",
+      "summary": "Добавляем к рабочему стенду сбор метрик и дашборд и сразу закрываем лишнее наружу — единый шаг «видеть и защищать».",
+      "durationMin": 14,
+      "content": {
+        "language": "yaml",
+        "task": "Соберите файл docker-compose.observability.yml, который поднимает мониторинг рядом с приложением и делает это безопасно. По пунктам:\n\n1. Сервис prometheus (образ prom/prometheus:v2.53.0) — он собирает метрики. Подключите конфиг ./prometheus.yml в /etc/prometheus/prometheus.yml в режиме только чтение (:ro).\n2. Порт Prometheus 9090 откройте ТОЛЬКО на localhost: привязка \"127.0.0.1:9090:9090\". Так метрики не торчат в интернет (принцип least privilege — минимум прав и доступа).\n3. Сервис grafana (образ grafana/grafana:11.1.0) — он рисует дашборды из метрик.\n4. Пароль администратора Grafana задайте через переменную окружения: GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}. Сам пароль лежит в файле .env вне репозитория (роль секрет-менеджера на минималках), а НЕ прямо в compose.\n5. Данные Grafana сохраните в именованном томе grafana-data, смонтированном в /var/lib/grafana, чтобы дашборды пережили перезапуск.\n6. Порт Grafana 3000 тоже привяжите к 127.0.0.1 — снаружи её должен открывать только обратный прокси по HTTPS.\n7. Обоим сервисам добавьте restart: unless-stopped, чтобы после сбоя они поднимались сами.\n8. Не забудьте объявить том grafana-data в секции volumes: на верхнем уровне файла.\n\n**Усиление безопасности сервера (`harden.sh`).** Типовой скрипт защиты сервера включает firewall (`ufw`), ставит `fail2ban` против перебора паролей и правит `/etc/ssh/sshd_config`. Строка `PermitRootLogin no` запрещает вход суперпользователя root по SSH, а `PasswordAuthentication no` оставляет вход только по ключам. Это принцип наименьших привилегий на практике.",
+        "starter": "# docker-compose.observability.yml — мониторинг + базовая защита\n# Дополните файл по пунктам задания. Порты наружу НЕ открываем.\nservices:\n  prometheus:\n    image: prom/prometheus:v2.53.0\n    volumes:\n      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro\n    # TODO: порт 9090 только на 127.0.0.1\n    # TODO: restart: unless-stopped\n\n  grafana:\n    image: grafana/grafana:11.1.0\n    # TODO: environment — пароль админа из ${GRAFANA_ADMIN_PASSWORD}\n    # TODO: том grafana-data -> /var/lib/grafana\n    # TODO: порт 3000 только на 127.0.0.1\n    # TODO: restart: unless-stopped\n\n# TODO: объявите именованный том grafana-data\n",
+        "hint": "Привязка порта к localhost пишется так: \"127.0.0.1:9090:9090\" (первая часть — на каком адресе слушать). Переменная подставляется через ${GRAFANA_ADMIN_PASSWORD} — фигурные скобки обязательны. Именованные тома перечисляют в секции volumes: на верхнем уровне файла, там же где services:.",
+        "checks": [
+          {
+            "type": "contains",
+            "value": "prom/prometheus",
+            "message": "Нужен сервис Prometheus — он собирает метрики."
+          },
+          {
+            "type": "contains",
+            "value": "grafana/grafana",
+            "message": "Нужен сервис Grafana — он рисует дашборды."
+          },
+          {
+            "type": "regex",
+            "value": "127\\.0\\.0\\.1:9090:9090",
+            "message": "Порт Prometheus (9090) должен быть привязан к 127.0.0.1, а не открыт наружу."
+          },
+          {
+            "type": "regex",
+            "value": "127\\.0\\.0\\.1:3000:3000",
+            "message": "Порт Grafana (3000) тоже должен слушать только localhost."
+          },
+          {
+            "type": "contains",
+            "value": "GF_SECURITY_ADMIN_PASSWORD=${",
+            "message": "Пароль админа Grafana берётся из переменной окружения, а не из файла."
+          },
+          {
+            "type": "notContains",
+            "value": "PASSWORD=admin",
+            "message": "Пароль не должен быть захардкожен прямо в compose."
+          },
+          {
+            "type": "contains",
+            "value": "grafana-data",
+            "message": "Данные Grafana должны лежать в именованном томе grafana-data."
+          },
+          {
+            "type": "contains",
+            "value": "restart: unless-stopped",
+            "message": "Сервисы должны сами перезапускаться после сбоя."
+          }
+        ],
+        "solution": "# docker-compose.observability.yml — мониторинг + базовая защита\nservices:\n  prometheus:\n    image: prom/prometheus:v2.53.0\n    volumes:\n      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro\n    ports:\n      - \"127.0.0.1:9090:9090\"   # метрики видны только с самого сервера\n    restart: unless-stopped\n\n  grafana:\n    image: grafana/grafana:11.1.0\n    environment:\n      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}\n    volumes:\n      - grafana-data:/var/lib/grafana\n    ports:\n      - \"127.0.0.1:3000:3000\"   # наружу Grafana отдаёт только прокси по HTTPS\n    depends_on:\n      - prometheus\n    restart: unless-stopped\n\nvolumes:\n  grafana-data:\n",
+        "resources": [
+          {
+            "title": "Prometheus: обзор",
+            "url": "https://prometheus.io/docs/introduction/overview/",
+            "note": "Зачем нужны метрики и как их собирает Prometheus."
+          },
+          {
+            "title": "Docker Compose: справочник файла",
+            "url": "https://docs.docker.com/compose/compose-file/",
+            "note": "Синтаксис services, ports, volumes и environment."
+          }
+        ]
+      }
+    },
+    {
+      "title": "Квиз темы: конвейер доставки целиком",
+      "kind": "quiz",
+      "summary": "Проверяем, как складывается сквозной путь доставки: порядок проектов, зачем появляется каждый инструмент, роли Prometheus и Grafana, шаги усиления безопасности.",
+      "durationMin": 10,
+      "content": {
+        "intro": "Вся глава — это лестница из 10 проектов, где каждый следующий добавляет ровно один инструмент. Проверим, поняли ли вы, зачем каждый шаг и в каком порядке они идут.",
+        "passScore": 70,
+        "questions": [
+          {
+            "id": "q1",
+            "type": "order",
+            "text": "Расставьте проекты в том порядке, в котором мы их проходили — от самого простого к самому сложному:",
+            "items": [
+              {
+                "id": "s1",
+                "text": "Ручной деплой приложения"
+              },
+              {
+                "id": "s2",
+                "text": "Упаковка приложения в Docker"
+              },
+              {
+                "id": "s3",
+                "text": "Пайплайн CI/CD"
+              },
+              {
+                "id": "s4",
+                "text": "Инфраструктура как код на Terraform"
+              },
+              {
+                "id": "s5",
+                "text": "Деплой в Kubernetes"
+              }
+            ],
+            "explanation": "Логика нарастания: сначала руками (чтобы прочувствовать боль), потом Docker убирает «у меня работало», CI/CD автоматизирует сборку и доставку, Terraform создаёт инфраструктуру кодом, а Kubernetes оркестрирует много контейнеров. Каждый шаг решает проблему предыдущего."
+          },
+          {
+            "id": "q2",
+            "type": "match",
+            "text": "Сопоставьте инструмент из проекта 8 (наблюдаемость и безопасность) с его задачей:",
+            "pairs": [
+              {
+                "id": "p1",
+                "left": "Prometheus",
+                "right": "собирает метрики (числа о состоянии)"
+              },
+              {
+                "id": "p2",
+                "left": "Grafana",
+                "right": "рисует дашборды с графиками"
+              },
+              {
+                "id": "p3",
+                "left": "ufw",
+                "right": "firewall: закрывает лишние порты"
+              },
+              {
+                "id": "p4",
+                "left": "fail2ban",
+                "right": "банит IP за перебор паролей"
+              }
+            ],
+            "explanation": "Prometheus и Grafana работают в паре: один хранит числа, другой их показывает. ufw и fail2ban — про безопасность: firewall не пускает на закрытые порты, а fail2ban отбивает попытки подобрать пароль по SSH."
+          },
+          {
+            "id": "q3",
+            "text": "Почему мониторинг (проект 8) мы добавляем уже после того, как приложение задеплоено?",
+            "options": [
+              {
+                "id": "a",
+                "text": "Потому что сначала должно появиться то, за чем наблюдать, — работающее приложение и сервер",
+                "correct": true
+              },
+              {
+                "id": "b",
+                "text": "Потому что Prometheus нельзя запустить в Docker",
+                "correct": false
+              },
+              {
+                "id": "c",
+                "text": "Потому что мониторинг заменяет собой деплой",
+                "correct": false
+              }
+            ],
+            "explanation": "Наблюдаемость имеет смысл только поверх чего-то работающего: метрики CPU, памяти и запросов появляются, когда есть сервер и приложение. Prometheus прекрасно живёт в Docker, а деплой он не заменяет."
+          },
+          {
+            "id": "q4",
+            "text": "Верно или нет: Prometheus сам рисует красивые дашборды с графиками, поэтому Grafana не нужна.",
+            "options": [
+              {
+                "id": "a",
+                "text": "Верно",
+                "correct": false
+              },
+              {
+                "id": "b",
+                "text": "Неверно",
+                "correct": true
+              }
+            ],
+            "explanation": "Неверно. Prometheus — это хранилище метрик и язык запросов к ним. Красивые дашборды строит именно Grafana, которая берёт данные из Prometheus как из источника."
+          },
+          {
+            "id": "q5",
+            "type": "blank",
+            "text": "Впишите строку конфига SSH, которая запрещает вход суперпользователя root по SSH:",
+            "accept": [
+              "PermitRootLogin no",
+              "PermitRootLogin  no"
+            ],
+            "hint": "Директива про root-логин со значением no.",
+            "explanation": "Строка `PermitRootLogin no` в /etc/ssh/sshd_config закрывает прямой вход под root. Дальше администратор заходит обычным пользователем и повышает права через sudo — так безопаснее и остаётся след, кто что делал."
+          },
+          {
+            "id": "q6",
+            "multiple": true,
+            "text": "Что из перечисленного делает наш скрипт усиления безопасности harden.sh? (несколько верных)",
+            "options": [
+              {
+                "id": "a",
+                "text": "По умолчанию запрещает входящие соединения через ufw",
+                "correct": true
+              },
+              {
+                "id": "b",
+                "text": "Отключает вход по паролю, оставляя только SSH-ключи",
+                "correct": true
+              },
+              {
+                "id": "c",
+                "text": "Устанавливает fail2ban против перебора паролей",
+                "correct": true
+              },
+              {
+                "id": "d",
+                "text": "Удаляет все контейнеры и образы Docker",
+                "correct": false
+              }
+            ],
+            "explanation": "Скрипт закрывает лишние порты (deny incoming), запрещает пароль и root-логин по SSH и ставит fail2ban. Docker он не трогает — задача усиления не в том, чтобы всё снести, а в том, чтобы закрыть двери."
+          },
+          {
+            "id": "q7",
+            "review": true,
+            "text": "Проект 2 упаковывает приложение в Docker. Какую главную проблему это решает?",
+            "options": [
+              {
+                "id": "a",
+                "text": "«У меня на машине работало, а на сервере нет» — образ несёт с собой всё окружение",
+                "correct": true
+              },
+              {
+                "id": "b",
+                "text": "Ускоряет интернет на сервере",
+                "correct": false
+              },
+              {
+                "id": "c",
+                "text": "Делает приложение бесплатным",
+                "correct": false
+              }
+            ],
+            "explanation": "Docker-образ упаковывает код вместе с его зависимостями и окружением. Поэтому он ведёт себя одинаково на ноутбуке и на сервере — исчезает классическое «а у меня работало»."
+          }
+        ],
+        "resources": [
+          {
+            "title": "CI/CD: непрерывная доставка",
+            "url": "https://ru.wikipedia.org/wiki/CI/CD",
+            "note": "Как этапы сборки, тестов и деплоя складываются в единый конвейер доставки."
+          },
+          {
+            "title": "Prometheus: обзор",
+            "url": "https://prometheus.io/docs/introduction/overview/",
+            "note": "Что такое метрики и чем Prometheus отличается от логов."
+          },
+          {
+            "title": "Google SRE Book: Monitoring",
+            "url": "https://sre.google/sre-book/monitoring-distributed-systems/",
+            "note": "Зачем наблюдаемость и какие сигналы важно измерять."
+          }
+        ]
+      }
+    },
+    {
+      "title": "Капстоун: разворачиваем окружение с нуля",
+      "kind": "code",
+      "summary": "Собираем весь стенд из кода одним файлом: приложение, база, обратный прокси и мониторинг связаны сетью, томами и HTTPS.",
+      "durationMin": 16,
+      "content": {
+        "language": "yaml",
+        "task": "Пришло время сложить всё вместе. Опишите продоподобный стенд одним файлом docker-compose.yml. Архитектура: обратный прокси принимает HTTPS → приложение обрабатывает запросы → база хранит данные → Prometheus следит за здоровьем. По пунктам:\n\n1. Сервис db (образ postgres:16). Пароль задайте через окружение POSTGRES_PASSWORD=${DB_PASSWORD} (секрет из .env, не из файла). Данные храните в именованном томе db-data в /var/lib/postgresql/data — иначе база исчезнет при пересоздании контейнера.\n2. Сервис app (образ myorg/app:${APP_VERSION}). Версию берём из переменной, чтобы CI/CD подставлял свежий тег. Приложению нужна база: добавьте depends_on: - db, чтобы app стартовал после db.\n3. Сервис proxy (образ nginx:1.27) — обратный прокси. Он единственный смотрит наружу: откройте порты \"80:80\" и \"443:443\" (HTTP и HTTPS). Подключите конфиг ./nginx.conf в /etc/nginx/nginx.conf:ro. Прокси зависит от app: depends_on: - app.\n4. Сервис prometheus (образ prom/prometheus:v2.53.0) для мониторинга. Порт 9090 привяжите к 127.0.0.1 — наружу метрики не отдаём.\n5. Всем четырём сервисам добавьте restart: unless-stopped.\n6. Объявите именованный том db-data в секции volumes: на верхнем уровне.\n\nСеть между сервисами Compose создаёт автоматически, и обращаются они друг к другу по имени (app → db, proxy → app).",
+        "starter": "# docker-compose.yml — финальный стенд из кода\n# Соберите всю картину: proxy -> app -> db, рядом prometheus.\nservices:\n  db:\n    image: postgres:16\n    # TODO: POSTGRES_PASSWORD из ${DB_PASSWORD}\n    # TODO: том db-data -> /var/lib/postgresql/data\n    # TODO: restart\n\n  app:\n    image: myorg/app:${APP_VERSION}\n    # TODO: depends_on db\n    # TODO: restart\n\n  proxy:\n    image: nginx:1.27\n    # TODO: конфиг ./nginx.conf -> /etc/nginx/nginx.conf:ro\n    # TODO: порты 80 и 443 наружу\n    # TODO: depends_on app; restart\n\n  # TODO: сервис prometheus, порт 9090 только на 127.0.0.1\n\n# TODO: том db-data\n",
+        "hint": "Порты наружу пишут как \"443:443\". Зависимость — списком: depends_on: с элементом - app под ним. Пароль базы: POSTGRES_PASSWORD=${DB_PASSWORD}. Именованный том сначала монтируют в сервисе (db-data:/var/lib/postgresql/data), потом объявляют в volumes: внизу файла.",
+        "checks": [
+          {
+            "type": "contains",
+            "value": "postgres:16",
+            "message": "Нужен сервис базы данных на образе postgres:16."
+          },
+          {
+            "type": "contains",
+            "value": "POSTGRES_PASSWORD=${",
+            "message": "Пароль базы берётся из переменной окружения, а не из файла."
+          },
+          {
+            "type": "contains",
+            "value": "db-data",
+            "message": "Данные базы должны лежать в именованном томе db-data."
+          },
+          {
+            "type": "contains",
+            "value": "myorg/app:${APP_VERSION}",
+            "message": "Версия приложения подставляется из переменной APP_VERSION."
+          },
+          {
+            "type": "contains",
+            "value": "depends_on",
+            "message": "Порядок старта важен: app после db, proxy после app."
+          },
+          {
+            "type": "contains",
+            "value": "nginx:1.27",
+            "message": "Обратный прокси на nginx:1.27 отсутствует."
+          },
+          {
+            "type": "contains",
+            "value": "443:443",
+            "message": "Наружу нужен HTTPS-порт 443 на прокси."
+          },
+          {
+            "type": "regex",
+            "value": "127\\.0\\.0\\.1:9090:9090",
+            "message": "Метрики Prometheus должны слушать только localhost."
+          },
+          {
+            "type": "contains",
+            "value": "restart: unless-stopped",
+            "message": "Сервисы должны сами подниматься после сбоя."
+          }
+        ],
+        "solution": "# docker-compose.yml — финальный стенд из кода\nservices:\n  db:\n    image: postgres:16\n    environment:\n      - POSTGRES_PASSWORD=${DB_PASSWORD}\n    volumes:\n      - db-data:/var/lib/postgresql/data\n    restart: unless-stopped\n\n  app:\n    image: myorg/app:${APP_VERSION}\n    environment:\n      - DATABASE_URL=postgres://app:${DB_PASSWORD}@db:5432/app\n    depends_on:\n      - db\n    restart: unless-stopped\n\n  proxy:\n    image: nginx:1.27\n    volumes:\n      - ./nginx.conf:/etc/nginx/nginx.conf:ro\n    ports:\n      - \"80:80\"\n      - \"443:443\"\n    depends_on:\n      - app\n    restart: unless-stopped\n\n  prometheus:\n    image: prom/prometheus:v2.53.0\n    volumes:\n      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro\n    ports:\n      - \"127.0.0.1:9090:9090\"\n    restart: unless-stopped\n\nvolumes:\n  db-data:\n",
+        "resources": [
+          {
+            "title": "Docker Compose: несколько сервисов",
+            "url": "https://docs.docker.com/compose/",
+            "note": "Как связать app, db и прокси в одном файле."
+          },
+          {
+            "title": "Nginx: обратный прокси",
+            "url": "https://nginx.org/ru/docs/http/ngx_http_proxy_module.html",
+            "note": "Как прокси передаёт запросы приложению."
+          }
+        ]
+      }
+    },
+    {
+      "title": "Капстоун: находим и чиним намеренные поломки",
+      "kind": "terminal",
+      "summary": "Проходим по заложенным авариям и чиним каждую по методологии диагностики.",
+      "durationMin": 15,
+      "content": {
+        "intro": "Это капстоун-практика: в стенде спрятаны пять поломок — упавший под, закрытый порт, битый TLS, полный диск и красный пайплайн. Действуем по методологии: сначала собираем улики, потом чиним, потом проверяем. Не чини наугад — сначала посмотри.\n\n**Команды этого урока**\n\n- `kubectl get pods` — список всех подов и их статусы. Пример: у пода `app` увидишь статус вроде `CrashLoopBackOff`.\n- `kubectl describe pod app` — подробности и события пода: подскажет, почему он падает.\n- `kubectl logs app` — логи контейнера: в тексте видна ошибка приложения.\n- `kubectl rollout restart deployment app` — перезапускает деплой, поды поднимаются заново.\n- `curl http://localhost` — запрашивает сайт по HTTP. Пример: вернёт HTML или ошибку соединения.\n- `systemctl status nginx` — показывает состояние службы: `active (running)` или нет.\n- `systemctl restart nginx` — полностью перезапускает службу (стоп и старт).\n- `curl -vI https://localhost` — флаг `-I` берёт только заголовки, `-v` показывает детали рукопожатия TLS.\n- `systemctl reload nginx` — перечитывает конфиг без остановки, без простоя сайта.\n- `df -h` — сколько свободного места на дисках; флаг `-h` — в удобных ГБ/МБ.\n- `du -sh /var/log/*` — размер каждого элемента каталога (`-s` — итог, `-h` — читаемо).\n- `rm /var/log/app.log` — удаляет указанный файл и освобождает место.\n- `grep -i error ci.log` — ищет в файле строки со словом `error`; `-i` — без учёта регистра.\n\nВыполняй задания ниже по одной команде.",
+        "shell": "student@devops",
+        "tasks": [
+          {
+            "id": "t1",
+            "prompt": "Улика 1. Посмотреть все поды и найти проблемный статус.",
+            "expected": [
+              "kubectl get pods"
+            ],
+            "hint": "kubectl, затем get, затем pods",
+            "success": "Виден под в CrashLoopBackOff — он падает по кругу.",
+            "hints": [
+              "Нужно увидеть список всех подов кластера и их статусы.",
+              "Утилита `kubectl`, подкоманда `get`, а ресурс — поды.",
+              "`kubectl get pods`"
+            ],
+            "predict": "Сколько подов, по-вашему, окажутся в неполадочном статусе?"
+          },
+          {
+            "id": "t2",
+            "prompt": "Посмотреть события и причину падения пода app.",
+            "expected": [
+              "kubectl describe pod app"
+            ],
+            "hint": "kubectl describe pod <имя>",
+            "success": "В events видно, из-за чего под не стартует.",
+            "hints": [
+              "Нужно получить подробности и события конкретного пода app.",
+              "Команда `kubectl describe pod <имя>` покажет события ресурса.",
+              "`kubectl describe pod app`"
+            ]
+          },
+          {
+            "id": "t3",
+            "prompt": "Прочитать логи контейнера app, чтобы увидеть ошибку приложения.",
+            "expected": [
+              "kubectl logs app"
+            ],
+            "hint": "kubectl logs <имя пода>",
+            "success": "В логах видна конкретная ошибка запуска.",
+            "hints": [
+              "Нужно прочитать вывод самого приложения внутри пода.",
+              "Команда `kubectl logs <имя пода>` показывает логи контейнера.",
+              "`kubectl logs app`"
+            ]
+          },
+          {
+            "id": "t4",
+            "prompt": "Образ починили. Перезапустить деплой app, чтобы поднять поды заново.",
+            "expected": [
+              "kubectl rollout restart deployment app",
+              "kubectl rollout restart deploy app"
+            ],
+            "hint": "kubectl rollout restart deployment <имя>",
+            "success": "Деплой перезапущен, поды поднимаются с исправленным образом.",
+            "hints": [
+              "Нужно перезапустить деплой, чтобы поды пересоздались заново.",
+              "`kubectl rollout restart` для ресурса `deployment`.",
+              "`kubectl rollout restart deployment app`"
+            ]
+          },
+          {
+            "id": "t5",
+            "prompt": "Улика 2. Проверить, отвечает ли сайт на 80 порту через прокси.",
+            "expected": [
+              "curl http://localhost",
+              "curl http://localhost:80"
+            ],
+            "hint": "curl http://localhost",
+            "success": "Connection refused — порт закрыт, значит прокси не слушает.",
+            "hints": [
+              "Нужно проверить, отвечает ли веб-сервер на 80 порту.",
+              "Утилита `curl`, а дальше адрес по протоколу `http` на локальном хосте.",
+              "`curl http://localhost`"
+            ],
+            "predict": "Что вернёт curl — HTML сайта или ошибку соединения?"
+          },
+          {
+            "id": "t6",
+            "prompt": "Проверить, запущена ли служба nginx.",
+            "expected": [
+              "systemctl status nginx"
+            ],
+            "hint": "systemctl status <служба>",
+            "success": "Служба inactive — вот почему порт закрыт.",
+            "hints": [
+              "Нужно узнать, работает ли служба веб-сервера сейчас.",
+              "Команда `systemctl status <служба>` покажет состояние.",
+              "`systemctl status nginx`"
+            ]
+          },
+          {
+            "id": "t7",
+            "prompt": "Запустить nginx заново, чтобы открыть порт.",
+            "expected": [
+              "systemctl restart nginx",
+              "systemctl start nginx"
+            ],
+            "hint": "systemctl restart nginx",
+            "success": "nginx поднят, порт 80 снова слушается.",
+            "hints": [
+              "Нужно снова поднять остановленную службу веб-сервера.",
+              "Команда `systemctl restart <служба>` перезапустит её.",
+              "`systemctl restart nginx`"
+            ]
+          },
+          {
+            "id": "t8",
+            "prompt": "Улика 3. Сертификат истёк — посмотреть заголовки по HTTPS и увидеть ошибку TLS.",
+            "expected": [
+              "curl -vI https://localhost",
+              "curl -Iv https://localhost"
+            ],
+            "hint": "curl с флагами -v и -I по адресу https://localhost",
+            "success": "curl ругается на сертификат — подтвердили проблему TLS.",
+            "hints": [
+              "Нужно запросить только заголовки по HTTPS и увидеть детали TLS.",
+              "Утилита `curl` с флагами `-v` (подробно) и `-I` (заголовки) по `https`.",
+              "`curl -vI https://localhost`"
+            ]
+          },
+          {
+            "id": "t9",
+            "prompt": "Сертификат заменили новым. Перечитать конфиг nginx без остановки службы.",
+            "expected": [
+              "systemctl reload nginx"
+            ],
+            "hint": "systemctl reload <служба> перечитывает конфиг без простоя",
+            "success": "Конфиг перечитан, новый сертификат подхвачен.",
+            "hints": [
+              "Нужно заставить службу перечитать конфиг без остановки.",
+              "Команда `systemctl reload <служба>` перечитает настройки.",
+              "`systemctl reload nginx`"
+            ]
+          },
+          {
+            "id": "t10",
+            "prompt": "Улика 4. Проверить, сколько свободного места на дисках.",
+            "expected": [
+              "df -h",
+              "df"
+            ],
+            "hint": "df -h показывает диски в человекочитаемом виде",
+            "success": "Диск заполнен на 100% — вот источник аварии.",
+            "hints": [
+              "Нужно узнать, сколько свободного места осталось на дисках.",
+              "Команда `df`, а флаг `-h` даст человекочитаемый вид.",
+              "`df -h`"
+            ]
+          },
+          {
+            "id": "t11",
+            "prompt": "Найти, какие файлы в /var/log съели место (размеры содержимого каталога).",
+            "expected": [
+              "du -sh /var/log/*",
+              "du -h /var/log"
+            ],
+            "hint": "du -sh /var/log/* покажет размер каждого элемента",
+            "success": "Видно раздутый файл app.log — он и переполнил диск.",
+            "hints": [
+              "Нужно узнать, сколько места занимает каждый элемент в /var/log.",
+              "Команда `du` с флагами `-s` и `-h`, путь с маской `/var/log/*`.",
+              "`du -sh /var/log/*`"
+            ]
+          },
+          {
+            "id": "t12",
+            "prompt": "Удалить раздутый лог /var/log/app.log, чтобы освободить место.",
+            "expected": [
+              "rm /var/log/app.log",
+              "rm -f /var/log/app.log"
+            ],
+            "hint": "rm <путь к файлу>",
+            "success": "Место освобождено; настоящую причину роста логов чиним отдельно.",
+            "hints": [
+              "Нужно удалить раздутый лог-файл, чтобы освободить место.",
+              "Команда `rm`, а затем путь к нужному файлу.",
+              "`rm /var/log/app.log`"
+            ]
+          },
+          {
+            "id": "t13",
+            "prompt": "Улика 5. Найти упавшую стадию в логе пайплайна ci.log по слову error.",
+            "expected": [
+              "grep -i error ci.log",
+              "grep error ci.log"
+            ],
+            "hint": "grep -i error <файл> ищет строки с ошибкой без учёта регистра",
+            "success": "Нашли строку с ошибкой — теперь ясно, какая стадия красная.",
+            "hints": [
+              "Нужно найти в логе строки с ошибкой, не глядя на регистр.",
+              "`grep` с флагом `-i`, затем слово для поиска и имя файла.",
+              "`grep -i error ci.log`"
+            ]
+          }
+        ],
+        "resources": [
+          {
+            "title": "kubectl: шпаргалка команд",
+            "url": "https://kubernetes.io/ru/docs/reference/kubectl/cheatsheet/",
+            "note": "get, describe, logs, rollout restart — база диагностики подов"
+          },
+          {
+            "title": "systemctl: управление службами",
+            "url": "https://www.man7.org/linux/man-pages/man1/systemctl.1.html",
+            "note": "status, restart, reload — разница между рестартом и перечитыванием конфига"
+          }
+        ],
+        "challenge": "Замените слово в поиске: выполните `grep -i warning ci.log` вместо error. Сравните, сколько строк вернёт каждая команда.",
+        "debug": "`curl: (7) Connection refused` — на порту никто не слушает, служба не поднята. Проверьте `systemctl status nginx`, при необходимости выполните `systemctl restart nginx`."
+      }
+    },
+    {
+      "title": "Финальный квиз участка",
+      "kind": "quiz",
+      "summary": "Сквозной тест по стратегиям деплоя, методологии диагностики и связке инструментов.",
+      "durationMin": 10,
+      "content": {
+        "intro": "Проверим, как всё соединилось: стратегии выката, методология поиска поломок и инструменты стенда. Вопросы разного формата.",
+        "passScore": 70,
+        "questions": [
+          {
+            "id": "q1",
+            "type": "order",
+            "text": "Расставьте шаги диагностики по правильному порядку (по методологии из главы 59):",
+            "items": [
+              {
+                "id": "s1",
+                "text": "Наблюдай симптом и воспроизведи его"
+              },
+              {
+                "id": "s2",
+                "text": "Собери улики (логи, статусы, метрики)"
+              },
+              {
+                "id": "s3",
+                "text": "Определи слой, где проблема"
+              },
+              {
+                "id": "s4",
+                "text": "Проверь гипотезу о корневой причине"
+              },
+              {
+                "id": "s5",
+                "text": "Почини и убедись, что помогло"
+              }
+            ],
+            "explanation": "Сначала наблюдаем и воспроизводим, затем собираем улики, сужаем слой, проверяем гипотезу и только потом чиним. Правка наугад до сбора улик маскирует корневую причину.",
+            "review": true
+          },
+          {
+            "id": "q2",
+            "type": "match",
+            "text": "Сопоставьте симптом с командой, с которой логично начать проверку:",
+            "pairs": [
+              {
+                "id": "p1",
+                "left": "Под перезапускается по кругу",
+                "right": "kubectl logs / kubectl describe"
+              },
+              {
+                "id": "p2",
+                "left": "Сайт не отвечает, порт закрыт",
+                "right": "curl + systemctl status"
+              },
+              {
+                "id": "p3",
+                "left": "Всё тормозит, ничего не пишется",
+                "right": "df -h и du"
+              },
+              {
+                "id": "p4",
+                "left": "Ошибка сертификата в браузере",
+                "right": "проверка TLS/HTTPS"
+              }
+            ],
+            "explanation": "Каждый симптом живёт в своём слое, и у слоя есть своя команда-улика. Правильный первый инструмент экономит время и не даёт чинить не то.",
+            "review": true
+          },
+          {
+            "id": "q3",
+            "text": "Нужно выкатить рискованную фичу сначала на 2% пользователей, посмотреть метрики и лишь потом раскатать на всех. Какая стратегия подходит?",
+            "options": [
+              {
+                "id": "a",
+                "text": "Canary (канареечный выкат)",
+                "correct": true
+              },
+              {
+                "id": "b",
+                "text": "Просто скопировать файлы на прод",
+                "correct": false
+              },
+              {
+                "id": "c",
+                "text": "Удалить все старые поды разом",
+                "correct": false
+              }
+            ],
+            "explanation": "Canary выпускает версию на маленькую долю трафика, даёт понаблюдать за метриками и при проблеме автоматически остановить выкат — минимальный риск.",
+            "review": true
+          },
+          {
+            "id": "q4",
+            "text": "Верно или нет: откат (rollback) — это выкатить исправление вперёд новой версией.",
+            "options": [
+              {
+                "id": "a",
+                "text": "Верно",
+                "correct": false
+              },
+              {
+                "id": "b",
+                "text": "Неверно",
+                "correct": true
+              }
+            ],
+            "explanation": "Rollback — это возврат на предыдущую рабочую версию артефакта или образа. Пофиксить вперёд новой версией — это отдельный подход, не откат.",
+            "review": true
+          },
+          {
+            "id": "q5",
+            "multiple": true,
+            "text": "Что нужно, чтобы деплой прошёл без простоя (zero-downtime)? Выберите всё верное.",
+            "options": [
+              {
+                "id": "a",
+                "text": "Health check (readiness/liveness)",
+                "correct": true
+              },
+              {
+                "id": "b",
+                "text": "Graceful shutdown и дренаж соединений",
+                "correct": true
+              },
+              {
+                "id": "c",
+                "text": "Балансировщик, который шлёт трафик только в готовые поды",
+                "correct": true
+              },
+              {
+                "id": "d",
+                "text": "Одновременно погасить все старые поды",
+                "correct": false
+              }
+            ],
+            "explanation": "Без простоя работает связка: проверки готовности, аккуратное завершение соединений и балансировщик. Если разом убить все старые поды — часть запросов потеряется.",
+            "review": true
+          },
+          {
+            "id": "q6",
+            "type": "blank",
+            "text": "Впишите команду, которая откатывает деплой app в Kubernetes на прошлую ревизию:",
+            "accept": [
+              "kubectl rollout undo deployment app",
+              "kubectl rollout undo deploy app",
+              "kubectl rollout undo deployment/app"
+            ],
+            "hint": "kubectl rollout undo deployment <имя>",
+            "explanation": "kubectl rollout undo возвращает деплой на предыдущую ревизию. Это и есть быстрый откат, если новая версия оказалась плохой."
+          },
+          {
+            "id": "q7",
+            "text": "Сколько одинаковых окружений держат одновременно при стратегии blue-green?",
+            "options": [
+              {
+                "id": "a",
+                "text": "Два: blue и green, трафик переключают между ними",
+                "correct": true
+              },
+              {
+                "id": "b",
+                "text": "Одно, но с разными тегами",
+                "correct": false
+              },
+              {
+                "id": "c",
+                "text": "По одному на каждого пользователя",
+                "correct": false
+              }
+            ],
+            "explanation": "Blue-green держит два одинаковых окружения. Новая версия готовится во втором, затем трафик мгновенно переключают. Откат — просто переключить обратно.",
+            "review": true
+          },
+          {
+            "id": "q8",
+            "text": "Почему нельзя чинить поломку наугад, меняя всё подряд?",
+            "options": [
+              {
+                "id": "a",
+                "text": "Хаотичные правки маскируют корневую причину и ломают ещё больше",
+                "correct": true
+              },
+              {
+                "id": "b",
+                "text": "Так быстрее, поэтому это лучший способ",
+                "correct": false
+              },
+              {
+                "id": "c",
+                "text": "Логи после этого читаются легче",
+                "correct": false
+              }
+            ],
+            "explanation": "Правки наугад скрывают настоящую причину и добавляют новые поломки. Поэтому нужна повторяемая методология: улики, слой, гипотеза, починка, проверка.",
+            "review": true
+          }
+        ],
+        "resources": [
+          {
+            "title": "Google SRE Book: Effective Troubleshooting",
+            "url": "https://sre.google/sre-book/effective-troubleshooting/",
+            "note": "Как профессионалы ищут корневую причину методично"
+          },
+          {
+            "title": "Kubernetes: откат деплоя (rollout undo)",
+            "url": "https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#rolling-back-a-deployment",
+            "note": "Официально про rollout history и undo"
+          }
+        ]
+      }
+    },
+    {
+      "title": "Карта участка и тренды 2026: платформы, self-service и ИИ в эксплуатации",
+      "kind": "text",
+      "summary": "Собираем все проекты в одну карту доставки и смотрим, куда движется индустрия: платформенная инженерия, self-service и ИИ в эксплуатации.",
+      "durationMin": 12,
+      "content": {
+        "body": "## Зачем это нужно\n\nВы прошли восемь проектов и капстоун. За деталями легко потерять общую логику.\n\nЭтот урок собирает всё в одну карту. Затем показывает, куда индустрия идёт в 2026 году.\n\nБез карты знания рассыпаются на отдельные команды. С картой вы видите систему целиком.\n\nКарта важна ещё и на собеседовании. Вас спросят не «какие флаги у docker run», а «зачем вообще Docker».\n\nОтвет «он лечит боль X, которая возникла после Y» звучит как понимание, а не зубрёжка.\n\n## Что это простыми словами\n\nПредставьте стройку дома. Сначала фундамент, потом стены, крыша, проводка, сигнализация.\n\nКаждый этап решает свою задачу и опирается на предыдущий. Наш конвейер устроен так же.\n\nКаждый инструмент появился, потому что предыдущий шаг упёрся в конкретную боль.\n\nНельзя ставить сигнализацию в чистом поле. Нельзя мониторить то, что ещё не задеплоено.\n\nПорядок не случаен. Он повторяет реальную историю развития каждой команды эксплуатации.\n\n## Карта всего участка\n\nВот маршрут, который мы прошли. Читайте сверху вниз — это путь одной боли к её решению.\n\n```\nРучной деплой      -> боль: забытые шаги, простой\nDocker             -> боль: «у меня работает, а на сервере нет»\ndocker-compose     -> боль: связать app + БД + прокси\nCI/CD              -> боль: ручной повторяющийся выкат\nTerraform          -> боль: клики в облачной консоли\nAnsible            -> боль: ручная настройка сервера\nKubernetes         -> боль: одна ВМ не тянет и падает целиком\nМониторинг + защита -> боль: поломку замечают пользователи; сервис взламывают\n```\n\nПоверх этого лежат стратегии выката (rolling, откат) и методология диагностики.\n\nДиагностика — это привычка. Собрать улики, определить слой, проверить гипотезу, починить.\n\nОбратите внимание: каждая строка добавляет ровно один инструмент. Не два, не пять.\n\nЭто и есть принцип нарастания. Один шаг — одна боль — один новый инструмент.\n\n## Как это устроено внутри\n\nВесь конвейер держится на одной идее: состояние системы описано текстом, а не хранится в голове.\n\nРучной деплой держит шаги в памяти человека. Их нельзя повторить точь-в-точь.\n\nDocker переносит окружение приложения в файл (Dockerfile). Compose — связи между сервисами.\n\nTerraform кладёт в код сам сервер. Ansible — его настройку. Kubernetes — желаемое число копий.\n\nПод капотом у каждого инструмента живёт один цикл: сравнить «что есть» с «что должно быть».\n\n```\nжелаемое состояние (код в Git)  ->  инструмент сравнивает  ->  правит только разницу\n```\n\nЭтот цикл называют согласованием (reconciliation). Terraform, Ansible и Kubernetes — все так работают.\n\nИменно поэтому запуск можно повторять безопасно. Уже сделанное инструмент не трогает второй раз.\n\nАналогия: список покупок. Вы не покупаете заново то, что уже лежит в холодильнике.\n\nПлатформа 2026 года — это просто такой же цикл, спрятанный за одной кнопкой для разработчика.\n\n## Чек-лист готовности\n\nПройдитесь по пунктам перед тем, как двигаться дальше.\n\n- Приложение упаковано в образ и запускается одной командой.\n- Инфраструктура описана кодом, а не создаётся кликами в консоли.\n- Каждый пуш автоматически проходит сборку и тесты.\n- Есть метрики, централизованные логи и хотя бы один алерт.\n- Секреты лежат вне репозитория, лишние порты закрыты.\n\nЕсли хоть один пункт «нет» — это не провал, а точка следующего роста.\n\nВыпишите неготовые пункты и превратите каждый в маленький проект по нарастанию.\n\n## Куда идёт индустрия в 2026\n\nВыросло отдельное направление — платформенная инженерия (platform engineering).\n\nКоманда DevOps строит внутреннюю платформу разработчика (IDP — Internal Developer Platform).\n\nIDP даёт «золотые пути» (golden paths) — готовые проверенные способы выкатить сервис.\n\nРазработчик сам создаёт себе окружение через self-service, без тикета в DevOps.\n\nСмысл прост. Рутину прячут за кнопкой, а инженеры занимаются самой платформой.\n\n```\nБыло:  разработчик -> тикет в DevOps -> ждёт -> получает окружение\nСтало: разработчик -> кнопка в IDP (golden path) -> окружение за минуты\n```\n\nВажно понять: платформа не отменяет всё, что вы учили. Она это упаковывает и прячет.\n\nПод кнопкой всё те же Docker, Terraform, Kubernetes и пайплайны. Просто их запускает автоматика.\n\n## Разбор: команда self-service\n\nПосмотрим, как выглядит запуск сервиса через платформу. Имена флагов у разных IDP отличаются.\n\nСмысл одинаков. Разберём типичную команду построчно.\n\n```\nplatform service create \\\n  --name payments \\\n  --template golden-web-service \\\n  --env staging \\\n  --ttl 48h\n```\n\n`platform` — это CLI-клиент внутренней платформы (тот самый IDP).\n\n`service create` — подкоманда: «создай новый сервис по шаблону».\n\n`--name payments` — имя сервиса; из него платформа сделает репозиторий, namespace и адрес.\n\n`--template golden-web-service` — тот самый golden path: проверенный шаблон веб-сервиса.\n\n`--env staging` — окружение: тестовое, а не боевое; лимиты и доступы у него мягче.\n\n`--ttl 48h` — time to live: окружение само удалится через 48 часов и не будет жечь бюджет.\n\nОдна строка — а за ней платформа создаёт репозиторий, пайплайн, манифесты и мониторинг.\n\nРаньше это был тикет и полдня ожидания. Теперь — команда и пара минут.\n\n## Где реально помогает ИИ\n\nИИ разбирает логи и инциденты быстрее человека. Это направление зовут AIOps.\n\nАссистенты помогают писать конфиги и искать причину сбоя в куче метрик.\n\nОтдельно растёт LLMOps — эксплуатация самих ИИ-сервисов как обычной нагрузки.\n\nНо ИИ не заменяет понимание. Он подсказывает гипотезу, а проверяете её всё равно вы.\n\n## Второй пример: диагностика с ИИ\n\nПредставьте другую ситуацию: не создание сервиса, а разбор сбоя. Под приложения падает.\n\nИИ-ассистенту нужно скормить факты. Вы сами собираете улики знакомыми командами.\n\n```\nkubectl logs deploy/app --since=1h | grep -i -E \"error|panic\"\n```\n\n`kubectl logs deploy/app` — берём логи всех подов деплоя app, а не одного случайного пода.\n\n`--since=1h` — только за последний час; старый шум нам не нужен, ищем свежую поломку.\n\n`|` — конвейер: вывод логов передаём дальше на вход следующей команде.\n\n`grep -i -E \"error|panic\"` — фильтр строк: `-i` без учёта регистра, `-E` включает `|` как «или».\n\nВы получаете короткую выжимку ошибок. Её и даёте ассистенту вместе с вопросом.\n\nИИ предложит гипотезу за секунды. Но слой, где искать, определили вы сами командой выше.\n\nВ этом суть 2026 года: ИИ ускоряет шаги, но методологию ведёт по-прежнему инженер.\n\n## Что будет, если…\n\nРазберём три сценария, где карту участка игнорируют.\n\n1. Если поставить мониторинг раньше приложения — наблюдать будет не за чем.\n\nPrometheus поднимется, но метрик сервиса не увидит. Дашборд Grafana окажется пустым.\n\n2. Если довериться платформе вслепую — при сбое golden path вы не поймёте, что сломалось.\n\nКнопка «создать» отработает, а сервис не поднимется. Разбирать придётся всё те же Docker и k8s.\n\n3. Если принять ответ ИИ без проверки — почините не ту причину, а корневая останется.\n\nСбой вернётся через час. Хуже: правка наугад добавит ещё одну поломку поверх старой.\n\nВывод один: карта и методология важнее любого нового инструмента или ассистента.\n\n## Как бывает неправильно\n\nНовичок думает: «раз есть ИИ и платформа, методология больше не нужна».\n\nЭто проваливается на первом же реальном инциденте.\n\nИИ выдаёт правдоподобный, но неверный ответ. Платформа скрывает, что творится под ней.\n\nБез понимания слоёв вы не отличите верную подсказку от ошибочной.\n\n## ❓ Проверьте себя\n\nЧто такое «золотой путь» (golden path) в контексте IDP?\n\n*Ответ: готовый, проверенный и задокументированный способ выкатить сервис, которым разработчик пользуется сам через self-service, без ручных заявок в DevOps.*\n\nВторой вопрос: почему мониторинг в карте стоит после деплоя, а не до него?\n\n*Ответ: наблюдать можно только за тем, что уже работает; без запущенного сервиса метрик и логов просто нет, дашборд будет пустым.*\n\n## Частые ошибки новичка\n\n- Учить инструменты списком, не понимая, какую боль каждый решает.\n\nКак заметить: не можете ответить «зачем», только «как». Лечится вопросом «что было до и какая боль».\n\n- Считать, что платформа и ИИ отменяют базу — Linux, сети, диагностику.\n\nКак заметить: при сбое golden path впадаете в ступор. Лечится разбором того, что кнопка делает внутри.\n\n- Пропускать чек-лист готовности и катить в прод «на авось».\n\nКак заметить: инциденты находят пользователи, а не вы. Лечится закрытием пунктов чек-листа по одному.\n\n- Слепо доверять ответу ИИ и чинить по нему без улик.\n\nКак заметить: сбой возвращается после «починки». Лечится сбором логов и метрик ДО применения совета.\n\n## Запомнить\n\n- Весь участок — это одна доставка, которую мы починили десять раз подряд.\n- В основе всех инструментов один цикл: сравнить желаемое состояние с текущим и править разницу.\n- Тренды 2026: платформенная инженерия, IDP, golden paths, developer self-service.\n- ИИ (AIOps, LLMOps) ускоряет работу, но не заменяет понимание слоёв и методологию диагностики.",
+        "resources": [
+          {
+            "title": "Platform Engineering Roadmap",
+            "url": "https://habr.com/ru/companies/05-ru/articles/809661/",
+            "note": "Что входит в платформенную инженерию и IDP."
+          },
+          {
+            "title": "Google SRE: эффективная диагностика",
+            "url": "https://sre.google/sre-book/effective-troubleshooting/",
+            "note": "Почему методология поиска причины важнее любого инструмента."
+          }
+        ]
+      }
+    },
+    {
+      "title": "Квиз: тренды DevOps 2026",
+      "kind": "quiz",
+      "summary": "Проверка понимания платформенной инженерии, IDP, self-service и разницы между AIOps и LLMOps.",
+      "durationMin": 8,
+      "content": {
+        "intro": "Короткая проверка по трендам DevOps 2026: платформы, self-service и ИИ в эксплуатации.",
+        "passScore": 70,
+        "questions": [
+          {
+            "id": "q1",
+            "text": "Что такое платформенная инженерия (platform engineering)?",
+            "options": [
+              {
+                "id": "a",
+                "text": "Построение внутренней платформы как продукта для своих разработчиков",
+                "correct": true
+              },
+              {
+                "id": "b",
+                "text": "Отдел, который вручную заводит каждое окружение по тикету",
+                "correct": false
+              },
+              {
+                "id": "c",
+                "text": "Замена Kubernetes на что-то более простое",
+                "correct": false
+              }
+            ],
+            "explanation": "Платформенная инженерия собирает повторяющиеся задачи в один внутренний продукт — платформу. Её пользователи — свои же разработчики."
+          },
+          {
+            "id": "q2",
+            "type": "match",
+            "text": "Сопоставьте термин и его смысл:",
+            "pairs": [
+              {
+                "id": "p1",
+                "left": "IDP",
+                "right": "внутренняя платформа разработчика"
+              },
+              {
+                "id": "p2",
+                "left": "golden path",
+                "right": "проверенный способ частой задачи"
+              },
+              {
+                "id": "p3",
+                "left": "AIOps",
+                "right": "ИИ помогает эксплуатировать наши системы"
+              },
+              {
+                "id": "p4",
+                "left": "LLMOps",
+                "right": "эксплуатация самих ИИ-сервисов"
+              }
+            ],
+            "explanation": "IDP — это платформа-продукт. Golden path — готовый маршрут для задачи. AIOps применяет ИИ к нашим системам, а LLMOps — это уход за самими ИИ-сервисами."
+          },
+          {
+            "id": "q3",
+            "text": "Верно или нет: self-service означает, что разработчик может делать что угодно без каких-либо ограничений.",
+            "options": [
+              {
+                "id": "a",
+                "text": "Верно",
+                "correct": false
+              },
+              {
+                "id": "b",
+                "text": "Неверно",
+                "correct": true
+              }
+            ],
+            "explanation": "Self-service убирает ожидание тикета, но действует внутри рамок: лимиты, права и безопасные значения по умолчанию встроены в золотой путь."
+          },
+          {
+            "id": "q4",
+            "multiple": true,
+            "text": "Что обычно относится к developer self-service? Выберите все верные варианты.",
+            "options": [
+              {
+                "id": "a",
+                "text": "Самому создать временное тестовое окружение",
+                "correct": true
+              },
+              {
+                "id": "b",
+                "text": "Самому выкатить свою версию сервиса",
+                "correct": true
+              },
+              {
+                "id": "c",
+                "text": "Получить временную базу данных через платформу",
+                "correct": true
+              },
+              {
+                "id": "d",
+                "text": "Ночью звонить DevOps-инженеру и просить сделать всё вручную",
+                "correct": false
+              }
+            ],
+            "explanation": "Self-service — это самообслуживание через платформу: окружения, деплой, временные БД. Ручные звонки и заявки — как раз то, что self-service убирает."
+          },
+          {
+            "id": "q5",
+            "type": "blank",
+            "text": "Впишите параметр команды создания окружения, который задаёт время жизни, чтобы окружение само удалилось:",
+            "accept": [
+              "--ttl",
+              "ttl"
+            ],
+            "hint": "Три буквы, time to live, обычно с двумя дефисами впереди.",
+            "explanation": "Параметр --ttl (time to live) задаёт время жизни временного окружения. По истечении срока оно удаляется само и не тратит ресурсы зря."
+          },
+          {
+            "id": "q6",
+            "type": "order",
+            "text": "Расставьте по порядку, что происходит при self-service создании сервиса:",
+            "items": [
+              {
+                "id": "s1",
+                "text": "Разработчик выбирает golden path и запускает одну команду"
+              },
+              {
+                "id": "s2",
+                "text": "Платформа автоматически настраивает репозиторий, пайплайн и манифесты"
+              },
+              {
+                "id": "s3",
+                "text": "Сервис запущен в кластере с логами и метриками"
+              }
+            ],
+            "explanation": "Сначала разработчик выбирает золотой путь, затем платформа делает всю рутину сама, и в итоге сервис уже работает в кластере — без ручных тикетов."
+          }
+        ],
+        "resources": [
+          {
+            "title": "Platform engineering (roadmap.sh)",
+            "url": "https://habr.com/ru/companies/05-ru/articles/809661/",
+            "note": "Повторить понятия платформы, IDP и self-service."
+          },
+          {
+            "title": "Google SRE book",
+            "url": "https://sre.google/sre-book/table-of-contents/",
+            "note": "Контекст эксплуатации, на которую опирается AIOps."
+          }
+        ]
+      }
+    }
+  ]
 }

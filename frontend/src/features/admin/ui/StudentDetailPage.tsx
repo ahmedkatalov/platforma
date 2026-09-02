@@ -385,28 +385,28 @@ export default function StudentDetailPage() {
             <EmptyState title="Попыток пока нет" icon={<BarChart3 size={32} />} />
           ) : (
             <div className="max-h-80 overflow-y-auto">
-              <table className="w-full text-sm">
+              <table className="tbl">
                 <thead className="sticky top-0 bg-surface-solid">
-                  <tr className="border-b border-line text-left text-xs uppercase tracking-wide text-faint">
-                    <th className="px-4 py-2.5 font-semibold">Когда</th>
-                    <th className="px-4 py-2.5 font-semibold">Урок</th>
-                    <th className="px-4 py-2.5 font-semibold">Тип</th>
-                    <th className="px-4 py-2.5 font-semibold">Балл</th>
+                  <tr>
+                    <th>Когда</th>
+                    <th>Урок</th>
+                    <th>Тип</th>
+                    <th className="num">Балл</th>
                   </tr>
                 </thead>
                 <tbody>
                   {attempts.map((attempt) => (
-                    <tr key={attempt.id} className="border-b border-line/60 last:border-0">
-                      <td className="whitespace-nowrap px-4 py-2.5 text-muted">
+                    <tr key={attempt.id}>
+                      <td className="whitespace-nowrap">
                         {stampFmt.format(new Date(attempt.createdAt))}
                       </td>
-                      <td className="px-4 py-2.5 text-fg">{attempt.lessonTitle}</td>
-                      <td className="px-4 py-2.5">
+                      <td className="text-fg">{attempt.lessonTitle}</td>
+                      <td>
                         <Badge tone={attempt.kind === "quiz" ? "accent" : "default"}>
                           {ATTEMPT_LABEL[attempt.kind]}
                         </Badge>
                       </td>
-                      <td className="px-4 py-2.5">
+                      <td className="num">
                         <span
                           className={`font-bold ${attempt.passed ? "text-success" : "text-warning"}`}
                         >

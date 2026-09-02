@@ -213,6 +213,10 @@ export type TerminalTask = {
   id: string;
   prompt: string;
   hint?: string;
+  /** Прогрессивные подсказки: концепт → синтаксис → команда (открываются по одной). */
+  hints?: string[];
+  /** «Предскажи вывод» — вопрос перед вводом команды (тренирует мышление). */
+  predict?: string;
   success?: string;
 };
 
@@ -220,6 +224,10 @@ export type TerminalContent = {
   intro?: string;
   shell?: string;
   tasks: TerminalTask[];
+  /** «Измени одну вещь» — задание на модификацию после основных заданий. */
+  challenge?: string;
+  /** «Если сломалось» — типовая ошибка и как её диагностировать. */
+  debug?: string;
   resources?: LessonResource[];
 };
 
