@@ -179,7 +179,34 @@ export default function TerminalLesson({
       )}
 
       <div className="grid gap-[var(--gap)] lg:grid-cols-5">
-        {/* Терминал */}
+        {/* Мобильный фокус: текущее задание видно прямо над терминалом,
+            чтобы не листать вниз к списку заданий во время ввода команд. */}
+        {current && !allDone && (
+          <div className="rounded-[var(--radius-md)] border border-accent-border bg-accent-soft p-3 lg:hidden">
+            <div className="mb-1 flex items-center justify-between gap-2">
+              <span className="text-[11px] font-bold uppercase tracking-wide text-accent">
+                Задание {Math.min(solved.size + 1, taskList.length)} из {taskList.length}
+              </span>
+              <span className="w-20 shrink-0">
+                <Progress value={taskList.length ? (solved.size / taskList.length) * 100 : 0} />
+              </span>
+            </div>
+            <p className="text-sm font-medium text-fg">{current.prompt}</p>
+            {current.predict && (
+              <p className="mt-1.5 text-xs text-muted">
+                <span aria-hidden>🔮 </span>
+                {renderHint(current.predict)}
+              </p>
+            )}
+          </div>
+        )}
+        {allDone && (
+          <div className="flex items-center gap-2 rounded-[var(--radius-md)] bg-[var(--success-soft)] p-3 text-sm font-medium text-success lg:hidden">
+            <Check size={16} /> Все задания выполнены. Урок засчитан.
+          </div>
+        )}
+
+        {/* Терминал — ввод прямо в строке приглашения, как в настоящем терминале. */}
         <Card className="overflow-hidden lg:col-span-3">
           <div className="flex items-center gap-2 border-b border-line px-4 py-2.5">
             <span className="flex gap-1.5">
@@ -195,7 +222,7 @@ export default function TerminalLesson({
 
           <div
             ref={screenRef}
-            className="h-[26rem] overflow-y-auto bg-[var(--bg-deep)] p-4 font-mono text-[13px] leading-relaxed"
+            className="h-[16rem] overflow-y-auto overscroll-contain bg-[var(--bg-deep)] p-4 font-mono text-[13px] leading-relaxed sm:h-[20rem] lg:h-[26rem]"
             onClick={() => inputRef.current?.focus()}
           >
             {lines.map((line, i) => (
@@ -213,6 +240,7 @@ export default function TerminalLesson({
               </pre>
             ))}
 
+            {/* Приглашение и курсор ввода — прямо в потоке вывода. */}
             <div className="flex items-center gap-2">
               <span className="shrink-0 text-accent">{prompt(shell)}</span>
               <input
@@ -220,10 +248,12 @@ export default function TerminalLesson({
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={onKeyDown}
-                className="flex-1 bg-transparent font-mono text-[13px] text-fg outline-none"
+                className="min-w-0 flex-1 bg-transparent font-mono text-[13px] text-fg outline-none"
                 autoComplete="off"
                 autoCapitalize="off"
+                autoCorrect="off"
                 spellCheck={false}
+                enterKeyHint="send"
                 aria-label="Командная строка"
               />
             </div>

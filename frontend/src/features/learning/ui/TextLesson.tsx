@@ -33,13 +33,16 @@ export default function TextLesson({
     startedAt.current = Date.now();
   }, [lessonId, progress?.status]);
 
+  // Ручная отметка «прочитано»: помечаем урок пройденным и ОСТАЁМСЯ на странице.
+  // Переход к следующему уроку — отдельной кнопкой «Далее» внизу.
   const markDone = async () => {
     const seconds = Math.round((Date.now() - startedAt.current) / 1000);
     try {
       const result = await complete({ id: lessonId, seconds }).unwrap();
       setDone(true);
       toast.success("Урок отмечен пройденным");
-      onDone(result.certificate);
+      // Если это был последний урок курса — сразу показываем сертификат.
+      if (result.certificate) onDone(result.certificate);
     } catch (err) {
       toast.error(apiErrorMessage(err));
     }
@@ -55,7 +58,9 @@ export default function TextLesson({
 
   return (
     <>
-      <Card className="p-[var(--pad)] sm:p-8">
+      {/* На телефоне теория читается прямо на фоне (без «стеклянной» карточки) —
+          легче и спокойнее для длинного чтения; на sm+ остаётся карточкой. */}
+      <Card className="p-[var(--pad)] max-sm:border-0 max-sm:bg-transparent max-sm:p-0 max-sm:shadow-none max-sm:backdrop-blur-none sm:p-8">
         <div className="mx-auto">
           {headings.length >= 4 && (
             <nav className="mb-6 rounded-[var(--radius-md)] border border-line bg-surface-2 p-4">

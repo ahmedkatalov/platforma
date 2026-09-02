@@ -1,12 +1,18 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
 import { useAppSelector } from "@/app/store";
-import { useGetStudentCourseQuery } from "@/features/admin/api/coursesApi";
 import {
+  useGetStudentCourseQuery,
+  useRequestModuleAccessMutation,
+} from "@/features/admin/api/coursesApi";
+import {
+  useCompleteLessonMutation,
   useGetLessonQuery,
   useStartLessonMutation,
 } from "@/features/learning/api/lessonApi";
+import { apiErrorMessage } from "@/shared/api/baseApi";
+import { useToast } from "@/shared/ui/ToastProvider";
 import type {
   Certificate,
   CodeContent,
@@ -82,6 +88,8 @@ export default function LessonPage() {
   });
   const { data: courseData } = useGetStudentCourseQuery(slug, { skip: !slug });
   const [startLesson] = useStartLessonMutation();
+  const [completeLesson] = useCompleteLessonMutation();
+  const startedAt = useRef(Date.now());
   const currentUser = useAppSelector((state) => state.auth.user);
 
   const [asideOpen, setAsideOpen] = useState(false);
@@ -92,6 +100,7 @@ export default function LessonPage() {
   useEffect(() => {
     if (lessonId) void startLesson(lessonId);
     setAsideOpen(false);
+    startedAt.current = Date.now();
     window.scrollTo({ top: 0 });
   }, [lessonId, startLesson]);
 
@@ -105,7 +114,25 @@ export default function LessonPage() {
   // Админ видит все главы (превью). Студенту глава открыта только если она в moduleAccess.
   const isAdminView = currentUser?.role === "admin";
   const moduleAccess = courseData?.moduleAccess ?? {};
+  const requests = courseData?.requests ?? {};
   const chapterUnlocked = (moduleId: string) => isAdminView || moduleAccess[moduleId] === true;
+
+  const [requestAccess, { isLoading: requesting }] = useRequestModuleAccessMutation();
+  const toast = useToast();
+
+  // Тап по закрытой главе: если заявки ещё не было — отправляем её админу.
+  const askAccess = async (moduleId: string, chapterNo: number) => {
+    if (requests[moduleId] === "pending") {
+      toast.info(`Заявка на главу ${chapterNo} уже у администратора — ожидайте.`);
+      return;
+    }
+    try {
+      await requestAccess({ slug, moduleId }).unwrap();
+      toast.success(`Заявка на главу ${chapterNo} отправлена — администратор откроет доступ.`);
+    } catch (err) {
+      toast.error(apiErrorMessage(err, "Не удалось отправить заявку"));
+    }
+  };
 
   const totals = useMemo(() => {
     const all = modules.flatMap((module) => module.lessons ?? []);
@@ -170,6 +197,28 @@ export default function LessonPage() {
       navigate(
         `/learn/courses/${data.courseSlug}/lessons/${data.nextLessonId}`,
       );
+    } else {
+      navigate(`/learn/courses/${data.courseSlug}`);
+    }
+  };
+
+  // «Далее» в конце урока. Для теории заодно отмечает урок пройденным (как чтение),
+  // остальные типы (квиз/терминал/код) засчитываются своей проверкой — просто переходим.
+  const advance = async () => {
+    if (lesson.kind === "text" && !completed) {
+      try {
+        const seconds = Math.round((Date.now() - startedAt.current) / 1000);
+        const res = await completeLesson({ id: lesson.id, seconds }).unwrap();
+        if (res?.certificate) {
+          setCertificate(res.certificate);
+          return;
+        }
+      } catch {
+        // тихо — переход дальше не блокируем, отметку можно поставить вручную
+      }
+    }
+    if (data.nextLessonId) {
+      navigate(`/learn/courses/${data.courseSlug}/lessons/${data.nextLessonId}`);
     } else {
       navigate(`/learn/courses/${data.courseSlug}`);
     }
@@ -323,28 +372,45 @@ export default function LessonPage() {
                 const activeChapter = lessons.some((l) => l.id === lesson.id);
                 const chapterComplete = moduleTotal > 0 && moduleDone === moduleTotal;
 
-                // Закрытая глава: с замком, приглушённая, ведёт на страницу курса
-                // (там можно запросить доступ). Уроки не кликабельны.
+                // Закрытая глава: замок, приглушена, НЕ раскрывается и никуда не
+                // ведёт. Тап отправляет заявку администратору на доступ.
                 if (!chapterUnlocked(module.id)) {
+                  const pending = requests[module.id] === "pending";
                   return (
                     <section key={module.id}>
-                      <Link
-                        to={`/learn/courses/${data.courseSlug}`}
-                        className="flex w-full items-center gap-2.5 rounded-[var(--radius-md)] px-2 py-2 opacity-75 transition-opacity hover:opacity-100"
-                        title="Глава закрыта — запросите доступ на странице курса"
+                      <button
+                        type="button"
+                        onClick={() => askAccess(module.id, moduleIndex + 1)}
+                        disabled={requesting}
+                        className="group flex w-full items-center gap-2.5 rounded-[var(--radius-md)] border border-dashed border-line px-2 py-2 text-left transition-colors hover:bg-surface-2 disabled:cursor-wait"
+                        title={
+                          pending
+                            ? "Заявка на доступ уже у администратора"
+                            : "Глава закрыта — нажмите, чтобы запросить доступ у администратора"
+                        }
                       >
                         <span className="grid h-7 w-7 shrink-0 place-items-center rounded-[var(--radius-md)] bg-surface-2 text-faint">
                           <Lock size={14} />
                         </span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-sm font-semibold text-muted">
+                        <span className="min-w-0 flex-1 opacity-70">
+                          <span
+                            title={module.title}
+                            className="block truncate text-sm font-semibold text-muted"
+                          >
                             {module.title}
                           </span>
                           <span className="block text-[11px] text-faint">
-                            Глава {moduleIndex + 1} · доступ закрыт
+                            Глава {moduleIndex + 1} · {pending ? "заявка у админа" : "закрыта"}
                           </span>
                         </span>
-                      </Link>
+                        {pending ? (
+                          <Badge tone="warning">Ждём</Badge>
+                        ) : (
+                          <span className="shrink-0 whitespace-nowrap text-[11px] font-semibold text-accent opacity-80 group-hover:opacity-100">
+                            Запросить
+                          </span>
+                        )}
+                      </button>
                     </section>
                   );
                 }
@@ -373,7 +439,9 @@ export default function LessonPage() {
                         >
                           {done ? <Check size={12} /> : kindIcon(item.kind)}
                         </span>
-                        <span className="min-w-0 flex-1 truncate">{item.title}</span>
+                        <span title={item.title} className="min-w-0 flex-1 truncate">
+                          {item.title}
+                        </span>
                       </Link>
                     </li>
                   );
@@ -409,7 +477,10 @@ export default function LessonPage() {
                         {chapterComplete ? <Check size={15} /> : moduleIndex + 1}
                       </span>
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-semibold text-fg">
+                        <span
+                          title={module.title}
+                          className="block truncate text-sm font-semibold text-fg"
+                        >
                           {module.title}
                         </span>
                         <span className="block text-[11px] text-faint">
@@ -443,7 +514,10 @@ export default function LessonPage() {
                             return (
                               <div key={theme.key}>
                                 <div className="flex items-center justify-between gap-2 px-1 pb-1">
-                                  <span className="min-w-0 truncate text-[11px] font-semibold uppercase tracking-wide text-muted">
+                                  <span
+                                    title={`Тема ${ti + 1} · ${theme.title}`}
+                                    className="min-w-0 truncate text-[11px] font-semibold uppercase tracking-wide text-muted"
+                                  >
                                     Тема {ti + 1} · {theme.title}
                                   </span>
                                   <span className="shrink-0 text-[10px] font-semibold text-faint">
@@ -541,7 +615,7 @@ export default function LessonPage() {
           <span className="text-xs text-faint">{data.moduleTitle}</span>
         </div>
 
-        <h1 className="mb-1 text-2xl font-bold tracking-tight text-fg sm:text-3xl">
+        <h1 className="mb-1 text-[1.375rem] font-bold leading-tight tracking-tight text-fg sm:text-3xl">
           {lesson.title}
         </h1>
         {lesson.summary && (
@@ -550,35 +624,40 @@ export default function LessonPage() {
 
         <NoteSelection lessonId={lesson.id}>{body}</NoteSelection>
 
-        <div className="mt-[var(--gap)] flex items-center justify-between gap-3">
+        {/* Навигация между уроками — обычный ряд в самом конце урока (не липкий):
+            «Далее» появляется, только когда дочитали до низа. Для теории «Далее»
+            заодно отмечает урок пройденным; вручную это можно сделать и кнопкой выше. */}
+        <div className="mt-[var(--gap)] flex items-center gap-3 pt-[var(--gap)]">
           {data.prevLessonId ? (
             <Link
               to={`/learn/courses/${data.courseSlug}/lessons/${data.prevLessonId}`}
-              className="btn btn-secondary"
+              className="btn btn-secondary btn-icon shrink-0 xl:w-auto xl:px-4"
+              aria-label="Предыдущий урок"
             >
-              <ChevronRight size={16} className="rotate-180" />
-              Предыдущий
+              <ChevronRight size={18} className="rotate-180" />
+              <span className="hidden xl:inline">Предыдущий</span>
             </Link>
           ) : (
-            <span />
+            <span className="hidden xl:block" />
           )}
 
-          {data.nextLessonId ? (
-            <Link
-              to={`/learn/courses/${data.courseSlug}/lessons/${data.nextLessonId}`}
-              className="btn btn-secondary"
-            >
-              Следующий
-              <ChevronRight size={16} />
-            </Link>
-          ) : (
-            <Link
-              to={`/learn/courses/${data.courseSlug}`}
-              className="btn btn-secondary"
-            >
-              <Terminal size={16} />К программе курса
-            </Link>
-          )}
+          <button
+            type="button"
+            onClick={advance}
+            className="btn btn-primary flex-1 xl:ml-auto xl:flex-none"
+          >
+            {data.nextLessonId ? (
+              <>
+                Далее
+                <ChevronRight size={18} />
+              </>
+            ) : (
+              <>
+                <Check size={16} />
+                К программе курса
+              </>
+            )}
+          </button>
         </div>
       </div>
     </div>

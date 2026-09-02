@@ -9,6 +9,9 @@ export default defineConfig({
     alias: { "@": path.resolve(__dirname, "./src") },
   },
   build: {
+    // Поддержка не самых свежих телефонов (iOS 14+, Android Chrome 87+):
+    // современный синтаксис транспилируется, чтобы код не падал при разборе.
+    target: ["es2020", "safari14", "chrome87", "firefox78"],
     rollupOptions: {
       output: {
         // Тяжёлые библиотеки — отдельными чанками, чтобы они кэшировались отдельно от кода приложения.

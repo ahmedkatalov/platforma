@@ -1,6 +1,6 @@
 // Service worker платформы. Задача: сделать приложение устанавливаемым
 // и дать базовый офлайн-режим, НЕ ломая обновления и API.
-const CACHE = "platforma-v2";
+const CACHE = "platforma-v3";
 const SHELL = [
   "/",
   "/index.html",

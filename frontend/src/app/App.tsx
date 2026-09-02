@@ -2,27 +2,32 @@ import { lazy, Suspense, useEffect } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 
 import { sessionEnded, userRefreshed } from "@/features/auth/authSlice";
+// Страницы входа лёгкие и нужны сразу при первом заходе — грузим их обычным импортом.
 import ForgotPasswordPage from "@/features/auth/ui/ForgotPasswordPage";
 import LoginPage from "@/features/auth/ui/LoginPage";
-import AppearancePage from "@/features/admin/ui/AppearancePage";
-import AuditPage from "@/features/admin/ui/AuditPage";
-import AdminCertificatesPage from "@/features/admin/ui/CertificatesPage";
-import AdminCoursesPage from "@/features/admin/ui/CoursesPage";
-import CourseEditorPage from "@/features/admin/ui/CourseEditorPage";
-import AdminDashboardPage from "@/features/admin/ui/DashboardPage";
-import RequestsPage from "@/features/admin/ui/RequestsPage";
-import SettingsPage from "@/features/admin/ui/SettingsPage";
-import StudentDetailPage from "@/features/admin/ui/StudentDetailPage";
-import StudentsPage from "@/features/admin/ui/StudentsPage";
 import CertificatePage from "@/features/certificates/ui/CertificatePage";
-import LessonPage from "@/features/learning/ui/LessonPage";
-import StudentCoursePage from "@/features/student/ui/CoursePage";
-import CatalogPage from "@/features/student/ui/CatalogPage";
-import StudentDashboardPage from "@/features/student/ui/DashboardPage";
-import ProfilePage from "@/features/student/ui/ProfilePage";
-import NotesPage from "@/features/student/ui/NotesPage";
-import QuizzesPage from "@/features/student/ui/QuizzesPage";
-import StudentStatsPage from "@/features/student/ui/StatsPage";
+
+// Остальные страницы — по требованию (route-splitting): студент на телефоне не тянет
+// код админки и графиков, пока они реально не открыты. Резко уменьшает первый бандл.
+const AppearancePage = lazy(() => import("@/features/admin/ui/AppearancePage"));
+const AuditPage = lazy(() => import("@/features/admin/ui/AuditPage"));
+const AdminCertificatesPage = lazy(() => import("@/features/admin/ui/CertificatesPage"));
+const AdminCoursesPage = lazy(() => import("@/features/admin/ui/CoursesPage"));
+const CourseEditorPage = lazy(() => import("@/features/admin/ui/CourseEditorPage"));
+const AdminDashboardPage = lazy(() => import("@/features/admin/ui/DashboardPage"));
+const RequestsPage = lazy(() => import("@/features/admin/ui/RequestsPage"));
+const SettingsPage = lazy(() => import("@/features/admin/ui/SettingsPage"));
+const StudentDetailPage = lazy(() => import("@/features/admin/ui/StudentDetailPage"));
+const StudentsPage = lazy(() => import("@/features/admin/ui/StudentsPage"));
+const LessonPage = lazy(() => import("@/features/learning/ui/LessonPage"));
+const StudentCoursePage = lazy(() => import("@/features/student/ui/CoursePage"));
+const CatalogPage = lazy(() => import("@/features/student/ui/CatalogPage"));
+const StudentDashboardPage = lazy(() => import("@/features/student/ui/DashboardPage"));
+const ProfilePage = lazy(() => import("@/features/student/ui/ProfilePage"));
+const NotesPage = lazy(() => import("@/features/student/ui/NotesPage"));
+const QuizzesPage = lazy(() => import("@/features/student/ui/QuizzesPage"));
+// StatsPage тянет recharts (~100 КБ) — теперь грузится только на странице статистики.
+const StudentStatsPage = lazy(() => import("@/features/student/ui/StatsPage"));
 // Песочница тянет тяжёлый движок Linux — грузим её отдельным чанком по требованию.
 const SandboxPage = lazy(() => import("@/features/learning/ui/SandboxPage"));
 import { useGetMeQuery } from "@/shared/api/meApi";

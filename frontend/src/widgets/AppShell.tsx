@@ -1,5 +1,5 @@
 import clsx from "clsx";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 
 import { useAppDispatch, useAppSelector } from "@/app/store";
@@ -29,7 +29,6 @@ import {
   TerminalSquare,
   Inbox,
   MessageSquare,
-  ChevronLeft,
 } from "lucide-react";
 import Logo from "@/shared/images/svg/logo.svg";
 
@@ -137,6 +136,19 @@ export default function AppShell() {
         ? studentNav
         : ADMIN_NAV;
 
+  // Мобильная нижняя навигация: 4 главных пункта. Прячем её на самой странице
+  // урока (там свой липкий низ «Далее»/«Содержание») и вне зоны обучения.
+  const isLessonPage = /\/learn\/courses\/[^/]+\/lessons\//.test(location.pathname);
+  const showBottomNav = inStudentArea && !isAdmin && !isLessonPage;
+  const bottomNav: NavItem[] = [
+    { to: "/learn", label: "Курсы", icon: <Book size={20} />, end: true },
+    { to: "/learn/dashboard", label: "Обзор", icon: <LayoutGrid size={20} /> },
+    sandboxAvailable
+      ? { to: "/learn/sandbox", label: "Терминал", icon: <TerminalSquare size={20} /> }
+      : { to: "/learn/quizzes", label: "Квизы", icon: <Check size={20} /> },
+    { to: "/learn/profile", label: "Профиль", icon: <Settings size={20} /> },
+  ];
+
   const handleLogout = async () => {
     const refreshToken = tokenStorage.refresh();
     if (refreshToken) {
@@ -162,7 +174,7 @@ export default function AppShell() {
       {/* Боковая навигация */}
       <aside
         className={clsx(
-          "fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r border-line bg-surface backdrop-blur-[var(--glass-blur)] transition-[width,transform] duration-200 lg:translate-x-0",
+          "fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r border-line bg-surface pt-[var(--safe-top)] pb-[var(--safe-bottom)] pl-[var(--safe-left)] backdrop-blur-[var(--glass-blur)] transition-[width,transform] duration-200 lg:translate-x-0",
           sidebarCollapsed ? "lg:w-20" : "lg:w-64",
           menuOpen ? "translate-x-0" : "-translate-x-full",
         )}
@@ -335,13 +347,11 @@ export default function AppShell() {
       )}
 
       {/* Контент */}
-      <div
-        className={clsx(
-          "transition-[padding] duration-200",
-          sidebarCollapsed ? "lg:pl-20" : "lg:pl-64",
-        )}
-      >
-        <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-line bg-surface px-4 backdrop-blur-[var(--glass-blur)] sm:px-6">
+      <div className={clsx("transition-[padding] duration-200", sidebarCollapsed ? "lg:pl-20" : "lg:pl-64")}>
+        <header
+          className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-line bg-surface px-4 backdrop-blur-[var(--glass-blur)] sm:px-6"
+          style={{ height: "calc(4rem + var(--safe-top))", paddingTop: "var(--safe-top)" }}
+        >
           <button
             className="btn btn-ghost btn-icon lg:hidden"
             onClick={() => setMenuOpen(true)}
@@ -370,10 +380,49 @@ export default function AppShell() {
           </div>
         </header>
 
-        <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
-          <Outlet />
+        <main
+          className={clsx(
+            "mx-auto w-full max-w-7xl px-4 py-5 sm:px-6 sm:py-8",
+            // На телефоне в зоне обучения снизу — таб-бар; оставляем ему место.
+            showBottomNav && "pb-[calc(4.25rem+var(--safe-bottom))] lg:pb-8",
+          )}
+        >
+          <Suspense
+            fallback={
+              <div className="grid place-items-center py-24 text-accent" aria-label="Загрузка">
+                <span className="h-8 w-8 animate-spin rounded-full border-2 border-current border-t-transparent" />
+              </div>
+            }
+          >
+            <Outlet />
+          </Suspense>
         </main>
       </div>
+
+      {/* Мобильная нижняя навигация — только в зоне обучения, вне страницы урока. */}
+      {showBottomNav && (
+        <nav
+          className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t border-line bg-surface-solid pb-[var(--safe-bottom)] lg:hidden"
+          aria-label="Основная навигация"
+        >
+          {bottomNav.map((item) => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              end={item.end}
+              className={({ isActive }) =>
+                clsx(
+                  "flex min-h-[3.5rem] flex-col items-center justify-center gap-0.5 text-[11px] font-medium transition-colors",
+                  isActive ? "text-accent" : "text-faint hover:text-muted",
+                )
+              }
+            >
+              {item.icon}
+              <span className="leading-none">{item.label}</span>
+            </NavLink>
+          ))}
+        </nav>
+      )}
     </div>
   );
 }
