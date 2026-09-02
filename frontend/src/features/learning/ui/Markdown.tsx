@@ -70,17 +70,21 @@ export default function Markdown({ children }: { children: string }) {
         remarkPlugins={[remarkGfm]}
         components={{
           h1: ({ children }) => (
-            <h1 className="mt-6 text-2xl font-bold text-fg first:mt-0">{children}</h1>
+            <h1 className="mt-6 text-xl font-bold leading-snug text-fg first:mt-0 sm:text-2xl">
+              {children}
+            </h1>
           ),
           h2: ({ children }) => (
             <h2
               id={headingId(textOf(children))}
-              className="mt-8 scroll-mt-24 border-b border-line pb-2 text-xl font-bold text-fg first:mt-0"
+              className="mt-7 scroll-mt-24 border-b border-line pb-2 text-lg font-bold leading-snug text-fg first:mt-0 sm:mt-8 sm:text-xl"
             >
               {children}
             </h2>
           ),
-          h3: ({ children }) => <h3 className="mt-5 text-lg font-bold text-fg">{children}</h3>,
+          h3: ({ children }) => (
+            <h3 className="mt-5 text-base font-bold text-fg sm:text-lg">{children}</h3>
+          ),
           p: ({ children }) => <p className="text-muted">{children}</p>,
           ul: ({ children }) => (
             <ul className="list-disc space-y-2 pl-5 text-muted marker:text-accent">{children}</ul>

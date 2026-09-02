@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
 import { useAppSelector } from "@/app/store";
@@ -7,6 +7,7 @@ import {
   useRequestModuleAccessMutation,
 } from "@/features/admin/api/coursesApi";
 import {
+  useCompleteLessonMutation,
   useGetLessonQuery,
   useStartLessonMutation,
 } from "@/features/learning/api/lessonApi";
@@ -74,6 +75,8 @@ export default function LessonPage() {
   const { data, isLoading, isError, error } = useGetLessonQuery(lessonId, { skip: !lessonId });
   const { data: courseData } = useGetStudentCourseQuery(slug, { skip: !slug });
   const [startLesson] = useStartLessonMutation();
+  const [completeLesson] = useCompleteLessonMutation();
+  const startedAt = useRef(Date.now());
   const currentUser = useAppSelector((state) => state.auth.user);
 
   const [asideOpen, setAsideOpen] = useState(false);
@@ -84,6 +87,7 @@ export default function LessonPage() {
   useEffect(() => {
     if (lessonId) void startLesson(lessonId);
     setAsideOpen(false);
+    startedAt.current = Date.now();
     window.scrollTo({ top: 0 });
   }, [lessonId, startLesson]);
 
@@ -173,6 +177,28 @@ export default function LessonPage() {
     if (issued) {
       setCertificate(issued);
       return;
+    }
+    if (data.nextLessonId) {
+      navigate(`/learn/courses/${data.courseSlug}/lessons/${data.nextLessonId}`);
+    } else {
+      navigate(`/learn/courses/${data.courseSlug}`);
+    }
+  };
+
+  // «Далее» в конце урока. Для теории заодно отмечает урок пройденным (как чтение),
+  // остальные типы (квиз/терминал/код) засчитываются своей проверкой — просто переходим.
+  const advance = async () => {
+    if (lesson.kind === "text" && !completed) {
+      try {
+        const seconds = Math.round((Date.now() - startedAt.current) / 1000);
+        const res = await completeLesson({ id: lesson.id, seconds }).unwrap();
+        if (res?.certificate) {
+          setCertificate(res.certificate);
+          return;
+        }
+      } catch {
+        // тихо — переход дальше не блокируем, отметку можно поставить вручную
+      }
     }
     if (data.nextLessonId) {
       navigate(`/learn/courses/${data.courseSlug}/lessons/${data.nextLessonId}`);
@@ -538,21 +564,19 @@ export default function LessonPage() {
           <span className="text-xs text-faint">{data.moduleTitle}</span>
         </div>
 
-        <h1 className="mb-1 text-2xl font-bold tracking-tight text-fg sm:text-3xl">
+        <h1 className="mb-1 text-[1.375rem] font-bold leading-tight tracking-tight text-fg sm:text-3xl">
           {lesson.title}
         </h1>
-        {lesson.summary && <p className="mb-6 text-sm text-muted">{lesson.summary}</p>}
+        {lesson.summary && (
+          <p className="mb-6 text-[0.9375rem] leading-relaxed text-muted">{lesson.summary}</p>
+        )}
 
         <NoteSelection lessonId={lesson.id}>{body}</NoteSelection>
 
-        {/* Навигация между уроками: на телефоне для теории/квиза — липкая нижняя
-            панель с явной «Далее»; для терминала/кода — обычный ряд, чтобы липкая
-            панель не перекрывала ввод команд и кнопку проверки. На десктопе — ряд. */}
-        <div
-          className={`mt-[var(--gap)] flex items-center gap-3 pt-[var(--gap)] ${
-            lesson.kind === "text" || lesson.kind === "quiz" ? "action-bar" : ""
-          }`}
-        >
+        {/* Навигация между уроками — обычный ряд в самом конце урока (не липкий):
+            «Далее» появляется, только когда дочитали до низа. Для теории «Далее»
+            заодно отмечает урок пройденным; вручную это можно сделать и кнопкой выше. */}
+        <div className="mt-[var(--gap)] flex items-center gap-3 pt-[var(--gap)]">
           {data.prevLessonId ? (
             <Link
               to={`/learn/courses/${data.courseSlug}/lessons/${data.prevLessonId}`}
@@ -566,23 +590,23 @@ export default function LessonPage() {
             <span className="hidden xl:block" />
           )}
 
-          {data.nextLessonId ? (
-            <Link
-              to={`/learn/courses/${data.courseSlug}/lessons/${data.nextLessonId}`}
-              className="btn btn-primary flex-1 xl:ml-auto xl:flex-none"
-            >
-              Далее
-              <ChevronRight size={18} />
-            </Link>
-          ) : (
-            <Link
-              to={`/learn/courses/${data.courseSlug}`}
-              className="btn btn-primary flex-1 xl:ml-auto xl:flex-none"
-            >
-              <Check size={16} />
-              К программе курса
-            </Link>
-          )}
+          <button
+            type="button"
+            onClick={advance}
+            className="btn btn-primary flex-1 xl:ml-auto xl:flex-none"
+          >
+            {data.nextLessonId ? (
+              <>
+                Далее
+                <ChevronRight size={18} />
+              </>
+            ) : (
+              <>
+                <Check size={16} />
+                К программе курса
+              </>
+            )}
+          </button>
         </div>
       </div>
     </div>

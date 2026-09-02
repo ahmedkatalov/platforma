@@ -367,18 +367,6 @@ html.glow-animated body::before {
 .top-safe { top: var(--safe-top); }
 .h-safe-top { height: var(--safe-top); }
 
-/* Липкая нижняя панель действий (Далее/…) — ТОЛЬКО на телефоне/планшете (<xl):
-   над домашним индикатором, поверх контента. На десктопе (≥1280px) — обычный ряд. */
-@media (max-width: 1279.98px) {
-  .action-bar {
-    position: sticky;
-    bottom: 0;
-    z-index: 20;
-    padding-bottom: calc(0.75rem + var(--safe-bottom));
-    padding-top: 0.75rem;
-    background: linear-gradient(to top, var(--bg) 62%, transparent);
-  }
-}
 
 /* Всплывающая снизу «шторка» (bottom sheet) для мобильных: меню, содержание,
    подсказки. На sm+ такие же поповеры остаются на своих местах. */

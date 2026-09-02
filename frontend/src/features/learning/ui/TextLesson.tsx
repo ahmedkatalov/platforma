@@ -33,13 +33,16 @@ export default function TextLesson({
     startedAt.current = Date.now();
   }, [lessonId, progress?.status]);
 
+  // Ручная отметка «прочитано»: помечаем урок пройденным и ОСТАЁМСЯ на странице.
+  // Переход к следующему уроку — отдельной кнопкой «Далее» внизу.
   const markDone = async () => {
     const seconds = Math.round((Date.now() - startedAt.current) / 1000);
     try {
       const result = await complete({ id: lessonId, seconds }).unwrap();
       setDone(true);
       toast.success("Урок отмечен пройденным");
-      onDone(result.certificate);
+      // Если это был последний урок курса — сразу показываем сертификат.
+      if (result.certificate) onDone(result.certificate);
     } catch (err) {
       toast.error(apiErrorMessage(err));
     }
