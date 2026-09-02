@@ -1,6 +1,6 @@
 {
   "title": "Тестирование и CI/CD",
-  "summary": "От автоматических тестов к сборочно-выкаточному конвейеру: студент понимает, зачем нужен CI/CD, читает и пишет workflow на GitHub Actions, безопасно работает с секретами, выкатывает через staging в pr",
+  "summary": "От автоматических тестов к сборочно-выкаточному конвейеру: студент понимает, зачем нужен CI/CD, читает и пишет workflow на GitHub Actions, безопасно работает с секретами, выкатывает через staging в pr. закрепляет workflow: SHA-пин, минимальные permissions, окружения и OIDC.",
   "lessons": [
     {
       "title": "Зачем нужны тесты: виды и пирамида",
@@ -802,6 +802,109 @@
       }
     },
     {
+      "title": "Безопасный пайплайн после 2025: SHA-пин, permissions, OIDC",
+      "kind": "text",
+      "summary": "Что сломалось в цепочке поставки в 2025 году и семь привычек, которые закрывают эти дыры: пин по SHA, минимальные permissions, окружения с подтверждением, OIDC.",
+      "durationMin": 13,
+      "content": {
+        "body": "## Зачем это нужно\n\nВаш конвейер уже умеет тестировать, собирать и передавать секреты.\nНо у него есть слабое место: он выполняет чужой код.\n\nКаждая строка `uses:` подключает action, который написал кто-то другой.\nЭтот код работает на раннере рядом с вашими секретами и токеном репозитория.\n\nВ 2025 году это слабое место било по тысячам команд подряд.\n\n- 14–15 марта 2025: скомпрометирован action `tj-actions/changed-files` (CVE-2025-30066). Пострадало более 23 000 репозиториев.\n- 26 августа 2025: атака s1ngularity на Nx. Вредоносный код попал через workflow с триггером `pull_request_target`.\n- Сентябрь 2025: npm-червь Shai-Hulud — заражённый пакет сам распространял себя дальше по реестру.\n- Ноябрь 2025: Shai-Hulud 2.0 по той же схеме, затронуто около 800 пакетов.\n\nОбщая черта всех случаев: атакующий не ломал сервер.\nОн подменял звено, которому конвейер доверял по умолчанию.\n\nЭтот урок — набор привычек, после которых такая подмена перестаёт быть катастрофой.\n\n## Что это простыми словами\n\nПредставьте, что конвейер — это офис, а каждый action — подрядчик, которого вы пускаете внутрь.\n\nТег вроде `@v5` — это имя на бейдже. Бейдж можно переклеить на другого человека.\nSHA коммита — отпечаток пальца. Его переклеить нельзя.\n\n`permissions` — какие двери открывает ключ подрядчика. Зачем электрику ключ от сейфа?\n\n`environment: production` с подтверждением — охранник у двери в серверную.\nБез его кивка внутрь никто не пройдёт.\n\nOIDC — разовый пропуск на один визит вместо постоянного ключа, который можно украсть и носить годами.\n\nВсё вместе — принцип минимального доверия.\nКаждому звену ровно столько прав, сколько нужно на один запуск.\n\n## Как это работает\n\n### 1. Пин action по SHA\n\nФормат вы уже видели в практиках. Разберём его построчно:\n\n```anatomy\n- uses: actions/checkout@<40-символьный-sha> # v5.0.0 ## action закреплён хешем коммита, тег — только в комментарии\n- uses: actions/setup-node@v5 ## учебная форма: тег мажора, его можно переставить на другой коммит\n```\n\nОткуда брать SHA. Откройте репозиторий action, раздел Releases, нужную версию.\nРядом с тегом релиза показан полный хеш коммита — его и копируете в `uses:`.\nТег оставляете в комментарии после `#`, чтобы через год было видно, какая это версия.\n\n> [!TIP]\n>\n> Не вписывайте SHA по памяти и не копируйте из чужих статей. Только со страницы релиза самого action.\n\nОбновлять хеши руками утомительно, это доверяют роботу.\nDependabot или Renovate присылают pull request с новым SHA и обновлённым комментарием версии.\n\n### 2. Минимальные permissions\n\nУ каждого запуска есть токен `GITHUB_TOKEN`. По нему action'ы ходят в API репозитория.\nЕсли права токена не ограничить, скомпрометированный action сможет писать в репозиторий и релизы.\n\nПравило: на уровне workflow ставим только чтение, а расширяем точечно у той job, которой это нужно.\n\n```yaml\npermissions:\n  contents: read\n\njobs:\n  release:\n    permissions:\n      contents: write\n```\n\nРазберём:\n- `permissions:` наверху файла — права по умолчанию для всех job.\n- `contents: read` — токен может читать код и не может ничего менять.\n- `permissions:` внутри job — заменяет права только для неё; остальные job остаются на чтении.\n\nКак только вы указали хоть одно право, все не перечисленные права отключаются.\n\n### 3. environment: production с подтверждением\n\nJob с ключом `environment: production` привязана к окружению, у которого есть свои правила.\nВ настройках окружения задают обязательных проверяющих (required reviewers).\nКонвейер доходит до этой job и ждёт, пока человек нажмёт «approve».\n\nСекреты тоже можно привязать к окружению. Тогда job без `environment: production` их просто не увидит.\nПодменённый action в job тестов до прод-токена не дотянется.\n\n### 4. Запрет pull_request_target в публичных репозиториях\n\nТриггер `pull_request` запускает workflow на коде из PR, но с ограниченными правами и без секретов для форков.\nТриггер `pull_request_target` запускает workflow в контексте основной ветки: с секретами и полным токеном.\n\nЕсли в таком workflow сделать checkout кода из PR, вы выполните код незнакомца с доступом к своим секретам.\nИменно так сработала атака на Nx в августе 2025.\n\n> [!WARNING]\n>\n> В публичном репозитории `pull_request_target` не используйте. Для проверки PR хватает обычного `pull_request`.\n\n### 5. OIDC вместо долгоживущих секретов\n\nКлассический деплой в облако: сохранить ключ облака в secrets и жить с ним годами.\nУтёк ключ — атакующий пользуется им, пока вы не заметите.\n\nOIDC (OpenID Connect) меняет схему:\n\n```flow\njob запрашивает у GitHub короткоживущий токен с данными о репозитории и ветке\n*облако проверяет подпись токена и доверяет ему по заранее заданному правилу\nоблако выдаёт временные учётные данные на один запуск\njob деплоит и завершается — учётные данные протухают\n```\n\nПостоянного секрета нет вообще, красть нечего.\nДля этого job'у нужно право `id-token: write`, а облако должно уметь доверять GitHub как провайдеру.\nНастройка со стороны облака — отдельная тема.\n\n### 6. gitleaks и push protection\n\nСекрет, попавший в коммит, считается утёкшим. Даже если вы удалили его следующим коммитом.\n`gitleaks` сканирует репозиторий и историю на токены и ключи; его запускают локально и шагом в CI.\nPush protection на стороне GitHub отклоняет push с найденным секретом ещё до попадания в репозиторий.\n\n### 7. Эфемерные раннеры\n\nЭфемерный раннер живёт ровно один запуск и уничтожается.\nНа следующий запуск приходит чистая машина: ни чужих файлов, ни забытых токенов.\nОблачные раннеры GitHub уже такие. Если вы поднимаете свои раннеры, настройте их так же.\n\nВ компаниях в России чаще встречается GitLab CI. Идеи те же: защищённые ветки, защищённые окружения, маскированные переменные.\n\n## Как это устроено внутри\n\nПочему тег ненадёжен, а SHA — да? Дело в устройстве Git.\n\nТег — это просто указатель на коммит.\nВладелец репозитория может переставить его на другой коммит и запушить принудительно.\nВаш `@v5` в этот момент молча начнёт подтягивать другой код.\n\nSHA — это хеш содержимого коммита. Изменили хоть байт — изменился хеш.\nПодставить другой код под тот же SHA невозможно, поэтому пин по хешу и работает.\n\n```reveal\nAction закреплён по SHA. Означает ли это, что код внутри action точно безопасен?\n---\nНет. SHA гарантирует лишь, что вы получите ровно тот код, который проверили при закреплении.\nЕсли сам этот коммит уже был вредоносным — пин не спасёт. Поэтому нужны ещё permissions и окружения.\n```\n\n`GITHUB_TOKEN` GitHub создаёт заново на каждый запуск и отзывает по окончании job.\nУкрасть его можно, а вот пользоваться им долго — нет.\n\n## Что будет, если…\n\n- **Оставить `@v5` у сторонних action и не следить.**\nТег переставят — и ваш конвейер выполнит чужой код, как случилось с `tj-actions/changed-files`.\n\n- **Не задать `permissions` вовсе.**\nТокен получит права из настроек репозитория, а они часто шире нужного.\nСкомпрометированный шаг сможет писать в репозиторий от вашего имени.\n\n- **Использовать `pull_request_target` и сделать checkout кода из PR.**\nЛюбой человек в интернете сможет запустить свой код с вашими секретами. Это сценарий Nx.\n\n## Как бывает неправильно\n\nКоманда закрепила все action по SHA, но не написала версию в комментарии.\nЧерез полгода никто не понимает, какие это версии и пора ли обновляться.\n\nДругой случай: чтобы «всё заработало», в workflow пишут `permissions: write-all`.\nТеперь любой шаг может всё.\n\n## Проверьте себя\n\nСторонний action подключён как `some/action@v3`. Что произойдёт, если владелец переставит тег `v3` на другой коммит?\n\n*Ответ: ваш конвейер молча начнёт выполнять новый код. Пин по SHA закрепляет один конкретный коммит, и подмена не пройдёт.*\n\nЗачем ставить `permissions: contents: read` на уровне workflow, если job'е релиза нужна запись?\n\n*Ответ: чтение — безопасное значение по умолчанию для всех job. Запись даёте точечно через permissions внутри одной job.*\n\nЧем OIDC безопаснее ключа облака в secrets?\n\n*Ответ: постоянного ключа нет. Облако выдаёт временные учётные данные на один запуск, и они протухают сразу после него.*\n\n## Частые ошибки новичка\n\n- **Закрепляют SHA без комментария с версией.**\nКак заметить: в `uses:` хеш, а рядом ничего. Никто не знает, что это.\nПочинка: всегда дописывайте `# v5.0.0` и доверьте обновление Dependabot или Renovate.\n\n- **Пишут `permissions: write-all` или не пишут permissions вовсе.**\nКак заметить: в workflow нет блока `permissions:` или в нём стоит `write-all`.\nПочинка: `contents: read` наверху, расширение только у нужной job.\n\n- **Берут `pull_request_target`, потому что «нужны секреты на PR».**\nКак заметить: в публичном репозитории есть workflow с этим триггером.\nПочинка: замените на `pull_request`. Секреты на чужих PR не нужны по определению.\n\n- **Ищут утечку секретов только по логам.**\nКак заметить: секрет попал в коммит, а заметили через месяц.\nПочинка: gitleaks шагом в CI и push protection в настройках репозитория.\n\n## Запомнить\n\n- Action — чужой код рядом с вашими секретами; тег можно переставить, SHA — нет.\n- Формат пина: `uses: owner/action@<40-символьный-sha> # v5.0.0`, SHA берут со страницы релиза.\n- `permissions: contents: read` на уровне workflow, расширение — точечно у job.\n- `environment: production` с обязательным подтверждением и своими секретами.\n- `pull_request_target` в публичном репозитории — запрет.\n- OIDC даёт временные учётные данные на один запуск вместо вечного ключа.\n- gitleaks + push protection ловят секреты до утечки; эфемерные раннеры не хранят прошлое.",
+        "resources": [
+          {
+            "title": "GitHub Docs: Security hardening for GitHub Actions",
+            "url": "https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions",
+            "note": "Официальные рекомендации: пин по SHA, permissions, pull_request_target, OIDC."
+          },
+          {
+            "title": "Unit 42: npm supply chain attack",
+            "url": "https://unit42.paloaltonetworks.com/npm-supply-chain-attack/",
+            "note": "Разбор атаки на цепочку поставки npm в 2025 году."
+          },
+          {
+            "title": "GitHub Actions security checklist",
+            "url": "https://www.stingrai.io/blog/github-actions-security-checklist",
+            "note": "Практический чеклист: что закрепить в workflow перед выходом в прод."
+          }
+        ]
+      }
+    },
+    {
+      "title": "Практика: закрепляем workflow",
+      "kind": "code",
+      "summary": "Переписываем конвейер «тест → деплой» по правилам 2025 года: permissions только на чтение, окружение production с подтверждением, без pull_request_target, с местом под SHA-пин.",
+      "durationMin": 14,
+      "content": {
+        "language": "yaml",
+        "task": "Ты уже написал workflow с тестами, секретами и кэшем. Теперь закрепим его по правилам из прошлого урока.\n\nВозьми за основу конвейер «тест → деплой» и сделай четыре вещи.\n\n1) На уровне workflow (без отступа, рядом с `on:` и `jobs:`) задай `permissions:` с единственным правом `contents: read`. Это права GITHUB_TOKEN по умолчанию для всех job: токен читает код и ничего не меняет.\n\n2) Триггер — push в ветку main. Триггер `pull_request_target` использовать запрещено: он даёт коду из чужого PR секреты и полный токен.\n\n3) Job `test`: забирает код (actions/checkout@v5), ставит Node.js 24 (actions/setup-node@v5), выполняет `npm ci` и `npm test`.\n\n4) Job `deploy`: зависит от `test` через `needs`, привязана к `environment: production` (там включено ручное подтверждение) и выполняет `./deploy.sh production`. Для входа в облако через OIDC ей нужно право `id-token: write`, поэтому у неё свой блок `permissions`. Перечисли в нём и `contents: read`: права job заменяют права workflow целиком, а не дополняют их.\n\n**Про версии action.** Оставь теги `@v5`, но допиши к каждому `uses` комментарий `# закрепите по SHA с релизной страницы`. В проде та же строка выглядит так:\n\n```yaml\n- uses: actions/checkout@<40-символьный-sha> # v5.0.0\n```\n\nSHA берут только со страницы релиза самого action — не по памяти и не из чужих статей. Реальные хеши в задании не пишем.\n\n## 🐞 Сломанный пример\n\nЭтот workflow GitHub не примет — ключ стоит не на своём уровне:\n\n```yaml\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - permissions:        # у шага не бывает permissions\n          contents: read\n      - uses: actions/checkout@v5\n```\n\nМетод отладки по шагам:\n1. Прочитай ошибку — GitHub укажет на неожиданный ключ и номер строки.\n2. Гипотеза: `permissions` живёт на уровне workflow или job, но не шага.\n3. Проверь: сравни отступ `permissions` с отступом `on:` и `jobs:`.\n4. Почини: перенеси блок наверх файла, без отступа.\n5. Убедись: `permissions:` стоит на одном уровне с `on:` и `jobs:`.\n\n## 🔮 Предскажите\n\nОтветьте до запуска:\n1. В job `deploy` вы оставили только `id-token: write`, без `contents: read`. Сможет ли `actions/checkout` забрать код?\n2. Вы убрали блок `permissions` с уровня workflow. Что получит токен в job `test`?\n\nПроверьте себя: без `contents: read` в job права на чтение кода пропадут — блок job заменяет блок workflow целиком. Без верхнего `permissions` токен получит права из настроек репозитория, а они часто шире нужного.",
+        "hint": "permissions на уровне workflow пишется без отступа, как on и jobs. Значение права — read или write. Окружение называется production, зависимость — needs: test. У job deploy свой блок permissions с contents: read и id-token: write. Теги @v5 оставь, SHA не выдумывай.",
+        "starter": "# Файл: .github/workflows/ci.yml\nname: CI\n\non:\n  push:\n    branches: [main]\n# запрещённый триггер с суффиксом _target здесь не появляется\n\n# TODO: права GITHUB_TOKEN по умолчанию для всех job — только чтение кода\npermissions:\n  contents: ___\n\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v5 # закрепите по SHA с релизной страницы\n      - uses: actions/setup-node@v5 # закрепите по SHA с релизной страницы\n        with:\n          node-version: \"24\"\n      - run: npm ci\n      - run: npm test\n\n  deploy:\n    # TODO: job ждёт успеха test\n    needs: ___\n    runs-on: ubuntu-latest\n    # TODO: окружение с ручным подтверждением\n    environment: ___\n    # TODO: права только этой job: чтение кода + токен для OIDC\n    permissions:\n      contents: ___\n      id-token: ___\n    steps:\n      - uses: actions/checkout@v5 # закрепите по SHA с релизной страницы\n      - run: ./deploy.sh production\n",
+        "solution": "name: CI\n\non:\n  push:\n    branches: [main]\n\npermissions:\n  contents: read\n\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v5 # закрепите по SHA с релизной страницы\n      - uses: actions/setup-node@v5 # закрепите по SHA с релизной страницы\n        with:\n          node-version: \"24\"\n      - run: npm ci\n      - run: npm test\n\n  deploy:\n    needs: test\n    runs-on: ubuntu-latest\n    environment: production\n    permissions:\n      contents: read\n      id-token: write\n    steps:\n      - uses: actions/checkout@v5 # закрепите по SHA с релизной страницы\n      - run: ./deploy.sh production\n",
+        "checks": [
+          {
+            "type": "contains",
+            "value": "permissions:",
+            "message": "Задай блок permissions — права GITHUB_TOKEN."
+          },
+          {
+            "type": "regex",
+            "value": "(?m)^permissions:\\s*\\n\\s+contents:\\s*read",
+            "message": "На уровне workflow (без отступа) permissions должен содержать contents: read."
+          },
+          {
+            "type": "regex",
+            "value": "contents:\\s*read",
+            "message": "Право contents должно быть read, а не write."
+          },
+          {
+            "type": "notContains",
+            "value": "write-all",
+            "message": "write-all даёт токену все права разом — так нельзя."
+          },
+          {
+            "type": "notContains",
+            "value": "pull_request_target",
+            "message": "Триггер pull_request_target запрещён: он даёт чужому коду секреты."
+          },
+          {
+            "type": "regex",
+            "value": "needs:\\s*test",
+            "message": "Job deploy должна ждать успеха test через needs."
+          },
+          {
+            "type": "regex",
+            "value": "environment:\\s*production",
+            "message": "Привяжи job deploy к environment production."
+          },
+          {
+            "type": "regex",
+            "value": "id-token:\\s*write",
+            "message": "Для OIDC job deploy нужно право id-token: write."
+          },
+          {
+            "type": "contains",
+            "value": "actions/checkout@",
+            "message": "Забери код через actions/checkout."
+          }
+        ],
+        "resources": [
+          {
+            "title": "Workflow syntax for GitHub Actions",
+            "url": "https://docs.github.com/ru/actions/using-workflows/workflow-syntax-for-github-actions",
+            "note": "Ключи permissions, environment, needs и на каком уровне они живут."
+          },
+          {
+            "title": "Using environments for deployment",
+            "url": "https://docs.github.com/ru/actions/deployment/targeting-different-environments/using-environments-for-deployment",
+            "note": "Окружение production, required reviewers и секреты окружения."
+          },
+          {
+            "title": "About security hardening with OpenID Connect",
+            "url": "https://docs.github.com/en/actions/deployment/security-hardening-your-deployments/about-security-hardening-with-openid-connect",
+            "note": "Как job получает временные учётные данные облака без долгоживущих секретов."
+          }
+        ]
+      }
+    },
+    {
       "title": "Квиз: workflow, триггеры, секреты и кэш",
       "kind": "quiz",
       "summary": "Проверяем структуру workflow, выбор триггеров и фильтров, безопасную работу с секретами и различие артефакта и кэша.",
@@ -947,6 +1050,77 @@
             ],
             "hint": "Пять букв, задаёт зависимость между job.",
             "explanation": "Ключ needs указывает, какие job должны успешно завершиться раньше. needs: deploy-staging заставит deploy-prod ждать окончания deploy-staging."
+          },
+          {
+            "id": "q7",
+            "text": "Зачем сторонний action закрепляют по полному SHA коммита, а не по тегу вроде @v5?",
+            "options": [
+              {
+                "id": "a",
+                "text": "Тег можно переставить на другой коммит, а SHA указывает ровно на один",
+                "correct": true
+              },
+              {
+                "id": "b",
+                "text": "SHA скачивается быстрее, чем тег",
+                "correct": false
+              },
+              {
+                "id": "c",
+                "text": "Теги не работают на раннерах ubuntu-latest",
+                "correct": false
+              },
+              {
+                "id": "d",
+                "text": "По SHA action автоматически обновляется до новой версии",
+                "correct": false
+              }
+            ],
+            "explanation": "Тег в Git — это указатель, владелец может переставить его на вредоносный коммит, как случилось с tj-actions/changed-files в марте 2025. SHA — хеш содержимого, подменить код под ним нельзя. Обновление хеша доверяют Dependabot или Renovate."
+          },
+          {
+            "id": "q8",
+            "multiple": true,
+            "text": "Какие меры уменьшат ущерб, если один из подключённых action окажется вредоносным? (выберите все)",
+            "options": [
+              {
+                "id": "a",
+                "text": "permissions: contents: read на уровне workflow",
+                "correct": true
+              },
+              {
+                "id": "b",
+                "text": "environment: production с обязательным подтверждением человеком",
+                "correct": true
+              },
+              {
+                "id": "c",
+                "text": "OIDC вместо долгоживущего ключа облака в secrets",
+                "correct": true
+              },
+              {
+                "id": "d",
+                "text": "Триггер pull_request_target в публичном репозитории",
+                "correct": false
+              },
+              {
+                "id": "e",
+                "text": "permissions: write-all, чтобы шаги точно не падали",
+                "correct": false
+              }
+            ],
+            "explanation": "Чтение по умолчанию не даёт подменённому коду писать в репозиторий. Окружение с подтверждением не пустит его в прод, а OIDC оставляет ему лишь временные учётные данные. pull_request_target и write-all, наоборот, расширяют доступ чужому коду."
+          },
+          {
+            "id": "q9",
+            "type": "blank",
+            "text": "Впишите право GITHUB_TOKEN в формате «ключ: значение», которое ставят на уровне workflow, чтобы токен мог только читать код репозитория:",
+            "accept": [
+              "contents: read",
+              "contents:read"
+            ],
+            "hint": "Ключ называет содержимое репозитория, значение — только чтение.",
+            "explanation": "contents: read на уровне workflow делает токен всех job только читающим. Как только указано хоть одно право, остальные отключаются; запись дают точечно через permissions внутри нужной job."
           }
         ],
         "resources": [
@@ -1349,6 +1523,113 @@
       }
     },
     {
+      "title": "Практика: .gitlab-ci.yml со stages test → build → deploy",
+      "kind": "code",
+      "summary": "Собираем полный .gitlab-ci.yml: общий image, кэш npm, артефакт сборки и деплой по rules только из ветки main; секреты берём из настроек проекта.",
+      "durationMin": 14,
+      "content": {
+        "language": "yaml",
+        "task": "В прошлом уроке ты увидел, что GitLab CI — тот же конвейер другим синтаксисом. Теперь соберём его целиком: три этапа, кэш, артефакт и деплой только из `main`.\n\n**Почему это важно именно здесь.** На рынке РФ GitLab CI, в том числе self-hosted GitLab на серверах компании, встречается чаще GitHub Actions. Одна из причин — код и раннеры остаются внутри контура компании. Поэтому `.gitlab-ci.yml` ты будешь читать и писать чаще, чем workflow в Actions.\n\n**Что нового по сравнению с прошлым уроком.**\n\n1) `image` на верхнем уровне — образ, в котором runner запускает каждую job. Одна строка `image: node:24` вместо повторения в каждой задаче. Ключ работает, когда runner запускает job в контейнерах (docker executor) — это самый частый вариант. Образ тянется из реестра. В компании runner обычно смотрит на зеркало или свой реестр: GitLab Registry, Harbor, Nexus. Причина: Docker Hub для российских IP ограничивали в конце мая 2024 года, и ограничения повторялись в начале 2026 года.\n\n2) `cache` — зависимости, которые переживают между запусками. Ключ считается по файлу: `key: files:` со списком из `package-lock.json`. Lock-файл не менялся — ключ тот же, кэш подходит. Кэшируем папку `.npm/`, а `npm ci` запускаем с флагами `--cache .npm --prefer-offline`. Первый флаг кладёт кэш npm внутрь проекта, чтобы runner мог его сохранить. Второй велит брать пакеты из кэша и ходить в сеть только за недостающим. Смысл тот же, что у actions/cache, только хэш файла GitLab считает сам.\n\n3) `rules` вместо `only`. В прошлом уроке деплой ограничивали через `only: main`. `rules` гибче: это список условий, и job попадает в пайплайн, если сработало хотя бы одно. Условие пишут через `if` и встроенные переменные: `$CI_COMMIT_BRANCH == \"main\"`. Если ни одно правило не подошло, job в пайплайн не попадает вовсе — не «пропускается», а просто отсутствует.\n\n4) `artifacts` с `expire_in`. Папку `dist/` из сборки сохраняем на неделю: `expire_in: 1 week`. Артефакты предыдущих этапов job'ы следующих этапов получают автоматически, лишних ключей не нужно.\n\n5) Переменные из настроек проекта, а не из файла. Токен деплоя не пишут в `.gitlab-ci.yml` — файл лежит в репозитории, и его видит каждый с доступом на чтение. Секрет заводят в Settings → CI/CD → Variables проекта. Флаг Masked прячет значение в логах, Protected отдаёт переменную только защищённым веткам и тегам. В job она приходит как обычная переменная окружения `$DEPLOY_TOKEN`, и `deploy.sh` читает её сам. Ключ `variables:` в самом файле годится лишь для несекретных значений вроде имени окружения.\n\nНапиши `.gitlab-ci.yml`, в котором:\n- общий `image: node:24` для всех job;\n- `stages` строго в порядке `test`, `build`, `deploy`;\n- глобальный `cache` с ключом по `package-lock.json` и папкой `.npm/`;\n- job `run-tests` на этапе `test`: `npm ci --cache .npm --prefer-offline`, затем `npm test`;\n- job `build-app` на этапе `build`: те же зависимости, `npm run build`, артефакт `dist/` на `1 week`;\n- job `deploy-prod` на этапе `deploy`: `rules` с условием по ветке `main`, `environment: production`;\n- в `script` деплоя сначала `test -n \"$DEPLOY_TOKEN\"` — проверка, что переменная задана, затем `./deploy.sh production`.\n\nСтрока `test -n` — маленький предохранитель. Если переменную забыли создать в настройках, job упадёт сразу, а не где-то внутри `deploy.sh`.\n\n**Как бывает неправильно.** Разработчик торопится и пишет в `variables:` файла строку вида `DEPLOY_TOKEN: glpat-...`. Токен уезжает в Git вместе с коммитом, и его видит вся команда и вся история репозитория. Такой токен считается утёкшим: его отзывают и выпускают новый, а в файле оставляют только имя переменной.\n\n## 🔮 Предскажите\n\nОтветьте до запуска, опираясь на `rules` и `stages`:\n1. Разработчик пушит в ветку `feature/login`. Сколько job окажется в пайплайне?\n2. Переменную `DEPLOY_TOKEN` забыли создать в настройках проекта. Когда это станет видно?\n\nПроверьте себя: в пайплайне будут две job — `run-tests` и `build-app`; `deploy-prod` не появится, потому что правило для `main` не сработало. Отсутствие переменной вскроется только при пуше в `main`: на этапе `deploy` строка `test -n` завершится ошибкой, и job упадёт до запуска `deploy.sh`.",
+        "starter": "# Файл: .gitlab-ci.yml (в корне репозитория)\n\n# Один образ для всех job (node:24)\nimage:\n\n# Этапы по порядку: test, build, deploy\nstages:\n  -\n  -\n  -\n\n# Кэш npm: ключ по lock-файлу, папка .npm/\ncache:\n  key:\n    files:\n      -\n  paths:\n    -\n\nrun-tests:\n  stage:              # test\n  script:\n    - npm ci --cache .npm --prefer-offline\n    - npm test\n\nbuild-app:\n  stage:              # build\n  script:\n    - npm ci --cache .npm --prefer-offline\n    - npm run build\n  # dist/ — артефакт на неделю (expire_in)\n  artifacts:\n    paths:\n      -\n    expire_in:\n\ndeploy-prod:\n  stage:              # deploy\n  # rules вместо only — деплой лишь для ветки main\n  rules:\n    - if:\n  environment: production\n  script:\n    # DEPLOY_TOKEN живёт в Settings → CI/CD → Variables, а не в файле\n    - test -n\n    - ./deploy.sh production",
+        "hint": "Ключи верхнего уровня: image, stages, cache. У каждой job — stage и script. У деплоя rules с условием if по $CI_COMMIT_BRANCH, у сборки artifacts с paths и expire_in.",
+        "checks": [
+          {
+            "type": "contains",
+            "value": "stages:",
+            "message": "Нужен ключ stages со списком этапов."
+          },
+          {
+            "type": "regex",
+            "value": "stages:\\s*\\n\\s*-\\s*test[^\\n]*\\n\\s*-\\s*build[^\\n]*\\n\\s*-\\s*deploy",
+            "message": "Этапы должны идти в порядке test → build → deploy."
+          },
+          {
+            "type": "regex",
+            "value": "image:\\s*node:24",
+            "message": "Укажи общий образ image: node:24 на верхнем уровне."
+          },
+          {
+            "type": "contains",
+            "value": "cache:",
+            "message": "Подключи кэш зависимостей через cache."
+          },
+          {
+            "type": "contains",
+            "value": "package-lock.json",
+            "message": "Ключ кэша строй по файлу package-lock.json (cache.key.files)."
+          },
+          {
+            "type": "regex",
+            "value": "stage:\\s*test",
+            "message": "Нужна job этапа test."
+          },
+          {
+            "type": "regex",
+            "value": "stage:\\s*build",
+            "message": "Нужна job этапа build."
+          },
+          {
+            "type": "regex",
+            "value": "stage:\\s*deploy",
+            "message": "Нужна job этапа deploy."
+          },
+          {
+            "type": "contains",
+            "value": "artifacts:",
+            "message": "Сохрани dist/ как артефакт job build-app."
+          },
+          {
+            "type": "contains",
+            "value": "expire_in:",
+            "message": "Задай срок жизни артефакта через expire_in."
+          },
+          {
+            "type": "contains",
+            "value": "rules:",
+            "message": "Ограничь деплой через rules с условием по ветке."
+          },
+          {
+            "type": "regex",
+            "value": "if:\\s*\\$CI_COMMIT_BRANCH\\s*==\\s*[\"']main[\"']",
+            "message": "Условие деплоя: $CI_COMMIT_BRANCH == \"main\"."
+          },
+          {
+            "type": "contains",
+            "value": "$DEPLOY_TOKEN",
+            "message": "Токен бери из переменной $DEPLOY_TOKEN, заданной в настройках проекта."
+          },
+          {
+            "type": "notContains",
+            "value": "glpat-",
+            "message": "Нельзя писать настоящий токен в файл — только имя переменной."
+          },
+          {
+            "type": "notContains",
+            "value": "only:",
+            "message": "В этом уроке ветку ограничиваем через rules, ключ only не используем."
+          }
+        ],
+        "solution": "# Файл: .gitlab-ci.yml (в корне репозитория)\n\nimage: node:24\n\nstages:\n  - test\n  - build\n  - deploy\n\ncache:\n  key:\n    files:\n      - package-lock.json\n  paths:\n    - .npm/\n\nrun-tests:\n  stage: test\n  script:\n    - npm ci --cache .npm --prefer-offline\n    - npm test\n\nbuild-app:\n  stage: build\n  script:\n    - npm ci --cache .npm --prefer-offline\n    - npm run build\n  artifacts:\n    paths:\n      - dist/\n    expire_in: 1 week\n\ndeploy-prod:\n  stage: deploy\n  rules:\n    - if: $CI_COMMIT_BRANCH == \"main\"\n  environment: production\n  script:\n    - test -n \"$DEPLOY_TOKEN\"\n    - ./deploy.sh production",
+        "resources": [
+          {
+            "title": "GitLab CI/CD: справка по .gitlab-ci.yml",
+            "url": "https://docs.gitlab.com/ee/ci/yaml/",
+            "note": "Ключи image, stages, cache, artifacts, rules и environment в одном справочнике."
+          },
+          {
+            "title": "GitLab CI/CD: переменные",
+            "url": "https://docs.gitlab.com/ee/ci/variables/",
+            "note": "Переменные проекта, флаги Masked и Protected, встроенные переменные вроде CI_COMMIT_BRANCH."
+          },
+          {
+            "title": "GitLab CI/CD: кэширование",
+            "url": "https://docs.gitlab.com/ee/ci/caching/",
+            "note": "Как устроен cache, ключ по файлам и чем кэш отличается от артефактов."
+          }
+        ]
+      }
+    },
+    {
       "title": "Итоговый квиз главы: CI/CD",
       "kind": "quiz",
       "summary": "Проверяем всё об участке CI/CD: от этапов конвейера до rollback и чтения логов.",
@@ -1539,6 +1820,61 @@
               }
             ],
             "explanation": "Диагностика начинается с логов: находят красный шаг и первое сообщение об ошибке. Слепые перезапуски и переписывание с нуля лишь тратят время."
+          },
+          {
+            "id": "q9",
+            "type": "match",
+            "text": "Сопоставьте ключ .gitlab-ci.yml с его ролью:",
+            "pairs": [
+              {
+                "id": "p1",
+                "left": "stages",
+                "right": "порядок этапов конвейера"
+              },
+              {
+                "id": "p2",
+                "left": "image",
+                "right": "образ, в котором runner выполняет job"
+              },
+              {
+                "id": "p3",
+                "left": "cache",
+                "right": "зависимости, сохраняемые между запусками"
+              },
+              {
+                "id": "p4",
+                "left": "artifacts",
+                "right": "результат job для следующих этапов"
+              },
+              {
+                "id": "p5",
+                "left": "rules",
+                "right": "условие, при котором job попадает в пайплайн"
+              }
+            ],
+            "explanation": "stages задаёт порядок этапов, а image — образ контейнера для job. cache ускоряет установку зависимостей между запусками. artifacts передают результат дальше по конвейеру. rules решают, попадёт ли job в пайплайн, например только для ветки main."
+          },
+          {
+            "id": "q10",
+            "text": "У job deploy-prod в .gitlab-ci.yml стоит rules с единственным условием $CI_COMMIT_BRANCH == \"main\". Разработчик пушит в ветку feature/login. Что будет с deploy-prod?",
+            "options": [
+              {
+                "id": "a",
+                "text": "Job вообще не попадёт в пайплайн — её не будет в списке",
+                "correct": true
+              },
+              {
+                "id": "b",
+                "text": "Job запустится и упадёт на первой команде script",
+                "correct": false
+              },
+              {
+                "id": "c",
+                "text": "Job появится в пайплайне и будет ждать ручного запуска",
+                "correct": false
+              }
+            ],
+            "explanation": "rules — список условий; job добавляется в пайплайн, только если сработало хотя бы одно. Для ветки feature/login условие по main не выполняется, других правил нет — job просто отсутствует. Она не запускается и не ждёт: в пайплайне будут только run-tests и build-app."
           }
         ],
         "resources": [

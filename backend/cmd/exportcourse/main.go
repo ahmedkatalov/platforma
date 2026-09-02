@@ -7,6 +7,7 @@
 package main
 
 import (
+	"crypto/rand"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -98,10 +99,10 @@ func main() {
 	fmt.Printf("  %d глав · %d уроков · %.1f МБ\n", len(pkg.Modules), lessons, float64(len(data))/1024/1024)
 }
 
-// graftIDs переносит id курса, глав и уроков из прошлого экспорта по позиции.
-// Идентификаторы нужны, чтобы импорт в админке обновлял курс на месте (SyncContent
-// сначала ищет по id) и не терял прогресс студентов. Порядок и названия должны совпадать —
-// иначе отказываемся, чтобы не приклеить чужой id.
+// graftIDs переносит id курса, глав и уроков из прошлого экспорта, сопоставляя главы
+// и уроки ПО НАЗВАНИЮ (состав уроков между этапами меняется). Не найденным в эталоне
+// главам/урокам выдаётся новый UUID v4 — так импорт в админке обновляет старое на месте
+// (SyncContent ищет по id), а новое создаёт, не теряя прогресс студентов.
 func graftIDs(pkg *coursePackage, refPath string) error {
 	raw, err := os.ReadFile(refPath)
 	if err != nil {
@@ -111,28 +112,57 @@ func graftIDs(pkg *coursePackage, refPath string) error {
 	if err := json.Unmarshal(raw, &ref); err != nil {
 		return fmt.Errorf("ids: разбор %s: %w", refPath, err)
 	}
-	if len(ref.Modules) != len(pkg.Modules) {
-		return fmt.Errorf("ids: глав в эталоне %d, в выгрузке %d", len(ref.Modules), len(pkg.Modules))
-	}
 	pkg.Course.ID = ref.Course.ID
-	moved := 0
+	if pkg.Course.ID == "" {
+		pkg.Course.ID = newUUID()
+	}
+	refMods := map[string]pkgModule{}
+	for _, m := range ref.Modules {
+		refMods[m.Title] = m
+	}
+	kept, created, orphan := 0, 0, 0
 	for i := range pkg.Modules {
-		rm, m := ref.Modules[i], &pkg.Modules[i]
-		if rm.Title != m.Title {
-			return fmt.Errorf("ids: глава %d: «%s» ≠ «%s»", i+1, rm.Title, m.Title)
+		m := &pkg.Modules[i]
+		rm, ok := refMods[m.Title]
+		if ok {
+			m.ID = rm.ID
+		} else {
+			m.ID = newUUID()
+			fmt.Printf("  новая глава без эталона: «%s» → новый id\n", m.Title)
 		}
-		if len(rm.Lessons) != len(m.Lessons) {
-			return fmt.Errorf("ids: глава %d: уроков в эталоне %d, в выгрузке %d", i+1, len(rm.Lessons), len(m.Lessons))
+		refLes := map[string]string{}
+		for _, l := range rm.Lessons {
+			refLes[l.Title] = l.ID
 		}
-		m.ID = rm.ID
+		seen := map[string]bool{}
 		for j := range m.Lessons {
-			if rm.Lessons[j].Title != m.Lessons[j].Title {
-				return fmt.Errorf("ids: глава %d урок %d: «%s» ≠ «%s»", i+1, j+1, rm.Lessons[j].Title, m.Lessons[j].Title)
+			l := &m.Lessons[j]
+			if id, ok := refLes[l.Title]; ok && !seen[l.Title] {
+				l.ID, seen[l.Title] = id, true
+				kept++
+			} else {
+				l.ID = newUUID()
+				created++
 			}
-			m.Lessons[j].ID = rm.Lessons[j].ID
-			moved++
+		}
+		for t := range refLes {
+			if !seen[t] {
+				orphan++
+				fmt.Printf("  ВНИМАНИЕ: урок из эталона не найден (переименован/удалён?): глава «%s» → «%s»\n", m.Title, t)
+			}
 		}
 	}
-	fmt.Printf("  id перенесены из %s: курс, %d глав, %d уроков\n", refPath, len(pkg.Modules), moved)
+	fmt.Printf("  id: сохранено %d, новых UUID %d, потеряно из эталона %d\n", kept, created, orphan)
 	return nil
+}
+
+// newUUID — UUID v4 из crypto/rand (без внешних зависимостей).
+func newUUID() string {
+	var b [16]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		log.Fatal(err)
+	}
+	b[6] = (b[6] & 0x0f) | 0x40
+	b[8] = (b[8] & 0x3f) | 0x80
+	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
 }

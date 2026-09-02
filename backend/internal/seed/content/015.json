@@ -1,6 +1,6 @@
 {
   "title": "Kubernetes: оркестрация контейнеров",
-  "summary": "Учим Kubernetes как целостную систему: от боли, которую он решает, через архитектуру кластера и базовые объекты к конфигурации, надёжности, безопасности, упаковке (Helm) и доставке (GitOps). Каждый но",
+  "summary": "Учим Kubernetes как целостную систему: от боли, которую он решает, через архитектуру кластера и базовые объекты к конфигурации, надёжности, безопасности, упаковке (Helm) и доставке (GitOps). Каждый но. Разбираем Gateway API: GatewayClass, Gateway и HTTPRoute вместо Ingress NGINX.",
   "lessons": [
     {
       "title": "Зачем Kubernetes и как устроен кластер",
@@ -594,6 +594,129 @@
       }
     },
     {
+      "title": "Gateway API: GatewayClass, Gateway и HTTPRoute",
+      "kind": "text",
+      "summary": "Новый стандарт маршрутизации вместо Ingress: три объекта, разделение ролей оператора и команды, переезд после вывода Ingress NGINX из поддержки.",
+      "durationMin": 13,
+      "content": {
+        "body": "## Зачем это нужно\n\nВ прошлом уроке вы описали Ingress: хост, путь, Service.\nДля одного сайта этого хватает, но у Ingress три слабых места.\n\nПервое: всё, что сложнее «хост и путь», Ingress не умеет.\nРедиректы, правка заголовков, доля трафика на новую версию — это делают через аннотации.\nАннотации у каждого контроллера свои, и манифест намертво привязан к конкретной реализации.\n\nВторое: один объект смешивает две зоны ответственности.\nПорт, TLS-сертификат и выбор контроллера — забота администратора кластера.\nПуть `/api` и имя Service — забота команды приложения.\nВ Ingress всё это лежит в одном YAML, и права приходится давать «всё или ничего».\n\nТретье: самый популярный контроллер, Ingress NGINX, выведен из поддержки в марте 2026 года.\nОб этом объявили Kubernetes Steering Committee и Security Response Committee 29 января 2026 года.\nОбъект Ingress из API никуда не делся, но строить на нём новые проекты уже не стоит.\n\nGateway API отвечает на все три пункта — это официальный стандарт маршрутизации в Kubernetes.\n\n## Что это простыми словами\n\nПредставьте бизнес-центр.\n\nGatewayClass — это договор с подрядчиком, который держит вход: охрана, турникеты, техника.\nДоговор один на здание, подписывает его управляющий.\n\nGateway — сам вход: какие двери открыты и где проверяют пропуск.\nВход тоже принадлежит управляющему.\n\nHTTPRoute — таблички «бухгалтерия — третий этаж, направо», которые вешает каждый арендатор.\nАрендатор не трогает двери и турникеты, он только описывает, как дойти до его офиса.\n\nВ кластере управляющий — оператор кластера, арендаторы — команды приложений.\nGateway API разделяет их манифесты так же, как здание разделяет вход и таблички.\n\n## Как это устроено внутри\n\n### Три объекта и как они связаны\n\nGateway API — не часть ядра Kubernetes, а набор CRD с группой `gateway.networking.k8s.io`.\nCRD ставят в кластер отдельно, вместе с контроллером.\nБез контроллера объекты создаются, но ничего не делают — так же было и с Ingress.\n\n```flow\n*GatewayClass → controllerName: какой контроллер воплощает шлюзы\n*Gateway → gatewayClassName: ссылка на класс → listeners: порт, протокол, TLS\n*HTTPRoute → parentRefs: к какому Gateway прикрепиться → rules: хост, путь\nService → backendRefs из HTTPRoute → Pod по селектору\n```\n\nGatewayClass говорит, кто реализует шлюзы.\nGateway ссылается на класс и открывает точку входа.\nHTTPRoute ссылается на Gateway и описывает, что делать с запросом.\nService и Pod — те же, что раньше: Gateway API меняет только слой маршрутизации.\n\n### Разбор HTTPRoute по строкам\n\n```anatomy\napiVersion: gateway.networking.k8s.io/v1 ## Группа Gateway API: объекты приходят из CRD, а не из ядра\nkind: HTTPRoute ## Правила для HTTP-трафика\nmetadata:\n  name: shop-routes\n  namespace: shop ## Живёт в отсеке команды приложения\nspec:\n  parentRefs: ## К какому Gateway прикрепить маршрут\n    - name: shop-gateway\n      namespace: infra ## Gateway лежит в отсеке оператора, поэтому namespace указан явно\n  hostnames: ## Для каких хостов действуют правила\n    - shop.example.com\n  rules:\n    - matches: ## Условие: путь начинается с /api\n        - path:\n            type: PathPrefix\n            value: /api\n      backendRefs: ## Куда отправить запрос: Service api, порт 80\n        - name: api\n          port: 80\n```\n\nОбратите внимание на `parentRefs`.\nИменно это поле связывает маршрут с входом, и именно его новички чаще всего забывают.\n\n> [!TIP]\n>\n> Принят ли маршрут, видно в `kubectl describe httproute shop-routes`: смотрите раздел Status и условие Accepted.\n\n### Разделение ролей\n\nОператор кластера создаёт GatewayClass и Gateway, обычно в своём namespace вроде `infra`.\nОн решает, какой контроллер стоит, какие порты открыты и где лежит сертификат.\n\nКоманда приложения создаёт HTTPRoute в своём namespace и ссылается на Gateway через `parentRefs`.\nЕй не нужны права на объекты оператора — RBAC из следующих уроков ложится на это разделение идеально.\n\nЧтобы Gateway принимал маршруты из чужих namespace, оператор разрешает это у listener:\n\n```\nlisteners:\n  - name: http\n    protocol: HTTP\n    port: 80\n    allowedRoutes:\n      namespaces:\n        from: All\n```\n\nПо умолчанию listener принимает маршруты только из своего namespace.\n`from: All` открывает его для всех отсеков, а `Selector` — только для namespace с нужной меткой.\n\n### Чего не умел Ingress\n\nHTTPRoute сравнивает не только путь.\nВ `matches` можно проверить заголовок, метод, параметр запроса.\nВ `backendRefs` можно указать несколько Service с весами — так делают канареечный выкат без аннотаций.\nФильтры в правиле умеют редирект, переписывание пути и правку заголовков.\nВсё это описано в самом стандарте, а значит, одинаково работает у любого контроллера.\n\n## Чем Gateway API отличается от Ingress\n\n| Вопрос | Ingress | Gateway API |\n|---|---|---|\n| Сколько объектов | один | три: класс, шлюз, маршрут |\n| Кто владеет | одна команда — всем | оператор — вход, команда — маршруты |\n| Сложные правила | аннотации контроллера | поля стандарта |\n| Переносимость | зависит от контроллера | манифест одинаков у всех |\n\n## Ingress NGINX: почему это срочно\n\nС марта 2026 года Ingress NGINX вне поддержки: новых версий и исправлений, включая исправления безопасности, не будет.\nКластер с ним продолжит работать, но каждая новая уязвимость останется в нём навсегда.\n\n> [!WARNING]\n>\n> Не путайте: из поддержки вышел контроллер Ingress NGINX, а объект Ingress в API остался. Но новые проекты стройте на Gateway API.\n\nДля переезда есть утилита ingress2gateway, версия 1.0 вышла в марте 2026 года.\nОна читает существующие Ingress и печатает эквивалентные Gateway и HTTPRoute.\nРезультат нужно проверить глазами: аннотации с логикой контроллера переводятся не всегда.\n\n```flow\nинвентаризация Ingress → выбор контроллера Gateway API\nустановка CRD и контроллера → *ingress2gateway: черновик Gateway и HTTPRoute\nревью и правка черновика → apply рядом со старым Ingress\nпереключение DNS на новый вход → удаление Ingress и старого контроллера\n```\n\nСтарый и новый вход какое-то время живут вместе — так переезд можно откатить за минуту.\n\n## Контроллеры: кто воплощает шлюз\n\nGateway API — только описание.\nРеальный прокси приносит контроллер, и у каждого свой GatewayClass.\n\n- **Envoy Gateway** — реализация на прокси Envoy от сообщества Envoy.\n- **kgateway** — ещё одна реализация на базе Envoy.\n- **Cilium** — если Cilium уже стоит как сетевой плагин, шлюз включается в нём же.\n- **Traefik** — знакомый по Docker-миру прокси, поддерживает Gateway API.\n\nВыбирайте по тому, что уже есть в кластере: манифесты Gateway и HTTPRoute при смене контроллера переписывать не придётся.\n\n## TLS: cert-manager\n\nДля HTTPS оператор добавляет второй listener на порт 443 с `protocol: HTTPS`.\nСертификат он не вписывает в манифест, а ссылается на Secret через `tls.certificateRefs`.\n\nВыпуск и продление сертификата берёт на себя cert-manager: он получает сертификат у центра сертификации и кладёт его в нужный Secret.\nКогда срок подходит к концу, cert-manager обновляет Secret сам, а Gateway подхватывает новый сертификат.\n\n## Что будет, если…\n\n- **Не установить контроллер.**\nGateway создастся, но адреса не получит: в `kubectl get gateway` колонка ADDRESS останется пустой.\n\n- **Забыть `parentRefs` в HTTPRoute.**\nМаршрут повиснет в воздухе: ни один Gateway о нём не знает, трафик не пойдёт.\n\n- **Сослаться на Gateway из чужого namespace без allowedRoutes.**\nМаршрут не примут: в его status условие Accepted будет False.\n\n## Как бывает неправильно\n\nНовичок переносит сайт с Ingress и копирует аннотации `nginx.ingress.kubernetes.io/...` в HTTPRoute.\nКонтроллер их молча игнорирует, редиректы и лимиты пропадают.\n\nПочему проваливается: аннотации были языком конкретного контроллера.\nВ Gateway API то же самое описывают полями стандарта — фильтрами в правиле HTTPRoute.\nКаждую аннотацию нужно перевести в поле, а не перенести как есть.\n\n## Проверьте себя\n\nКто и какой объект создаёт, если оператор кластера открывает вход, а команда добавляет маршрут?\n\n*Ответ: оператор — GatewayClass и Gateway, команда — HTTPRoute в своём namespace с parentRefs на Gateway.*\n\nПочему манифест HTTPRoute переносится между контроллерами, а Ingress с аннотациями — нет?\n\n*Ответ: HTTPRoute описывает правила полями стандарта Gateway API, а аннотации Ingress — язык одного контроллера.*\n\nМожно ли оставить Ingress NGINX в проде «пока работает»?\n\n*Ответ: рискованно: с марта 2026 года он вне поддержки, новые уязвимости никто не закроет. Планируйте переезд через ingress2gateway.*\n\n## Частые ошибки новичка\n\n- **Ставят CRD Gateway API, но не контроллер.**\nКак заметить: Gateway без адреса, HTTPRoute без эффекта.\nПочинка: установите контроллер и убедитесь, что его GatewayClass появился в кластере.\n\n- **Кладут HTTPRoute в другой namespace и забывают про allowedRoutes.**\nКак заметить: маршрут не принят, в status условие Accepted False.\nПочинка: оператор открывает listener через allowedRoutes, а вы указываете namespace в parentRefs.\n\n- **Переносят аннотации Ingress как есть.**\nКак заметить: редиректы и лимиты «исчезли» после переезда.\nПочинка: переведите каждую аннотацию в фильтр HTTPRoute или настройку контроллера.\n\n## Запомнить\n\n- Gateway API — стандарт маршрутизации; объекты GatewayClass, Gateway и HTTPRoute приходят из CRD.\n- Оператор владеет классом и шлюзом, команда приложения — маршрутами; связь через parentRefs.\n- Ingress остаётся в API, но Ingress NGINX вне поддержки с марта 2026 года; переезд — через ingress2gateway.\n- Контроллер обязателен: Envoy Gateway, kgateway, Cilium или Traefik; TLS автоматизирует cert-manager.",
+        "resources": [
+          {
+            "title": "Kubernetes: Gateway API",
+            "url": "https://kubernetes.io/docs/concepts/services-networking/gateway/",
+            "note": "Официальное описание GatewayClass, Gateway и HTTPRoute в документации Kubernetes."
+          },
+          {
+            "title": "Kubernetes Blog: заявление об Ingress NGINX",
+            "url": "https://www.kubernetes.io/blog/2026/01/29/ingress-nginx-statement/",
+            "note": "Заявление Steering Committee и SRC от 29.01.2026 о выводе Ingress NGINX из поддержки."
+          },
+          {
+            "title": "Kubernetes Blog: ingress2gateway 1.0",
+            "url": "https://kubernetes.io/blog/2026/03/20/ingress2gateway-1-0-release",
+            "note": "Релиз утилиты для переноса правил Ingress в объекты Gateway API."
+          }
+        ]
+      }
+    },
+    {
+      "title": "Практика: Gateway и HTTPRoute для двух сервисов",
+      "kind": "code",
+      "summary": "Пишем Gateway с одним HTTP-listener и HTTPRoute, который по путям / и /api направляет трафик на два Service.",
+      "durationMin": 14,
+      "content": {
+        "language": "yaml",
+        "task": "В кластере уже есть два Service: `web` (фронтенд) и `api` (бэкенд), оба слушают порт `80`. Оператор кластера установил контроллер Gateway API и создал GatewayClass с именем `shared`.\n\nОпишите в одном YAML-файле два объекта, разделив их строкой `---`.\n\n1) Gateway с именем `shop-gateway`:\n   - apiVersion `gateway.networking.k8s.io/v1`;\n   - `gatewayClassName: shared`;\n   - один listener с именем `http`, протокол `HTTP`, порт `80`.\n\n2) HTTPRoute с именем `shop-routes`:\n   - `parentRefs` на Gateway `shop-gateway`;\n   - hostname `shop.example.com`;\n   - правило: путь `/api` с типом `PathPrefix` ведёт на Service `api`, порт `80`;\n   - правило: путь `/` с типом `PathPrefix` ведёт на Service `web`, порт `80`.\n\nВ учебном кластере всё лежит в одном namespace, поэтому `allowedRoutes` у listener и `namespace` в `parentRefs` не нужны.\n\n**Порядок правил.** Контроллер выбирает самый длинный подходящий префикс. Запрос на `/api/users` уйдёт на `api`, даже если правило `/` стоит первым. Но принято писать более точные правила выше — так манифест читается без сюрпризов.\n\n**Что дальше.** После `kubectl apply` команда `kubectl get gateway shop-gateway` покажет адрес входа. А `kubectl describe httproute shop-routes` — раздел Status, где видно, принят ли маршрут. Ingress здесь не нужен: вход описывает Gateway, правила — HTTPRoute.",
+        "hint": "У Gateway обязательны spec.gatewayClassName и spec.listeners (name, protocol, port). У HTTPRoute — spec.parentRefs с именем Gateway и spec.rules, где каждое правило состоит из matches (path.type и path.value) и backendRefs (name и port).",
+        "starter": "# Gateway: точка входа, которой владеет оператор кластера\napiVersion: gateway.networking.k8s.io/v1\nkind: Gateway\nmetadata:\n  name: shop-gateway\nspec:\n  gatewayClassName:      # shared — класс, созданный оператором\n  listeners:\n    - name:              # http\n      protocol:          # HTTP\n      port:              # 80\n---\n# HTTPRoute: правила маршрутизации, которыми владеет команда приложения\napiVersion: gateway.networking.k8s.io/v1\nkind: HTTPRoute\nmetadata:\n  name: shop-routes\nspec:\n  parentRefs:\n    - name:              # shop-gateway — к какому Gateway прикрепиться\n  hostnames:\n    -                    # shop.example.com\n  rules:\n    - matches:\n        - path:\n            type:        # PathPrefix\n            value:       # /api\n      backendRefs:\n        - name:          # api\n          port:          # 80\n    - matches:\n        - path:\n            type:        # PathPrefix\n            value:       # /\n      backendRefs:\n        - name:          # web\n          port:          # 80",
+        "solution": "apiVersion: gateway.networking.k8s.io/v1\nkind: Gateway\nmetadata:\n  name: shop-gateway\nspec:\n  gatewayClassName: shared\n  listeners:\n    - name: http\n      protocol: HTTP\n      port: 80\n---\napiVersion: gateway.networking.k8s.io/v1\nkind: HTTPRoute\nmetadata:\n  name: shop-routes\nspec:\n  parentRefs:\n    - name: shop-gateway\n  hostnames:\n    - shop.example.com\n  rules:\n    - matches:\n        - path:\n            type: PathPrefix\n            value: /api\n      backendRefs:\n        - name: api\n          port: 80\n    - matches:\n        - path:\n            type: PathPrefix\n            value: /\n      backendRefs:\n        - name: web\n          port: 80",
+        "checks": [
+          {
+            "type": "regex",
+            "value": "kind:\\s*Gateway\\s*\\n",
+            "message": "Должен быть объект Gateway."
+          },
+          {
+            "type": "contains",
+            "value": "kind: HTTPRoute",
+            "message": "Должен быть объект HTTPRoute."
+          },
+          {
+            "type": "contains",
+            "value": "gateway.networking.k8s.io/v1",
+            "message": "Объекты Gateway API используют apiVersion gateway.networking.k8s.io/v1."
+          },
+          {
+            "type": "regex",
+            "value": "gatewayClassName:\\s*shared",
+            "message": "Gateway должен ссылаться на класс: gatewayClassName: shared."
+          },
+          {
+            "type": "regex",
+            "value": "protocol:\\s*HTTP\\s*\\n",
+            "message": "У listener укажите protocol: HTTP."
+          },
+          {
+            "type": "regex",
+            "value": "parentRefs:\\s*\\n\\s*-\\s*name:\\s*shop-gateway",
+            "message": "HTTPRoute должен прикрепляться к Gateway через parentRefs с именем shop-gateway."
+          },
+          {
+            "type": "contains",
+            "value": "matches:",
+            "message": "В правиле нужны условия matches."
+          },
+          {
+            "type": "regex",
+            "value": "type:\\s*PathPrefix",
+            "message": "Для путей укажите тип PathPrefix."
+          },
+          {
+            "type": "regex",
+            "value": "value:\\s*/api",
+            "message": "Нужно правило для пути /api."
+          },
+          {
+            "type": "contains",
+            "value": "backendRefs:",
+            "message": "В правиле нужны backendRefs — куда отправить запрос."
+          },
+          {
+            "type": "regex",
+            "value": "name:\\s*api\\s*\\n\\s*port:\\s*80",
+            "message": "Путь /api должен вести на Service api, порт 80."
+          },
+          {
+            "type": "regex",
+            "value": "name:\\s*web\\s*\\n\\s*port:\\s*80",
+            "message": "Путь / должен вести на Service web, порт 80."
+          },
+          {
+            "type": "notContains",
+            "value": "kind: Ingress",
+            "message": "Здесь Ingress не нужен: вход описывает Gateway, правила — HTTPRoute."
+          }
+        ],
+        "resources": [
+          {
+            "title": "Kubernetes: Gateway API в документации",
+            "url": "https://kubernetes.io/docs/concepts/services-networking/gateway/",
+            "note": "Поля parentRefs, hostnames, rules, matches и backendRefs с примерами."
+          },
+          {
+            "title": "Gateway API: обзор объектов (GatewayClass, Gateway, HTTPRoute)",
+            "url": "https://gateway-api.sigs.k8s.io/",
+            "note": "Как описывать listeners: имя, протокол, порт, allowedRoutes и TLS."
+          },
+          {
+            "title": "Kubernetes: Gateway API",
+            "url": "https://kubernetes.io/docs/concepts/services-networking/gateway/",
+            "note": "Обзор объектов Gateway API в документации Kubernetes."
+          }
+        ]
+      }
+    },
+    {
       "title": "ConfigMap и Secret: выносим настройки и секреты из образа",
       "kind": "code",
       "summary": "Выносим настройки в ConfigMap и пароли в Secret, подключаем их к Pod через переменные окружения и монтирование тома.",
@@ -887,6 +1010,69 @@
               }
             ],
             "explanation": "Слой записи контейнера живёт только пока живёт контейнер. При перезапуске Pod он создаётся заново, и данные исчезают. Чтобы данные сохранялись, их кладут на Volume, а для настоящей персистентности — на PV через PVC."
+          },
+          {
+            "id": "q8",
+            "text": "Команда приложения хочет открыть путь /reports к своему Service, но прав на объекты оператора у неё нет. Какой объект Gateway API она создаёт?",
+            "options": [
+              {
+                "id": "a",
+                "text": "HTTPRoute в своём namespace с parentRefs на существующий Gateway",
+                "correct": true
+              },
+              {
+                "id": "b",
+                "text": "Новый Gateway с отдельным listener под этот путь",
+                "correct": false
+              },
+              {
+                "id": "c",
+                "text": "GatewayClass с именем своего контроллера",
+                "correct": false
+              }
+            ],
+            "explanation": "Разделение ролей — суть Gateway API: оператор владеет GatewayClass и Gateway, а команда описывает свои правила в HTTPRoute. Маршрут прикрепляется к чужому Gateway через parentRefs, и трогать вход не нужно."
+          },
+          {
+            "id": "q9",
+            "type": "match",
+            "text": "Сопоставьте объект или инструмент с его ролью в Gateway API:",
+            "pairs": [
+              {
+                "id": "p1",
+                "left": "GatewayClass",
+                "right": "какой контроллер воплощает шлюзы"
+              },
+              {
+                "id": "p2",
+                "left": "Gateway",
+                "right": "точка входа: listener, порт, TLS"
+              },
+              {
+                "id": "p3",
+                "left": "HTTPRoute",
+                "right": "правила по хосту и пути до Service"
+              },
+              {
+                "id": "p4",
+                "left": "ingress2gateway",
+                "right": "переводит старые Ingress в объекты Gateway API"
+              }
+            ],
+            "explanation": "GatewayClass связывает шлюзы с контроллером, Gateway открывает вход и принадлежит оператору, HTTPRoute описывает маршруты команды. ingress2gateway (1.0 — март 2026) готовит черновик Gateway и HTTPRoute из существующих Ingress."
+          },
+          {
+            "id": "q10",
+            "type": "blank",
+            "text": "Впишите название поля HTTPRoute, которым маршрут прикрепляется к нужному Gateway.",
+            "hint": "Ссылка «на родителя», во множественном числе, в camelCase.",
+            "accept": [
+              "parentRefs",
+              "parentrefs",
+              "spec.parentRefs",
+              "spec.parentrefs"
+            ],
+            "explanation": "parentRefs указывает, к какому Gateway (и при необходимости в каком namespace) прикрепить маршрут. Без него HTTPRoute существует, но ни один шлюз о нём не знает, и трафик не идёт."
           }
         ],
         "resources": [
@@ -1261,7 +1447,7 @@
       "summary": "Кто что может (RBAC и ServiceAccount), кто с кем говорит (NetworkPolicy) и где живут Pod (taints, tolerations, affinity).",
       "durationMin": 12,
       "content": {
-        "body": "## Зачем это нужно\n\nПо умолчанию Kubernetes щедр. Это удобно для учёбы, но опасно в проде.\n\nУчётные записи часто могут больше, чем нужно. Все Pod свободно ходят по сети друг к другу. Планировщик ставит Pod куда угодно.\n\nВ учебном кластере это не беда. В продакшне — прямой риск.\n\nОдна утёкшая учётка или взломанный Pod получает слишком много власти. Через него можно дотянуться до всего кластера.\n\nНужны границы. Кто что может, кто с кем говорит, где что размещается. Об этих трёх границах и урок.\n\n## Что это простыми словами\n\nПредставьте офис с пропусками и правилами. Разложим термины по этой аналогии.\n\nRBAC — пропуска: кому в какие двери можно входить. ServiceAccount — бейдж сотрудника, только тут «сотрудник» — это приложение.\n\nNetworkPolicy — правила, кто с кем в здании общается. Не всем можно заходить в серверную.\n\ntaint и toleration — «этот этаж только для своих, вход по спецпропуску». affinity — «посади эти команды рядом или, наоборот, врозь».\n\n## Как это работает\n\nНачнём с доступа к API. За него отвечает RBAC — управление доступом на основе ролей.\n\n- **Role / ClusterRole** — набор разрешений: какие действия над какими ресурсами. Role — в одном namespace, ClusterRole — на весь кластер.\n- **RoleBinding** — связывает Role с тем, кому её выдают.\n- **ServiceAccount** — «личность» Pod. От её имени Pod обращается к API.\n- **Принцип наименьших привилегий** — выдаём ровно необходимое, ни правом больше.\n\nТеперь сеть и размещение.\n\n- **NetworkPolicy** — правила, какой трафик к Pod разрешён. Работает, только если CNI-плагин её поддерживает.\n- **taint** (на узле) отпугивает Pod от узла; **toleration** (на Pod) — «разрешение сесть» на такой узел.\n- **nodeSelector** и **affinity / anti-affinity** — притянуть Pod к нужным узлам или разнести реплики по разным узлам.\n\n## Как это устроено внутри\n\nRBAC работает по принципу «запрещено всё, что не разрешено явно». Пустой набор прав = ноль доступа.\n\nКогда Pod шлёт запрос к API server, тот проверяет две вещи. Кто просит (аутентификация) и что ему можно (авторизация).\n\nЛичность Pod — это его ServiceAccount. Если вы её не задали, Pod ходит от учётки `default` в своём namespace.\n\nAPI server смотрит: есть ли RoleBinding, связывающий эту учётку с ролью, разрешающей это действие. Нет связки — запрос отклонён с ошибкой Forbidden.\n\nВажно: разрешения только складываются. В RBAC нет правил «запретить». Есть лишь то, что явно разрешено ролями.\n\nNetworkPolicy устроена иначе, но по духу похоже. Пока политик нет, весь трафик разрешён.\n\nКак только на Pod навесили хотя бы одну NetworkPolicy, включается белый список. Разрешено только то, что описано в политике, остальное блокируется.\n\nНо есть подвох. Сами правила пишет не Kubernetes, а сетевой плагин (CNI). Если плагин их не поддерживает, политика тихо ничего не делает.\n\n## Разбор фрагмента Role построчно\n\nПосмотрим на самое сердце Role — блок rules.\n\n```yaml\nrules:\n  - apiGroups: [\"\"]         # основная группа (Pod, Service…)\n    resources: [\"pods\"]     # к каким ресурсам доступ\n    verbs: [\"get\", \"list\"]  # какие действия разрешены\n```\n\n- `rules` — список правил; каждое правило открывает часть доступа.\n- `apiGroups: [\"\"]` — пустая строка означает базовую (core) группу: Pod, Service, ConfigMap.\n- `resources: [\"pods\"]` — доступ выдаётся только к ресурсу Pod.\n- `verbs: [\"get\", \"list\"]` — можно получить один объект и список, и всё.\n\nЧего тут нет — тоже важно. Нет `delete`, `create`, `update`. Значит, обладатель роли не сможет ни удалить, ни создать Pod.\n\nЭто и есть наименьшие привилегии на практике. Роль разрешает ровно смотреть, не больше.\n\nЧтобы роль заработала, её надо кому-то выдать. Это делает RoleBinding.\n\n```yaml\nkind: RoleBinding\nsubjects:\n  - kind: ServiceAccount   # кому выдаём\n    name: monitor          # имя учётки Pod\nroleRef:\n  kind: Role               # какую роль\n  name: pod-reader         # её имя\n```\n\n- `subjects` — кому выдаём права; здесь это ServiceAccount с именем monitor.\n- `roleRef` — на какую роль ссылаемся; здесь Role с именем pod-reader.\n\nБез RoleBinding сама Role бесполезна. Она лишь описывает права, но никому их не раздаёт.\n\n## Пример\n\nМониторинг-агент читает Pod во всём кластере. Ему нужны права на чтение везде.\n\nДаём ClusterRole с verbs get, list, watch и свой ServiceAccount. Ничего лишнего — только чтение.\n\nБаза данных изолирована NetworkPolicy. К ней ходит только backend, остальные Pod получают отказ.\n\nGPU-узлы помечены taint. Лишь ML-задачи с нужным toleration туда попадают, обычные Pod обходят их стороной.\n\nРеплики фронтенда разнесены anti-affinity по разным узлам. Падение одного узла не роняет весь сервис.\n\nВторой пример — из другой ситуации. У вас namespace `dev`, где работают студенты.\n\nВы хотите, чтобы они видели Pod, но не могли трогать Secret. Даёте Role только на pods с verbs get и list, а на secrets — ничего.\n\nТеперь `kubectl get pods` у студента работает. А `kubectl get secrets` вернёт Forbidden. Граница держится сама.\n\n## Что будет, если…\n\n**Если выдать приложению ClusterRole cluster-admin.** Соблазн велик: «чтобы просто работало».\n\nТеперь любой, кто захватит этот Pod, управляет всем кластером. Он читает все Secret, удаляет чужие Deployment, создаёт свои. Это худший сценарий для безопасности.\n\n**Если забыть ServiceAccount у Pod.** Pod пойдёт в API от учётки `default`.\n\nОбычно у неё почти нет прав, и запросы к API упрутся в Forbidden. Приложение, которому нужен API, сломается на ровном месте.\n\n**Если написать NetworkPolicy, но CNI её не поддерживает.** Политика применится без ошибок.\n\nВы будете думать, что база изолирована. На деле трафик по-прежнему ходит свободно. Ложное чувство защиты хуже её отсутствия.\n\n## Как бывает неправильно\n\nСоблазн — выдать приложению cluster-admin, «чтобы просто работало». Проблема снята за минуту.\n\nПочему проваливается: вы отдали ключи от всего кластера одному Pod. Взлом этого Pod = взлом всего.\n\nЭто прямое нарушение принципа наименьших привилегий. Правильно — узкая Role ровно под нужные ресурсы и действия.\n\n## Проверьте себя\n\nНужно запретить всем Pod, кроме backend, обращаться к базе. Какой объект использовать?\n\n*Ответ: NetworkPolicy — она ограничивает, какой трафик доходит до Pod.*\n\n## Частые ошибки новичка\n\n- Выдают cluster-admin вместо узкой Role. Как заметить: у приложения прав больше, чем его функций. Диагностика: `kubectl describe rolebinding`. Чините: сузьте роль до нужных resources и verbs.\n- Ждут работы NetworkPolicy без поддерживающего CNI. Как заметить: политика есть, а трафик всё равно ходит. Чините: проверьте, что установлен CNI с поддержкой политик (Calico, Cilium).\n- Путают taint и toleration. Как заметить: Pod не садится на узел или, наоборот, лезет на чужой. Помните: taint на узле, toleration на Pod.\n- Забыли ServiceAccount. Как заметить: запросы Pod к API падают с Forbidden. Диагностика: посмотрите events через `kubectl describe pod`. Чините: создайте ServiceAccount и свяжите его через RoleBinding.\n- Диагностика прав в целом: `kubectl auth can-i <verb> <resource> --as=<subject>` честно скажет, разрешено ли действие.\n\n## Запомнить\n\n- RBAC = Role/ClusterRole + Binding; выдавайте минимум прав, лишнего доступа не бывает «на всякий случай».\n- ServiceAccount — «личность» Pod для доступа к API; без неё берётся учётка default.\n- NetworkPolicy включает белый список трафика, но работает только с поддерживающим CNI.\n- taint отпугивает узел, toleration разрешает сесть; affinity управляет соседством Pod.\n\n## 🧭 Соберите сами\nОпишите два объекта в одном файле через `---`:\n1. Role `pod-reader`: `apiGroups: [\"\"]`, `resources: [\"pods\"]`, `verbs: [\"get\", \"list\"]`.\n2. RoleBinding `read-pods`: связывает эту Role с subject (например, ServiceAccount `ci`).\nПроверьте себя: verbs задают, ЧТО можно делать, а RoleBinding — КОМУ это разрешено.",
+        "body": "## Зачем это нужно\n\nПо умолчанию Kubernetes щедр. Это удобно для учёбы, но опасно в проде.\n\nУчётные записи часто могут больше, чем нужно. Все Pod свободно ходят по сети друг к другу. Планировщик ставит Pod куда угодно.\n\nВ учебном кластере это не беда. В продакшне — прямой риск.\n\nОдна утёкшая учётка или взломанный Pod получает слишком много власти — через него можно дотянуться до всего кластера.\n\nНужны границы. Кто что может, кто с кем говорит, где что размещается, каким Pod вообще можно быть. Об этих границах и урок.\n\n## Что это простыми словами\n\nПредставьте офис с пропусками и правилами.\n\nRBAC — пропуска: кому в какие двери можно входить. ServiceAccount — бейдж сотрудника, только тут «сотрудник» — это приложение.\n\nNetworkPolicy — правила, кто с кем в здании общается. Не всем можно заходить в серверную.\n\ntaint и toleration — «этот этаж только для своих, вход по спецпропуску». affinity — «посади эти команды рядом или, наоборот, врозь».\n\nPod Security Admission — охранник на входе: без каски на стройплощадку не пустят, даже с пропуском.\n\n## Как это работает\n\nНачнём с доступа к API. За него отвечает RBAC — управление доступом на основе ролей.\n\n- **Role / ClusterRole** — набор разрешений: какие действия над какими ресурсами. Role — в одном namespace, ClusterRole — на весь кластер.\n- **RoleBinding** — связывает Role с тем, кому её выдают.\n- **ServiceAccount** — «личность» Pod. От её имени Pod обращается к API.\n- **Принцип наименьших привилегий** — выдаём ровно необходимое, ни правом больше.\n\nТеперь сеть и размещение.\n\n- **NetworkPolicy** — правила, какой трафик к Pod разрешён. Работает, только если CNI-плагин её поддерживает.\n- **taint** (на узле) отпугивает Pod от узла; **toleration** (на Pod) — «разрешение сесть» на такой узел.\n- **nodeSelector** и **affinity / anti-affinity** — притянуть Pod к нужным узлам или разнести реплики по разным узлам.\n\n## Как это устроено внутри\n\nRBAC работает по принципу «запрещено всё, что не разрешено явно». Пустой набор прав = ноль доступа.\n\nНа каждый запрос к API server тот проверяет две вещи: кто просит (аутентификация) и что ему можно (авторизация).\n\nЛичность Pod — это его ServiceAccount. Если вы её не задали, Pod ходит от учётки `default` в своём namespace.\n\nAPI server смотрит: есть ли RoleBinding, связывающий эту учётку с ролью, разрешающей это действие. Нет связки — запрос отклонён с ошибкой Forbidden.\n\nВажно: разрешения только складываются. В RBAC нет правил «запретить». Есть лишь то, что явно разрешено ролями.\n\nNetworkPolicy устроена иначе. Пока политик нет, весь трафик разрешён. Как только на Pod навесили хотя бы одну, включается белый список: остальное блокируется.\n\nПодвох: правила исполняет сетевой плагин (CNI); если он их не поддерживает, политика тихо ничего не делает.\n\n## Разбор фрагмента Role построчно\n\nПосмотрим на самое сердце Role — блок rules.\n\n```yaml\nrules:\n  - apiGroups: [\"\"]         # основная группа (Pod, Service…)\n    resources: [\"pods\"]     # к каким ресурсам доступ\n    verbs: [\"get\", \"list\"]  # какие действия разрешены\n```\n\n- `rules` — список правил; каждое правило открывает часть доступа.\n- `apiGroups: [\"\"]` — пустая строка означает базовую (core) группу: Pod, Service, ConfigMap.\n- `resources: [\"pods\"]` — доступ выдаётся только к ресурсу Pod.\n- `verbs: [\"get\", \"list\"]` — можно получить один объект и список, и всё.\n\nЧего тут нет — тоже важно: ни `delete`, ни `create`, ни `update`. Роль разрешает ровно смотреть — это и есть наименьшие привилегии на практике.\n\nЧтобы роль заработала, её надо кому-то выдать. Это делает RoleBinding.\n\n```yaml\nkind: RoleBinding\nsubjects:\n  - kind: ServiceAccount   # кому выдаём\n    name: monitor          # имя учётки Pod\nroleRef:\n  kind: Role               # какую роль\n  name: pod-reader         # её имя\n```\n\n- `subjects` — кому выдаём права; здесь это ServiceAccount с именем monitor.\n- `roleRef` — на какую роль ссылаемся; здесь Role с именем pod-reader.\n\nБез RoleBinding сама Role бесполезна: она описывает права, но никому их не раздаёт.\n\n## Pod Security Admission: privileged / baseline / restricted и метки namespace\n\nRBAC решает, кто может создать Pod, но не каким он будет. Pod от root или с `privileged: true` опасен сам по себе, даже если его создал честный человек.\n\nЗа это отвечает Pod Security Admission (PSA) — встроенный контролёр в API server. Он сверяет каждый новый Pod с одним из трёх уровней:\n\n- `privileged` — без ограничений; для системных компонентов вроде CNI.\n- `baseline` — запрещает самое опасное: privileged-контейнеры, hostNetwork, hostPID, hostPath.\n- `restricted` — строгий уровень для обычных приложений.\n\nЧто запрещает `restricted`: запуск от root (нужен `runAsNonRoot: true`) и повышение привилегий (`allowPrivilegeEscalation: false`). А ещё лишние capabilities и отсутствие seccomp-профиля.\n\nУровень задаётся не отдельным объектом, а метками на namespace. Их три, и работают они независимо.\n\n```anatomy\npod-security.kubernetes.io/enforce: restricted ## Pod-нарушитель отклоняется\npod-security.kubernetes.io/warn: restricted ## Pod пропускают, kubectl показывает предупреждение\npod-security.kubernetes.io/audit: restricted ## Pod пропускают, нарушение уходит в audit-лог\n```\n\nВнедряйте по шагам: сначала `warn` и `audit`, чтобы увидеть нарушителей, потом `enforce`.\n\n> [!WARNING]\n>\n> PSA проверяет именно Pod. Deployment с нарушением создастся, а его Pod — нет. Ищите ошибку `violates PodSecurity` в событиях ReplicaSet.\n\n## PodDisruptionBudget, ResourceQuota и LimitRange\n\nКогда кластер делят несколько команд, нужны ещё три границы — не про доступ, а про ресурсы и стабильность.\n\n- **PodDisruptionBudget (PDB)** — сколько Pod приложения обязаны оставаться живыми при плановых работах вроде drain узла. `minAvailable: 2` — drain не выселит Pod, если живых останется меньше двух.\n- **ResourceQuota** — потолок на весь namespace: суммарные requests CPU и памяти, число Pod и PVC. Одна команда не съест кластер целиком.\n- **LimitRange** — правила для одного контейнера: requests и limits по умолчанию и допустимые рамки. Забыли ресурсы в манифесте — подставятся значения из LimitRange.\n\nПодвох: если в namespace есть ResourceQuota на CPU и память, Pod без requests не создастся вовсе. Лечится тем же LimitRange со значениями по умолчанию.\n\n## Пример\n\nМониторинг-агент читает Pod во всём кластере. Даём ClusterRole с verbs get, list, watch и свой ServiceAccount. Только чтение.\n\nБаза данных изолирована NetworkPolicy. К ней ходит только backend, остальные Pod получают отказ.\n\nGPU-узлы помечены taint. Лишь ML-задачи с нужным toleration туда попадают, обычные Pod обходят их стороной.\n\nРеплики фронтенда разнесены anti-affinity по разным узлам, а PDB с `minAvailable: 2` бережёт их при drain.\n\nУ вас namespace `dev`, где работают студенты.\n\nВы хотите, чтобы они видели Pod, но не могли трогать Secret. Даёте Role только на pods с verbs get и list, а на secrets — ничего.\n\nТеперь `kubectl get pods` у студента работает. А `kubectl get secrets` вернёт Forbidden. Граница держится сама.\n\n## Что будет, если…\n\n**Если выдать приложению ClusterRole cluster-admin.** Любой, кто захватит этот Pod, управляет всем кластером.\n\n**Если забыть ServiceAccount у Pod.** Pod пойдёт в API от учётки `default`, у неё почти нет прав, и запросы упрутся в Forbidden.\n\n**Если написать NetworkPolicy, но CNI её не поддерживает.** Политика применится без ошибок, а трафик по-прежнему ходит свободно.\n\n## Как бывает неправильно\n\nСоблазн — выдать приложению cluster-admin, «чтобы просто работало».\n\nПочему проваливается: вы отдали ключи от всего кластера одному Pod. Взлом этого Pod = взлом всего. Правильно — узкая Role ровно под нужные ресурсы и действия.\n\n## Проверьте себя\n\nНужно запретить всем Pod, кроме backend, обращаться к базе. Какой объект использовать?\n\n*Ответ: NetworkPolicy — она ограничивает, какой трафик доходит до Pod.*\n\nНа namespace `prod` стоит метка `pod-security.kubernetes.io/enforce: restricted`. Deployment описывает контейнер с `runAsUser: 0`. Что произойдёт?\n\n*Ответ: Deployment создастся, но его Pod будут отклонены: restricted запрещает запуск от root. Ошибка появится в событиях ReplicaSet.*\n\n## Частые ошибки новичка\n\n- Выдают cluster-admin вместо узкой Role. Как заметить: у приложения прав больше, чем его функций (`kubectl describe rolebinding`). Чините: сузьте роль до нужных resources и verbs.\n- Ждут работы NetworkPolicy без поддерживающего CNI. Как заметить: политика есть, а трафик всё равно ходит. Чините: проверьте, что установлен CNI с поддержкой политик (Calico, Cilium).\n- Путают taint и toleration. Как заметить: Pod не садится на узел или, наоборот, лезет на чужой. Помните: taint на узле, toleration на Pod.\n- Забыли ServiceAccount. Как заметить: запросы Pod к API падают с Forbidden. Чините: создайте ServiceAccount и свяжите его через RoleBinding.\n- Включают `enforce: restricted` сразу, без `warn` и `audit`. Как заметить: Deployment есть, Pod не появляются. Чините: сначала warn и audit, потом enforce.\n- Диагностика прав в целом: `kubectl auth can-i <verb> <resource> --as=<subject>` честно скажет, разрешено ли действие.\n\n## Запомнить\n\n- RBAC = Role/ClusterRole + Binding; выдавайте минимум прав, лишнего доступа не бывает «на всякий случай».\n- ServiceAccount — «личность» Pod для доступа к API; без неё берётся учётка default.\n- NetworkPolicy включает белый список трафика, но работает только с поддерживающим CNI.\n- taint отпугивает узел, toleration разрешает сесть; affinity управляет соседством Pod.\n- PSA задаётся метками namespace: enforce отклоняет, warn предупреждает, audit пишет в лог; restricted — для приложений.\n- PDB бережёт Pod при drain, ResourceQuota делит кластер между командами, LimitRange задаёт ресурсы по умолчанию.\n\n## 🧭 Соберите сами\nОпишите два объекта в одном файле через `---`:\n1. Role `pod-reader`: `apiGroups: [\"\"]`, `resources: [\"pods\"]`, `verbs: [\"get\", \"list\"]`.\n2. RoleBinding `read-pods`: связывает эту Role с subject (например, ServiceAccount `ci`).\nПроверьте себя: verbs задают, ЧТО можно делать, а RoleBinding — КОМУ это разрешено.",
         "resources": [
           {
             "title": "Using RBAC Authorization",
@@ -1365,12 +1551,125 @@
       }
     },
     {
+      "title": "Kustomize: base и overlays для dev/stage/prod",
+      "kind": "text",
+      "summary": "Общие манифесты — один раз в base, различия окружений — в overlays. Разбираем kustomization.yaml: resources, namespace, images, patches — и когда Kustomize уместнее Helm.",
+      "durationMin": 13,
+      "content": {
+        "body": "## Зачем это нужно\n\nВ уроке о Helm вы видели боль трёх копий: dev, stage и prod расползаются, и дрейф потом не найти.\nHelm лечит её шаблонами: в манифестах появляются `{{ .Values.x }}`, а значения живут отдельно.\n\nНо у шаблонов есть цена.\nФайл в `templates/` — уже не валидный YAML: без Helm его не применить, а читать труднее.\n\nА различий между окружениями у своего приложения обычно три: namespace, тег образа и число реплик.\nРади трёх строк заводить чарт, values и шаблоны — стрельба из пушки по воробьям.\n\nХочется хранить общие манифесты как есть, а различия — маленькими файлами рядом.\nИменно это делает Kustomize. Он уже встроен в kubectl, ставить ничего не нужно.\n\n## Что это простыми словами\n\nKustomize собирает манифесты из «основы» и «слоёв поверх неё».\nОснова называется base, слои — overlays (оверлеи, наложения).\n\nАналогия — типовой договор.\nЮрист держит один бланк, а для каждого клиента прикладывает лист изменений.\n\nЛист говорит: «в пункте 3 срок не 30 дней, а 60». Сам бланк никто не переписывает.\nУ Kustomize так же: base — бланк, overlay — лист изменений для конкретного окружения.\n\nГлавное отличие от Helm: в base лежит обычный валидный YAML.\nНикаких `{{ .Values.x }}` — эти файлы можно применить и без Kustomize.\n\n## Как это устроено внутри\n\n### Структура папок\n\nТиповая раскладка репозитория:\n\n```\nk8s/\n  base/\n    kustomization.yaml\n    deployment.yaml\n    service.yaml\n  overlays/\n    dev/\n      kustomization.yaml\n    stage/\n      kustomization.yaml\n    prod/\n      kustomization.yaml\n      replicas.yaml\n```\n\nВ каждой папке лежит файл `kustomization.yaml`. Это оглавление: что взять и что поверх наложить.\nKustomize читает его, собирает ресурсы, применяет изменения и выдаёт готовый YAML.\n\n### Оглавление base\n\nРазберём `base/kustomization.yaml` построчно:\n\n```anatomy\napiVersion: kustomize.config.k8s.io/v1beta1 ## версия API самого Kustomize, не Kubernetes\nkind: Kustomization ## тип файла-оглавления\nresources: ## из чего собирать\n  - deployment.yaml ## обычный манифест Deployment\n  - service.yaml ## обычный манифест Service\n```\n\nЗдесь нет ничего, кроме списка файлов. Base — просто честный YAML, собранный в одном месте.\n\n### Оглавление overlay\n\nА вот `overlays/prod/kustomization.yaml` — здесь и живут различия:\n\n```anatomy\napiVersion: kustomize.config.k8s.io/v1beta1 ## тот же заголовок\nkind: Kustomization ## тот же тип\nresources: ## что берём за основу\n  - ../../base ## путь к папке base, а не к файлу\nnamespace: prod ## всем объектам проставить namespace prod\nimages: ## подменить образ, не трогая манифест\n  - name: acme/web ## какой образ искать в base\n    newTag: \"2.4.1\" ## какой тег подставить\npatches: ## точечные правки полей\n  - path: replicas.yaml ## файл-патч лежит рядом\n```\n\nЧетыре ключа закрывают почти все нужды:\n\n- `resources` — что включить: файлы или папки со своим `kustomization.yaml`. В overlay здесь путь к base.\n- `namespace` — проставить `metadata.namespace` всем объектам. Писать его в каждом файле не нужно.\n- `images` — найти образ по имени и подменить тег (`newTag`) или само имя (`newName`).\n- `patches` — наложить частичный YAML на объект: изменить несколько полей, остальное не трогать.\n\nПатч `replicas.yaml` — кусочек Deployment только с тем, что меняется:\n\n```yaml\napiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: web\nspec:\n  replicas: 3\n```\n\nKustomize найдёт в base Deployment с именем `web` и заменит в нём только `replicas`.\nТакой патч называется strategic merge: кусок «сливается» с полным объектом.\n\n### Как идёт сборка\n\n```flow\noverlays/prod/kustomization.yaml\n*resources — читаем ../../base и его файлы\nnamespace — проставляем prod всем объектам\nimages — меняем тег acme/web на 2.4.1\npatches — накладываем replicas: 3\nготовый YAML → kubectl apply\n```\n\nСначала Kustomize собирает всё из `resources`, и только потом накладывает преобразования.\nПоэтому патч видит уже полный объект из base, а не отдельный файл.\n\nПосмотреть результат, ничего не применяя:\n\n```\nkubectl kustomize overlays/prod\n```\n\nРазберём:\n- `kubectl kustomize` — собрать манифесты из папки и напечатать их в терминал.\n- `overlays/prod` — папка, где лежит `kustomization.yaml` нужного окружения.\n\nПрименить в кластер:\n\n```\nkubectl apply -k overlays/prod\n```\n\n- `-k` — вместо файла (`-f`) указать папку с `kustomization.yaml`. Сборка и apply за один шаг.\n\n> [!TIP]\n>\n> Перед `apply -k` всегда смотрите вывод `kubectl kustomize`. Так вы увидите итоговый YAML и поймаете опечатку до того, как она попадёт в prod.\n\n## Пример: dev, stage и prod\n\nТри overlay отличаются буквально несколькими строками:\n\n```\noverlay   namespace   images.newTag   patches\ndev       dev         dev             нет — replicas из base: 1\nstage     stage       2.4.1           replicas: 2\nprod      prod        2.4.1           replicas: 3\n```\n\nОбщая часть — Deployment, Service, пробы, requests и limits — лежит в base один раз.\nПочинили пробу в base — исправление автоматически попало во все три окружения.\n\nХотите новое окружение `demo`? Это одна папка и файл на десять строк.\nСтарые окружения при этом не трогаете совсем.\n\n## Kustomize или Helm: когда что\n\nОба инструмента решают задачу «одно приложение — разные настройки». Но по-разному.\n\n```\nHelm      : шаблоны {{ }} + values → релиз с историей и rollback → удобно раздавать другим\nKustomize : чистый YAML + патчи   → kubectl apply -k          → удобно для своих окружений\n```\n\nHelm сильнее, когда приложение ставят чужие люди: параметров много, нужен реестр чартов и история релизов.\nKustomize проще, когда приложение ваше: файлы читаются без шаблонизатора, а различия видны как патчи.\n\nПравило большого пальца:\n\n- Чужое — Prometheus Operator, cert-manager, External Secrets Operator — ставьте Helm-чартом. Его уже написали за вас.\n- Своё приложение с несколькими окружениями — часто хватает Kustomize без единого шаблона.\n- Они не враги: в одном репозитории чарты и overlays спокойно соседствуют.\n\nGitOps-агенты тоже не заставляют выбирать.\nArgo CD и Flux одинаково умеют разворачивать и Helm-чарт, и папку overlay из Kustomize.\n\n## Что будет, если…\n\n- **В `images.name` написать не то имя, что стоит в base.**\nОшибки не будет: Kustomize просто ничего не найдёт и молча оставит старый тег.\nСимптом: в prod уехала версия из base. Ловится через `kubectl kustomize`.\n\n- **В патче указать имя объекта, которого в base нет.**\nСборка упадёт с ошибкой: патчу не к чему примениться.\nЭто хороший случай — проблема видна сразу, а не в кластере.\n\n- **Применить base напрямую, без overlay.**\nОбъекты уйдут в namespace `default` с тегом из base и одной репликой.\nСимптом: «выкатил в prod, а prod пустой». Смотрите, куда указывали при `apply -k`.\n\n## Как бывает неправильно\n\nНовичок делает три копии папки с манифестами: `dev/`, `stage/`, `prod/`.\nТри месяца всё хорошо, а потом в prod находят баг в readiness-пробе.\n\nЧинят в prod. Через неделю тот же баг ловят в stage — там копия старая.\nВывод: дублирование манифестов расползается, а Kustomize держит общее в одном месте.\n\nВторая ошибка — писать различия прямо в base.\nНапример, `replicas: 3` и `namespace: prod` в `base/deployment.yaml`.\n\nТогда dev получает три реплики и лезет в prod-namespace.\nВсё, что отличается между окружениями, живёт в overlay, а base хранит только общее.\n\n## Проверьте себя\n\nВ prod нужно поднять число реплик с 3 до 5. Какой файл вы правите?\n\n*Ответ: патч в `overlays/prod` (например, `replicas.yaml`). Base не трогаем — иначе изменение утечёт в dev и stage.*\n\nКоманде нужно поставить cert-manager в кластер. Что выбрать — Helm или Kustomize?\n\n*Ответ: Helm. Это чужое приложение с готовым чартом, а Kustomize нужен для своих манифестов с несколькими окружениями.*\n\nВы поменяли `newTag` в overlay, но `kubectl kustomize` показывает старый тег. Что проверить в первую очередь?\n\n*Ответ: поле `images.name` — оно должно точно совпадать с именем образа в base (без тега). Иначе Kustomize молча ничего не меняет.*\n\n## Частые ошибки новичка\n\n- **Пишут в `resources` путь к файлу base вместо папки.**\nКак заметить: ошибка сборки — папка или файл не найдены.\nПочинка: в overlay указывайте папку `../../base`, а в ней держите свой `kustomization.yaml`.\n\n- **Забывают кавычки у тега в `newTag`.**\nКак заметить: YAML может прочитать `1.30` как число 1.3, и тег соберётся не тот.\nПочинка: пишите теги строкой в кавычках: `newTag: \"1.30\"`.\n\n- **Кладут в base то, что отличается между окружениями.**\nКак заметить: dev вдруг получил prod-настройки — реплики или namespace.\nПочинка: base хранит только общее; всё различное — в overlay.\n\n- **Меняют кластер руками, а не в overlay.**\nКак заметить: `kubectl kustomize` показывает одно, а в кластере другое.\nПочинка: правьте overlay и применяйте заново; в GitOps агент и так откатит ручное.\n\n## Запомнить\n\n- Kustomize встроен в kubectl: `kubectl kustomize папка` собирает, `kubectl apply -k папка` применяет.\n- base — обычный YAML без шаблонов, общий для всех окружений; overlay — различия поверх него.\n- Четыре ключа `kustomization.yaml`: `resources`, `namespace`, `images`, `patches`.\n- Патч — кусочек объекта только с меняемыми полями; Kustomize сливает его с base.\n- Helm — для чужих приложений и релизов с историей; Kustomize — для своих окружений. Argo CD и Flux умеют оба.",
+        "resources": [
+          {
+            "title": "Kustomize: справочник kustomization.yaml",
+            "url": "https://kubectl.docs.kubernetes.io/references/kustomize/kustomization/",
+            "note": "Все ключи файла-оглавления: resources, namespace, images, patches и остальные."
+          },
+          {
+            "title": "Kubernetes: управление объектами через Kustomize",
+            "url": "https://kubernetes.io/docs/tasks/manage-kubernetes-objects/kustomization/",
+            "note": "Официальный обзор base/overlays и команд kubectl kustomize и apply -k."
+          },
+          {
+            "title": "Kustomize: официальный сайт",
+            "url": "https://kustomize.io/",
+            "note": "Коротко об идее «без шаблонов» и ссылки на документацию."
+          }
+        ]
+      }
+    },
+    {
+      "title": "Практика: overlay для prod",
+      "kind": "code",
+      "summary": "Пишем overlays/prod/kustomization.yaml: берём base через resources, задаём namespace, меняем тег образа через images и число реплик патчем.",
+      "durationMin": 14,
+      "content": {
+        "language": "yaml",
+        "task": "В репозитории уже есть папка `base` с обычными манифестами:\n\n```yaml\n# base/deployment.yaml (фрагмент)\napiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: web\nspec:\n  replicas: 1\n  template:\n    spec:\n      containers:\n        - name: web\n          image: acme/web:dev\n```\n\nРядом лежат `base/service.yaml` и `base/kustomization.yaml`, который перечисляет оба файла в `resources`.\n\nНапишите файл `overlays/prod/kustomization.yaml` — слой для prod поверх base.\n\nТребования:\n1) Заголовок: `apiVersion: kustomize.config.k8s.io/v1beta1` и `kind: Kustomization`.\n2) `resources` указывает на папку base на два уровня выше: `../../base`.\n3) `namespace: prod` — все объекты уходят в namespace prod.\n4) `images`: для образа с именем `acme/web` подставить `newTag: \"2.4.1\"`. Тег — строка в кавычках.\n5) `patches`: inline-патч, который меняет у Deployment `web` только `replicas` на `3`.\n\nВ prod не бывает тега `latest` и не бывает шаблонов `{{ }}` — это чистый YAML.\n\nКак этим потом пользоваться (просто прочитайте, вводить не нужно):\n```\nkubectl kustomize overlays/prod     # собрать и показать итоговый YAML\nkubectl apply -k overlays/prod      # собрать и применить в кластер\n```",
+        "hint": "resources — список, где путь к папке base: `- ../../base`. В images поле name — имя образа из base без тега, newTag — новый тег в кавычках. Inline-патч пишут через `patch: |-` и внутри указывают apiVersion, kind, metadata.name и только меняемое поле.",
+        "starter": "# overlays/prod/kustomization.yaml — слой prod поверх base\napiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\n\n# namespace для всех объектов этого окружения\nnamespace:\n\n# откуда брать основу: папка base на два уровня выше\nresources:\n  -\n\n# подмена тега образа без правки base: name — имя образа без тега\nimages:\n  - name:\n    newTag:\n\n# точечная правка: число реплик у Deployment web\npatches:\n  - target:\n      kind:\n      name:\n    patch: |-\n      apiVersion: apps/v1\n      kind: Deployment\n      metadata:\n        name: web\n      spec:\n        replicas:\n",
+        "solution": "apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\n\nnamespace: prod\n\nresources:\n  - ../../base\n\nimages:\n  - name: acme/web\n    newTag: \"2.4.1\"\n\npatches:\n  - target:\n      kind: Deployment\n      name: web\n    patch: |-\n      apiVersion: apps/v1\n      kind: Deployment\n      metadata:\n        name: web\n      spec:\n        replicas: 3\n",
+        "checks": [
+          {
+            "type": "contains",
+            "value": "kind: Kustomization",
+            "message": "Файл-оглавление должен объявлять kind: Kustomization."
+          },
+          {
+            "type": "contains",
+            "value": "kustomize.config.k8s.io/v1beta1",
+            "message": "Укажите apiVersion: kustomize.config.k8s.io/v1beta1."
+          },
+          {
+            "type": "regex",
+            "value": "resources:\\s*-\\s*\\.\\./\\.\\./base",
+            "message": "resources должен указывать на папку ../../base."
+          },
+          {
+            "type": "regex",
+            "value": "namespace:\\s*prod(\\s|$)",
+            "message": "Задайте namespace: prod — все объекты overlay уходят туда."
+          },
+          {
+            "type": "contains",
+            "value": "images:",
+            "message": "Нужна секция images — тег меняют через неё, а не правкой base."
+          },
+          {
+            "type": "regex",
+            "value": "name:\\s*acme/web",
+            "message": "В images.name укажите имя образа из base: acme/web (без тега)."
+          },
+          {
+            "type": "regex",
+            "value": "newTag:\\s*\"2\\.4\\.1\"",
+            "message": "Для prod подставьте newTag: \"2.4.1\" — строкой в кавычках."
+          },
+          {
+            "type": "contains",
+            "value": "patches:",
+            "message": "Число реплик меняют патчем в секции patches."
+          },
+          {
+            "type": "regex",
+            "value": "replicas:\\s*3(\\s|$)",
+            "message": "Патч должен задавать replicas: 3."
+          },
+          {
+            "type": "notContains",
+            "value": "latest",
+            "message": "В prod не используйте тег latest — фиксируйте конкретную версию."
+          },
+          {
+            "type": "notContains",
+            "value": "{{",
+            "message": "Kustomize не использует шаблоны {{ }} — это чистый YAML."
+          }
+        ],
+        "resources": [
+          {
+            "title": "Kustomize: поле images",
+            "url": "https://kubectl.docs.kubernetes.io/references/kustomize/kustomization/images/",
+            "note": "Как name, newName и newTag подменяют образ без правки манифестов."
+          },
+          {
+            "title": "Kustomize: поле patches",
+            "url": "https://kubectl.docs.kubernetes.io/references/kustomize/kustomization/patches/",
+            "note": "Патчи по файлу и inline, target и strategic merge."
+          },
+          {
+            "title": "Kubernetes: управление объектами через Kustomize",
+            "url": "https://kubernetes.io/docs/tasks/manage-kubernetes-objects/kustomization/",
+            "note": "kubectl kustomize и kubectl apply -k на официальных примерах."
+          }
+        ]
+      }
+    },
+    {
       "title": "GitOps: Git как источник правды, push vs pull, ArgoCD и Flux",
       "kind": "text",
       "summary": "GitOps: желаемое состояние в Git, агент сверяет кластер с репозиторием; push против pull, ArgoCD и Flux, дрейф и sync.",
       "durationMin": 13,
       "content": {
-        "body": "## Зачем это нужно\n\nВы научились катить приложения через `kubectl apply` и Helm.\nНо кто и когда это делал — вопрос без ответа.\n\nИнженер ночью поправил что-то в кластере руками и забыл.\nТеперь кластер не такой, как манифесты в репозитории. Это называется дрейф.\n\nХочется, чтобы кластер всегда совпадал с тем, что записано в Git.\nА любой выкат был обычным коммитом, который видно в истории. Это идея GitOps.\n\nВыгода не только в порядке.\nGit даёт историю, авторов, ревью и мгновенный откат — всё то, чего нет у ручных правок.\n\n## Что это простыми словами\n\nGitOps — это подход, где Git становится единственным источником правды.\nЖелаемое состояние кластера целиком описано в репозитории.\n\nАналогия — термостат.\nВы ставите на нём 22 градуса (желаемое состояние) и уходите.\n\nТермостат сам постоянно сверяет: сейчас 19, а надо 22 — включает обогрев.\nВы не бегаете с обогревателем вручную; вы только меняете заданную цифру.\n\nВ GitOps «заданная цифра» — это YAML в Git.\nА роль термостата играет агент внутри кластера.\n\n## Как это работает: push против pull\n\nЕсть две модели доставки в кластер.\nРазница в том, кто именно запускает `kubectl apply`.\n\n**Push-модель.** Пайплайн CI после сборки сам ходит в кластер снаружи.\nCI хранит доступ к кластеру и делает `kubectl apply` со своей стороны.\n\n**Pull-модель.** Внутри кластера живёт агент.\nОн сам тянет манифесты из Git и применяет их изнутри.\n\nСхематично pull-поток выглядит так:\n\n```\nразработчик → git commit → Git-репозиторий\n                                  │  (агент постоянно опрашивает)\n                                  ▼\n                       агент в кластере → applies → Kubernetes\n```\n\nПочему pull безопаснее.\nКлючи от кластера не покидают кластер — снаружи их нет, красть нечего.\n\nИ почему pull самовосстанавливается.\nАгент видит расхождение с Git и сам возвращает всё к записанному состоянию.\n\nСравним подходы коротко, текстовой схемой:\n\n```\npush : CI (снаружи) --ключи от кластера--> kubectl apply --> Kubernetes\npull : Git <--опрос-- агент (внутри кластера) --apply--> Kubernetes\n```\n\nВ push доступ к кластеру хранит система сборки — большая мишень для атаки.\nВ pull наружу торчит только доступ на чтение Git, а это гораздо меньший риск.\n\n## Как это устроено внутри\n\nЗа «магией» синхронизации стоит простой цикл, который агент крутит без остановки.\nПонимание этого цикла снимает почти все вопросы «почему оно так себя ведёт».\n\n1. Агент читает манифесты из Git — это желаемое состояние.\n2. Агент запрашивает у API server реальное состояние кластера.\n3. Он сравнивает два набора объектов поле за полем.\n4. Совпало — статус `Synced`, делать нечего.\n5. Разошлось — статус `OutOfSync`, и агент применяет версию из Git.\n\nЭтот цикл повторяется постоянно, каждые несколько минут или по событию из Git.\nПоэтому ручная правка живёт недолго: на следующем витке агент её затрёт.\n\nВажно: агент сравнивает не текст файлов, а объекты в кластере.\nОн смотрит, какие поля отличаются, и приводит именно их к тому, что записано в Git.\n\nПо сути это тот же принцип desired state из первого урока главы.\nТолько «желаемое» теперь лежит не в вашей голове, а в Git, и сверяется автоматически.\n\n## ArgoCD и Flux: инструменты GitOps\n\nДва популярных pull-агента — **ArgoCD** и **Flux**.\nОба делают одно: держат кластер синхронным с Git.\n\nВ ArgoCD ваше приложение описывает объект **Application**.\nОн говорит: «вот этот путь в этом репозитории — разверни его в этот кластер».\n\nРазберём минимальный Application построчно, чтобы увидеть, из чего он состоит:\n\n```yaml\napiVersion: argoproj.io/v1alpha1\nkind: Application\nmetadata:\n  name: web\nspec:\n  source:\n    repoURL: https://github.com/acme/apps\n    path: web\n    targetRevision: main\n  destination:\n    server: https://kubernetes.default.svc\n    namespace: web\n  syncPolicy:\n    automated: {}\n```\n\n`kind: Application` — тип объекта ArgoCD, а не встроенный объект Kubernetes.\n`metadata.name: web` — имя приложения в интерфейсе ArgoCD.\n`source.repoURL` — из какого репозитория брать манифесты.\n`source.path: web` — какая папка внутри репозитория относится к этому приложению.\n`source.targetRevision: main` — какую ветку или тег отслеживать.\n`destination.server` — в какой кластер разворачивать; здесь это тот же кластер.\n`destination.namespace: web` — в какое пространство имён класть объекты.\n`syncPolicy.automated: {}` — включить автосинхронизацию: сверять и катить самому.\n\nАгент сравнивает Git и кластер и присваивает статус.\n**Synced** — реальность совпадает с Git. **OutOfSync** — есть дрейф, они разошлись.\n\nОперация приведения кластера к Git называется **sync** (синхронизация).\nОна может идти автоматически или по кнопке — как настроите через `syncPolicy`.\n\n## Пример и второй пример\n\nПример выката.\nВы меняете тег образа в YAML, коммитите — агент сам катит новую версию.\n\nПример отката.\nДелаете `git revert` того коммита — агент возвращает прошлую версию. Откат = revert.\n\nВторой пример — новое приложение в кластере.\nВы не заходите в кластер вообще: кладёте папку с манифестами в репозиторий.\n\nЗатем добавляете Application, который указывает на эту папку.\nАгент видит новое приложение и разворачивает его сам — руками `kubectl` вы не трогали.\n\nЧто это даёт команде на практике.\nКаждое изменение проходит через pull request, значит его видит и одобряет второй человек.\n\nИстория Git отвечает на вопросы «кто?», «когда?» и «зачем?».\nКаждый выкат — это коммит с автором и сообщением, а не безымянная правка в кластере.\n\nА новый сотрудник или второй кластер поднимается из того же репозитория.\nДостаточно навести на него агента — и состояние повторится один в один.\n\n## Что будет, если…\n\n**…выключить автосинхронизацию, но всё равно править кластер руками?**\nДрейф не откатится сам: агент лишь покажет `OutOfSync` и будет ждать вашей команды sync.\nЭто компромисс: безопаснее для случайных правок, но требует нажать кнопку на выкате.\n\n**…удалить объект из кластера через `kubectl delete`, оставив его в Git?**\nАгент заметит нехватку и создаст объект заново — Git считается правдой.\nЧтобы объект действительно исчез, удалить его нужно из репозитория коммитом.\n\n**…в Git попадёт битый манифест?**\nАгент застрянет в `OutOfSync`: применить невалидный YAML он не сможет.\nВ событиях приложения будет причина; чинят её новым коммитом, а не правкой в кластере.\n\n## Как бывает неправильно\n\nИнженер правит Deployment прямо в кластере через `kubectl edit`.\nПриложение чинится на пять минут, а в Git по-прежнему старое.\n\nАгент замечает, что кластер разошёлся с Git.\nОн видит OutOfSync и возвращает всё к версии из Git — ваша ручная правка исчезает.\n\nВывод.\nВ GitOps исправление вносят коммитом в Git, а не руками в кластере.\n\nВторой частый затык — застрявший sync.\nПриложение висит в OutOfSync и не сходится. Причина обычно в самом манифесте.\n\nСмотрят события и статус приложения агента.\nЧасто там ошибка валидации YAML или нехватка прав — чинят и коммитят снова.\n\n## Проверьте себя\n\nНочью кто-то вручную поменял число реплик через `kubectl`, а в Git осталось старое значение. Что сделает ArgoCD с автосинхронизацией?\n\n*Ответ: увидит статус OutOfSync (дрейф) и вернёт число реплик к значению из Git — ручная правка откатится. Менять нужно было коммитом.*\n\n## Частые ошибки новичка\n\n- Правят кластер руками и удивляются, что агент откатывает изменения. Диагностика: статус приложения висит `OutOfSync`, в истории sync видна перезапись.\n- Путают push и pull: в pull ключи от кластера наружу не отдаются.\n- Думают, что GitOps — это про Git-хостинг, а не про непрерывную сверку состояния.\n- Забывают, что откат в GitOps — это `git revert`, а не ручные действия в кластере.\n- Ждут мгновенного выката после коммита. На деле агент опрашивает Git с интервалом; ускоряет кнопка Refresh/Sync.\n\n## Запомнить\n\n- GitOps: желаемое состояние кластера целиком лежит в Git — это источник правды.\n- Push — CI применяет извне; pull — агент в кластере тянет из Git (безопаснее, самовосстанавливается).\n- Внутри агент крутит цикл: читает Git, читает кластер, сравнивает и приводит к Git.\n- ArgoCD и Flux — pull-агенты; Application, sync, статусы Synced/OutOfSync.\n- Выкат — это коммит, откат — это revert; ручные правки агент отменяет.",
+        "body": "## Зачем это нужно\n\nВы научились катить приложения через `kubectl apply` и Helm.\nНо кто и когда это делал — вопрос без ответа.\n\nИнженер ночью поправил что-то в кластере руками и забыл.\nТеперь кластер не такой, как манифесты в репозитории. Это называется дрейф.\n\nХочется, чтобы кластер всегда совпадал с тем, что записано в Git.\nА любой выкат был обычным коммитом, который видно в истории. Это идея GitOps.\n\nВыгода не только в порядке.\nGit даёт историю, авторов, ревью и мгновенный откат — всё то, чего нет у ручных правок.\n\n## Что это простыми словами\n\nGitOps — это подход, где Git становится единственным источником правды.\nЖелаемое состояние кластера целиком описано в репозитории.\n\nАналогия — термостат.\nВы ставите на нём 22 градуса (желаемое состояние) и уходите.\n\nТермостат сам постоянно сверяет: сейчас 19, а надо 22 — включает обогрев.\nВы не бегаете с обогревателем вручную; вы только меняете заданную цифру.\n\nВ GitOps «заданная цифра» — это YAML в Git.\nА роль термостата играет агент внутри кластера.\n\n## Как это работает: push против pull\n\nЕсть две модели доставки в кластер.\nРазница в том, кто именно запускает `kubectl apply`.\n\n**Push-модель.** Пайплайн CI после сборки сам ходит в кластер снаружи.\nCI хранит доступ к кластеру и делает `kubectl apply` со своей стороны.\n\n**Pull-модель.** Внутри кластера живёт агент.\nОн сам тянет манифесты из Git и применяет их изнутри.\n\nСхематично pull-поток выглядит так:\n\n```\nразработчик → git commit → Git-репозиторий\n                                  │  (агент постоянно опрашивает)\n                                  ▼\n                       агент в кластере → applies → Kubernetes\n```\n\nПочему pull безопаснее.\nКлючи от кластера не покидают кластер — снаружи их нет, красть нечего.\n\nИ почему pull самовосстанавливается.\nАгент видит расхождение с Git и сам возвращает всё к записанному состоянию.\n\nСравним подходы коротко, текстовой схемой:\n\n```\npush : CI (снаружи) --ключи от кластера--> kubectl apply --> Kubernetes\npull : Git <--опрос-- агент (внутри кластера) --apply--> Kubernetes\n```\n\nВ push доступ к кластеру хранит система сборки — большая мишень для атаки.\nВ pull наружу торчит только доступ на чтение Git, а это гораздо меньший риск.\n\n## Как это устроено внутри\n\nЗа «магией» синхронизации стоит простой цикл, который агент крутит без остановки.\nПонимание этого цикла снимает почти все вопросы «почему оно так себя ведёт».\n\n1. Агент читает манифесты из Git — это желаемое состояние.\n2. Агент запрашивает у API server реальное состояние кластера.\n3. Он сравнивает два набора объектов поле за полем.\n4. Совпало — статус `Synced`, делать нечего.\n5. Разошлось — статус `OutOfSync`, и агент применяет версию из Git.\n\nЭтот цикл повторяется постоянно, каждые несколько минут или по событию из Git.\nПоэтому ручная правка живёт недолго: на следующем витке агент её затрёт.\n\nВажно: агент сравнивает не текст файлов, а объекты в кластере.\nОн смотрит, какие поля отличаются, и приводит именно их к тому, что записано в Git.\n\nПо сути это тот же принцип desired state из первого урока главы.\nТолько «желаемое» теперь лежит не в вашей голове, а в Git, и сверяется автоматически.\n\n## ArgoCD и Flux: инструменты GitOps\n\nДва популярных pull-агента — **ArgoCD** и **Flux**.\nОба делают одно: держат кластер синхронным с Git.\nОба работают и с Helm, и с Kustomize: источником может быть чарт, папка overlay или просто каталог с YAML.\n\nВ ArgoCD ваше приложение описывает объект **Application**.\nОн говорит: «вот этот путь в этом репозитории — разверни его в этот кластер».\n\nРазберём минимальный Application построчно, чтобы увидеть, из чего он состоит:\n\n```yaml\napiVersion: argoproj.io/v1alpha1\nkind: Application\nmetadata:\n  name: web\nspec:\n  source:\n    repoURL: https://github.com/acme/apps\n    path: web\n    targetRevision: main\n  destination:\n    server: https://kubernetes.default.svc\n    namespace: web\n  syncPolicy:\n    automated: {}\n```\n\n`kind: Application` — тип объекта ArgoCD, а не встроенный объект Kubernetes.\n`metadata.name: web` — имя приложения в интерфейсе ArgoCD.\n`source.repoURL` — из какого репозитория брать манифесты.\n`source.path: web` — какая папка внутри репозитория относится к этому приложению.\n`source.targetRevision: main` — какую ветку или тег отслеживать.\n`destination.server` — в какой кластер разворачивать; здесь это тот же кластер.\n`destination.namespace: web` — в какое пространство имён класть объекты.\n`syncPolicy.automated: {}` — включить автосинхронизацию: сверять и катить самому.\n\nАгент сравнивает Git и кластер и присваивает статус.\n**Synced** — реальность совпадает с Git. **OutOfSync** — есть дрейф, они разошлись.\n\nОперация приведения кластера к Git называется **sync** (синхронизация).\nОна может идти автоматически или по кнопке — как настроите через `syncPolicy`.\n\n## Пример и второй пример\n\nПример выката.\nВы меняете тег образа в YAML, коммитите — агент сам катит новую версию.\n\nПример отката.\nДелаете `git revert` того коммита — агент возвращает прошлую версию. Откат = revert.\n\nВторой пример — новое приложение в кластере.\nВы не заходите в кластер вообще: кладёте папку с манифестами в репозиторий.\n\nЗатем добавляете Application, который указывает на эту папку.\nАгент видит новое приложение и разворачивает его сам — руками `kubectl` вы не трогали.\n\nЧто это даёт команде на практике.\nКаждое изменение проходит через pull request, значит его видит и одобряет второй человек.\n\nИстория Git отвечает на вопросы «кто?», «когда?» и «зачем?».\nКаждый выкат — это коммит с автором и сообщением, а не безымянная правка в кластере.\n\nА новый сотрудник или второй кластер поднимается из того же репозитория.\nДостаточно навести на него агента — и состояние повторится один в один.\n\n## Что будет, если…\n\n**…выключить автосинхронизацию, но всё равно править кластер руками?**\nДрейф не откатится сам: агент лишь покажет `OutOfSync` и будет ждать вашей команды sync.\nЭто компромисс: безопаснее для случайных правок, но требует нажать кнопку на выкате.\n\n**…удалить объект из кластера через `kubectl delete`, оставив его в Git?**\nАгент заметит нехватку и создаст объект заново — Git считается правдой.\nЧтобы объект действительно исчез, удалить его нужно из репозитория коммитом.\n\n**…в Git попадёт битый манифест?**\nАгент застрянет в `OutOfSync`: применить невалидный YAML он не сможет.\nВ событиях приложения будет причина; чинят её новым коммитом, а не правкой в кластере.\n\n## Как бывает неправильно\n\nИнженер правит Deployment прямо в кластере через `kubectl edit`.\nПриложение чинится на пять минут, а в Git по-прежнему старое.\n\nАгент замечает, что кластер разошёлся с Git.\nОн видит OutOfSync и возвращает всё к версии из Git — ваша ручная правка исчезает.\n\nВывод.\nВ GitOps исправление вносят коммитом в Git, а не руками в кластере.\n\nВторой частый затык — застрявший sync.\nПриложение висит в OutOfSync и не сходится. Причина обычно в самом манифесте.\n\nСмотрят события и статус приложения агента.\nЧасто там ошибка валидации YAML или нехватка прав — чинят и коммитят снова.\n\n## Проверьте себя\n\nНочью кто-то вручную поменял число реплик через `kubectl`, а в Git осталось старое значение. Что сделает ArgoCD с автосинхронизацией?\n\n*Ответ: увидит статус OutOfSync (дрейф) и вернёт число реплик к значению из Git — ручная правка откатится. Менять нужно было коммитом.*\n\n## Частые ошибки новичка\n\n- Правят кластер руками и удивляются, что агент откатывает изменения. Диагностика: статус приложения висит `OutOfSync`, в истории sync видна перезапись.\n- Путают push и pull: в pull ключи от кластера наружу не отдаются.\n- Думают, что GitOps — это про Git-хостинг, а не про непрерывную сверку состояния.\n- Забывают, что откат в GitOps — это `git revert`, а не ручные действия в кластере.\n- Ждут мгновенного выката после коммита. На деле агент опрашивает Git с интервалом; ускоряет кнопка Refresh/Sync.\n\n## Запомнить\n\n- GitOps: желаемое состояние кластера целиком лежит в Git — это источник правды.\n- Push — CI применяет извне; pull — агент в кластере тянет из Git (безопаснее, самовосстанавливается).\n- Внутри агент крутит цикл: читает Git, читает кластер, сравнивает и приводит к Git.\n- ArgoCD и Flux — pull-агенты; Application, sync, статусы Synced/OutOfSync.\n- Выкат — это коммит, откат — это revert; ручные правки агент отменяет.",
         "resources": [
           {
             "title": "Argo CD — Core Concepts",
@@ -1381,6 +1680,32 @@
             "title": "Flux — GitOps Toolkit",
             "url": "https://fluxcd.io/flux/concepts/",
             "note": "Как pull-агент сверяет кластер с Git."
+          }
+        ]
+      }
+    },
+    {
+      "title": "Как расширяют Kubernetes: CRD, контроллеры и операторы",
+      "kind": "text",
+      "summary": "Как в кластер добавляют свои типы объектов (CRD), кто их обслуживает (контроллер с циклом сверки) и когда оператор нужен, а когда хватит Deployment.",
+      "durationMin": 13,
+      "content": {
+        "body": "## Зачем это нужно\n\nВы уже знаете встроенные объекты Kubernetes: Pod, Deployment, Service, ConfigMap.\nНо реальные задачи шире.\nХочется объявить «сертификат для example.com» и получить готовый TLS-секрет.\nИли сказать «собирай метрики с этого сервиса», а не править конфиг Prometheus руками.\n\nВстроенных типов для этого нет.\nKubernetes решает проблему иначе: он позволяет добавлять свои типы объектов.\n\nМеханизм называется CRD, а логику к нему пишут в виде контроллера.\nВместе они дают оператор — «робота-админа», который обслуживает приложение внутри кластера.\n\nВы уже пользовались таким роботом в прошлом уроке.\nОбъект Application в Argo CD — не встроенный тип, а именно CRD с контроллером.\n\n## Что это простыми словами\n\nПредставьте склад с типовыми бланками заявок: «выдать», «переместить», «списать».\nБланки лежат в приёмной, а кладовщики их читают и исполняют.\n\nCRD (CustomResourceDefinition) — это новый бланк, который вы добавили в приёмную: «выпустить сертификат».\nТеперь такую заявку можно подать, и она ляжет в архив как любая другая.\n\nНо бланк сам ничего не делает.\nНужен кладовщик, который умеет читать именно этот бланк. Это контроллер.\n\nОн находит заявки своего типа, исполняет их и отмечает статус; изменились условия — переделывает.\n\nОператор — это бланк плюс обученный кладовщик в одной коробке.\nУстановили оператор — в кластере появились и новые типы, и логика их обработки.\n\n## Как это работает\n\n### CRD: новый тип объекта в API\n\nCRD — это тоже манифест.\nОн описывает, как называется новый тип, к какой группе API он относится и какие поля у него есть.\n\n```anatomy\napiVersion: apiextensions.k8s.io/v1 ## API самого механизма расширения\nkind: CustomResourceDefinition ## объявляем новый тип объекта\nmetadata:\n  name: certificates.cert-manager.io ## имя строго вида plural.group\nspec:\n  group: cert-manager.io ## группа API: попадёт в apiVersion новых объектов\n  scope: Namespaced ## объекты живут в namespace, а не на весь кластер\n  names:\n    kind: Certificate ## что писать в kind у новых объектов\n    plural: certificates ## как называть в kubectl get certificates\n  versions: ## версии типа и схема полей: что разрешено писать в spec\n```\n\nКак только CRD применён, API server принимает объекты нового типа: они хранятся в etcd и видны через `kubectl get certificates`.\n\n> [!WARNING]\n>\n> CRD — это только описание типа. После его установки объекты можно создавать и читать, но никто на них не реагирует.\n\n### Контроллер: цикл сверки\n\nКонтроллер — программа, которая следит за объектами своего типа и приводит реальность к их `spec`.\nЦикл у него один и тот же, что бы он ни обслуживал:\n\n```flow\nсобытие: объект создан, изменён или удалён\n*контроллер читает spec — желаемое состояние\nконтроллер смотрит на реальность: есть ли нужный Secret, Pod, конфиг\nсовпало → ничего не делать\nразошлось → сделать шаг к желаемому → записать status\nснова ждать событие\n```\n\nЭто тот же принцип desired state, что у Deployment из начала главы.\nВстроенные контроллеры работают внутри kube-controller-manager.\nСвой контроллер — обычный Pod в кластере, чаще всего Deployment в отдельном namespace.\nЕму нужен ServiceAccount и права RBAC на свои типы и на то, что он создаёт.\n\n### Оператор: CRD плюс контроллер плюс опыт эксплуатации\n\nСлово «оператор» означает контроллер, в который зашили знания о конкретной системе: как её обновить, забэкапить, продлить сертификат.\n\nОператор ставят как обычное приложение, чаще всего Helm-чартом.\nЧарт приносит CRD, Deployment с контроллером и нужные роли RBAC.\n\n## Как это устроено внутри\n\nПроследим путь объекта.\nВы выполняете `kubectl apply -f certificate.yaml` с объектом `kind: Certificate`.\n\n```\n1. kubectl отправляет объект в API server\n2. API server ищет CRD для kind Certificate\n3. поля объекта проверяются по схеме из CRD\n4. объект сохраняется в etcd — kubectl get его уже видит\n5. контроллер cert-manager получает событие и запускает сверку\n6. контроллер создаёт Secret с сертификатом и пишет status: Ready\n```\n\nШаги 1–4 работают даже без контроллера.\nОбъект «есть», но ничего не происходит: `status` пустой, Secret не появляется.\n\nШаг 2 срабатывает, только если CRD установлен.\nИначе kubectl вернёт ошибку `no matches for kind \"Certificate\"` и подсказку `ensure CRDs are installed first`.\n\nШаги 5–6 — зона ответственности контроллера.\nЕсли его Pod лежит, объект молча висит без статуса.\n\n```\nkubectl api-resources\nkubectl get crd\nkubectl explain certificate.spec\n```\n\nПервая — все типы кластера, включая добавленные; вторая — сами определения; третья — поля по схеме из CRD.\n\n`apiVersion: argoproj.io/v1alpha1` у Application — не группа Kubernetes, а группа из CRD, который принёс Argo CD.\n\nКонтроллер Argo CD крутит тот же цикл: читает `spec.source` из Git и сравнивает с кластером.\nДальше ставит `Synced` или `OutOfSync`, а при автосинке применяет манифесты.\nИ Argo CD, и Flux умеют брать источник как из Helm-чартов, так и из Kustomize — это тоже работа контроллера.\n\n## Пример: три оператора, которые встречаются почти везде\n\n**Prometheus Operator.**\nПриносит типы Prometheus, ServiceMonitor и PrometheusRule.\nВы создаёте ServiceMonitor: «собирай метрики с Service с такой меткой».\nОператор сам собирает конфиг Prometheus и перезагружает его — без ручных правок prometheus.yml.\n\n**cert-manager.**\nПриносит типы Issuer, ClusterIssuer и Certificate.\nКонтроллер получает сертификат, кладёт его в Secret и продлевает до истечения срока.\nИменно так делают TLS и для Ingress, и для Gateway API.\n\n```yaml\napiVersion: cert-manager.io/v1\nkind: Certificate\nmetadata:\n  name: web-tls\nspec:\n  secretName: web-tls          # куда положить готовый сертификат\n  dnsNames:\n    - example.com              # для какого имени\n  issuerRef:\n    name: letsencrypt          # у кого просить\n    kind: ClusterIssuer\n```\n\n`issuerRef` ссылается на Issuer или ClusterIssuer — объект, который знает, где и как получать сертификат.\n\n**External Secrets Operator.**\nПриносит типы SecretStore, ClusterSecretStore и ExternalSecret.\nВы указываете, какой секрет взять из внешнего хранилища, а оператор создаёт обычный Secret и держит его свежим.\n\nТак решается больная тема GitOps: в Git лежит только ссылка, а значение секрета в репозиторий не попадает.\n\n## Когда оператор нужен, а когда достаточно Deployment\n\nDeployment достаточно, когда приложение без состояния (веб, API, воркер), перезапуск ничего не ломает, а настройки помещаются в ConfigMap и Secret.\n\nОператор оправдан, когда:\n\n- у системы есть жизненный цикл: бэкап, переключение реплики, миграция версии;\n- вы хотите декларативно описать внешнюю вещь: сертификат, секрет в хранилище, цель мониторинга;\n- одну и ту же ручную процедуру повторяют много команд.\n\n> [!TIP]\n>\n> Сначала ищите готовый оператор. Свой пишут, когда одна и та же операция повторяется постоянно и её нельзя выразить встроенными объектами.\n\n## Что будет, если…\n\n- **Применить Certificate до установки cert-manager.**\nОшибка `no matches for kind \"Certificate\"`: CRD нет, API server не знает такой тип.\nПорядок всегда один: сначала оператор, потом его объекты.\n\n- **CRD стоит, а Pod контроллера лежит.**\nОбъект создастся и будет виден в `kubectl get`.\nНо `status` останется пустым, а Secret так и не появится.\n\n- **Удалить сам CRD.**\nВместе с определением исчезнут все объекты этого типа во всех namespace — все Certificate разом.\n\n## Как бывает неправильно\n\nИнженер создал Certificate, увидел его в `kubectl get` и закрыл задачу.\nЧерез час сайт не открывается: сертификата нет.\n\nПочему проваливается: «объект создан» и «объект обработан» — разные вещи.\nОбъект лежит в etcd, а контроллер до него не добрался или упал на ошибке.\n\nПравильно — смотреть `status` и события.\nКоманда `kubectl describe certificate web-tls` покажет условия готовности и причину отказа.\n\nВторая ошибка — свой оператор для обычного веб-сервиса: недели на фреймворк, а пользы как от Deployment.\n\n## Проверьте себя\n\nВы применили манифест с `kind: ServiceMonitor`, а kubectl вернул «no matches for kind». Что случилось?\n\n*Ответ: в кластере нет CRD этого типа — Prometheus Operator не установлен. API server не знает такой kind и отклоняет манифест.*\n\nCertificate создан, `kubectl get` его показывает, но Secret с сертификатом не появился. Где искать?\n\n*Ответ: CRD есть, а контроллер не отработал. Смотрите status и события через kubectl describe certificate, затем Pod cert-manager и его логи.*\n\n## Частые ошибки новичка\n\n- **Применяют объекты оператора до установки оператора.**\nКак заметить: ошибка `no matches for kind` и подсказка про CRD.\nПочинка: установите оператор, дождитесь его Pod, затем применяйте объекты.\n\n- **Считают, что «создан» значит «готов».**\nКак заметить: `status` пустой или условие Ready равно False.\nПочинка: читайте `kubectl describe` объекта, затем логи контроллера.\n\n- **Удаляют CRD, чтобы «почистить кластер».**\nКак заметить: разом пропали все объекты этого типа.\nПочинка: удаляйте объекты, а не определение типа; перед удалением CRD делайте выгрузку.\n\n## Запомнить\n\n- CRD добавляет в API кластера новый тип объекта; API server хранит его, как встроенные.\n- Сам по себе CRD — только данные. Действует контроллер: событие → сравнить → сделать шаг → записать status.\n- Оператор = CRD + контроллер + опыт эксплуатации; ставится как обычное приложение, часто Helm-чартом.\n- Application в Argo CD — это CRD; Prometheus Operator, cert-manager и External Secrets Operator — типовые операторы.\n- Deployment хватает stateless-приложению; оператор — когда есть жизненный цикл или внешний ресурс.\n- «Создан» не значит «обработан»: смотрите status и `kubectl describe`.",
+        "resources": [
+          {
+            "title": "Kubernetes: Custom Resources",
+            "url": "https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/",
+            "note": "Что такое CRD и как новый тип попадает в API кластера."
+          },
+          {
+            "title": "Kubernetes: Operator pattern",
+            "url": "https://kubernetes.io/docs/concepts/extend-kubernetes/operator/",
+            "note": "Оператор как контроллер с знаниями о предметной области."
+          },
+          {
+            "title": "cert-manager: документация",
+            "url": "https://cert-manager.io/docs/",
+            "note": "Пример оператора: Issuer, Certificate и автоматическое продление TLS."
           }
         ]
       }
@@ -1815,6 +2140,151 @@
               }
             ],
             "explanation": "Верно. В pull-модели агент внутри кластера сам тянет манифесты из Git и применяет их. Учётные данные кластера не покидают кластер — это и есть преимущество pull в безопасности перед push."
+          },
+          {
+            "id": "q13",
+            "text": "Одно приложение, три окружения dev/stage/prod. Отличаются только namespace, тег образа и число реплик; манифесты — обычный YAML без шаблонов. Как это оформить в духе Kustomize?",
+            "options": [
+              {
+                "id": "a",
+                "text": "Одна папка base с общими манифестами и три overlay с патчами",
+                "correct": true
+              },
+              {
+                "id": "b",
+                "text": "Три полные копии манифестов в трёх папках",
+                "correct": false
+              },
+              {
+                "id": "c",
+                "text": "Обязательно переписать всё в Helm-чарт с {{ .Values }}",
+                "correct": false
+              }
+            ],
+            "explanation": "Kustomize хранит общее в base один раз, а различия — в overlays: namespace, images.newTag и патч на replicas. Копии расползаются и забываются; Helm возможен, но для своих манифестов без шаблонов он избыточен."
+          },
+          {
+            "id": "q14",
+            "text": "Сопоставьте ключ kustomization.yaml с тем, что он делает:",
+            "type": "match",
+            "pairs": [
+              {
+                "id": "p1",
+                "left": "resources",
+                "right": "что включить в сборку: файлы или папка ../../base"
+              },
+              {
+                "id": "p2",
+                "left": "namespace",
+                "right": "проставить namespace всем объектам сразу"
+              },
+              {
+                "id": "p3",
+                "left": "images",
+                "right": "подменить тег или имя образа без правки манифеста"
+              },
+              {
+                "id": "p4",
+                "left": "patches",
+                "right": "точечно изменить поля объекта, например replicas"
+              }
+            ],
+            "explanation": "resources собирает основу, namespace и images — массовые преобразования поверх неё, patches — точечные правки частичным YAML. Так overlay для prod умещается в десяток строк."
+          },
+          {
+            "id": "q15",
+            "text": "Вы применили манифест с kind: Certificate, а kubectl ответил: no matches for kind \"Certificate\". Что это значит?",
+            "options": [
+              {
+                "id": "a",
+                "text": "В кластере нет CRD этого типа — оператор cert-manager не установлен",
+                "correct": true
+              },
+              {
+                "id": "b",
+                "text": "Опечатка в metadata.name объекта",
+                "correct": false
+              },
+              {
+                "id": "c",
+                "text": "Не хватает прав RBAC на создание Secret",
+                "correct": false
+              }
+            ],
+            "explanation": "API server принимает только типы, которые знает: встроенные и добавленные через CRD. Без CRD kind Certificate неизвестен, и манифест отклоняется ещё до проверки полей и прав. Сначала ставят оператор (он приносит CRD), потом его объекты."
+          },
+          {
+            "id": "q16",
+            "type": "match",
+            "text": "Сопоставьте оператор с объектом, который он добавляет в кластер через CRD:",
+            "pairs": [
+              {
+                "id": "p1",
+                "left": "cert-manager",
+                "right": "Certificate — выпуск и продление TLS-сертификата в Secret"
+              },
+              {
+                "id": "p2",
+                "left": "Prometheus Operator",
+                "right": "ServiceMonitor — какие Service собирать в метрики"
+              },
+              {
+                "id": "p3",
+                "left": "External Secrets Operator",
+                "right": "ExternalSecret — секрет из внешнего хранилища в Secret кластера"
+              },
+              {
+                "id": "p4",
+                "left": "Argo CD",
+                "right": "Application — путь в Git, который нужно синхронизировать с кластером"
+              }
+            ],
+            "explanation": "Каждый оператор приносит свои CRD и контроллер к ним. cert-manager обслуживает Certificate, Prometheus Operator — ServiceMonitor и PrometheusRule. External Secrets Operator — ExternalSecret и SecretStore, Argo CD — Application. Во всех случаях работает один цикл: прочитать spec, сравнить с реальностью, сделать шаг, записать status."
+          },
+          {
+            "id": "q17",
+            "text": "На namespace prod нужно, чтобы API server отклонял Pod, запущенные от root или с повышением привилегий. Какую метку повесить на namespace?",
+            "options": [
+              {
+                "id": "a",
+                "text": "pod-security.kubernetes.io/enforce: restricted",
+                "correct": true
+              },
+              {
+                "id": "b",
+                "text": "pod-security.kubernetes.io/warn: baseline",
+                "correct": false
+              },
+              {
+                "id": "c",
+                "text": "pod-security.kubernetes.io/enforce: privileged",
+                "correct": false
+              }
+            ],
+            "explanation": "Отклоняет нарушителей только режим enforce, а запуск от root и повышение привилегий запрещает уровень restricted. warn лишь показывает предупреждение и пропускает Pod, а baseline допускает root. privileged вообще ничего не ограничивает."
+          },
+          {
+            "id": "q18",
+            "type": "match",
+            "text": "Несколько команд делят один кластер. Сопоставьте объект с его задачей:",
+            "pairs": [
+              {
+                "id": "p1",
+                "left": "PodDisruptionBudget",
+                "right": "сколько Pod должны остаться живыми при drain узла"
+              },
+              {
+                "id": "p2",
+                "left": "ResourceQuota",
+                "right": "потолок суммарных CPU и памяти на весь namespace"
+              },
+              {
+                "id": "p3",
+                "left": "LimitRange",
+                "right": "requests и limits по умолчанию для одного контейнера"
+              }
+            ],
+            "explanation": "PDB защищает сервис при плановых работах: drain не выселит Pod, если живых станет меньше minAvailable. ResourceQuota делит кластер между командами, ограничивая сумму ресурсов в namespace. LimitRange подставляет и ограничивает ресурсы одного контейнера, без него Pod без requests в namespace с квотой не создастся."
           }
         ],
         "resources": [

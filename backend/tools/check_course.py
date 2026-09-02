@@ -165,6 +165,9 @@ for r, t, u in resources:
     dom = re.sub(r'^https?://(www\.)?', '', u).split('/')[0]
     if 'wikipedia.org' in dom and 'Википедия' not in t and 'Wikipedia' not in t:
         bad('8.ссылки', f"{r}: Википедия подписана как «{t}»")
+    # Если источник назван явно (Хабр:, Википедия:, Habr, Medium) — доменное правило не применяем.
+    if re.match(r'\s*(Хабр|Википедия|Habr|Medium|Wikipedia)\s*:', t):
+        continue
     for pat, doms in RULES:
         if re.search(pat, t):
             ok = ('wikipedia.org' not in dom) if doms is None else any(x in dom for x in doms)
