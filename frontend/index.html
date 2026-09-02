@@ -48,10 +48,41 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="DevOps" />
+    <meta name="apple-mobile-web-app-title" content="Okvion" />
+    <style>
+      /* Мгновенная заставка: видна сразу, пока грузится и стартует JS —
+         на медленном телефоне это не белый экран, а спиннер бренда. */
+      #app-splash {
+        position: fixed;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        background: #0b1020;
+      }
+      #app-splash .ring {
+        width: 38px;
+        height: 38px;
+        border: 3px solid rgba(120, 140, 190, 0.35);
+        border-top-color: #3b82f6;
+        border-radius: 50%;
+        animation: app-splash-spin 0.8s linear infinite;
+      }
+      @keyframes app-splash-spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div id="app-splash"><div class="ring"></div></div>
+    </div>
+    <noscript>
+      <div style="padding: 24px; color: #e5e9f0; background: #0b1020; font-family: sans-serif">
+        Для работы платформы нужно включить JavaScript в браузере.
+      </div>
+    </noscript>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

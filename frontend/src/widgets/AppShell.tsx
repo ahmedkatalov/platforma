@@ -1,5 +1,5 @@
 import clsx from "clsx";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 
 import { useAppDispatch, useAppSelector } from "@/app/store";
@@ -316,7 +316,15 @@ export default function AppShell() {
             showBottomNav && "pb-[calc(4.25rem+var(--safe-bottom))] lg:pb-8",
           )}
         >
-          <Outlet />
+          <Suspense
+            fallback={
+              <div className="grid place-items-center py-24 text-accent" aria-label="Загрузка">
+                <span className="h-8 w-8 animate-spin rounded-full border-2 border-current border-t-transparent" />
+              </div>
+            }
+          >
+            <Outlet />
+          </Suspense>
         </main>
       </div>
 
