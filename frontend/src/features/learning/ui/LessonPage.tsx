@@ -508,9 +508,16 @@ export default function LessonPage() {
 
         <NoteSelection lessonId={lesson.id}>{body}</NoteSelection>
 
-        {/* Навигация между уроками: на телефоне — липкая нижняя панель с явной
-            основной кнопкой «Далее»; на десктопе — обычный ряд. */}
-        <div className="action-bar mt-[var(--gap)] flex items-center gap-3 xl:static xl:bg-none xl:pb-0 xl:pt-[var(--gap)]">
+        {/* Навигация между уроками: на телефоне для теории/квиза — липкая нижняя
+            панель с явной «Далее»; для терминала/кода — обычный ряд, чтобы липкая
+            панель не перекрывала ввод команд и кнопку проверки. На десктопе — ряд. */}
+        <div
+          className={`mt-[var(--gap)] flex items-center gap-3 pt-[var(--gap)] ${
+            lesson.kind === "text" || lesson.kind === "quiz"
+              ? "action-bar xl:static xl:bg-none xl:pb-0"
+              : ""
+          }`}
+        >
           {data.prevLessonId ? (
             <Link
               to={`/learn/courses/${data.courseSlug}/lessons/${data.prevLessonId}`}

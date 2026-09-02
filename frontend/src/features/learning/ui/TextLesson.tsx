@@ -55,7 +55,9 @@ export default function TextLesson({
 
   return (
     <>
-      <Card className="p-[var(--pad)] sm:p-8">
+      {/* На телефоне теория читается прямо на фоне (без «стеклянной» карточки) —
+          легче и спокойнее для длинного чтения; на sm+ остаётся карточкой. */}
+      <Card className="p-[var(--pad)] max-sm:border-0 max-sm:bg-transparent max-sm:p-0 max-sm:shadow-none max-sm:backdrop-blur-none sm:p-8">
         <div className="mx-auto">
           {headings.length >= 4 && (
             <nav className="mb-6 rounded-[var(--radius-md)] border border-line bg-surface-2 p-4">
