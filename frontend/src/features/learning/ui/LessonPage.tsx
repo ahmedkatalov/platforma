@@ -28,6 +28,7 @@ import {
   HelpCircle,
   Lock,
   Terminal,
+  X,
 } from "lucide-react";
 
 import { groupThemes, themeProgress } from "@/features/learning/lib/themes";
@@ -207,10 +208,41 @@ export default function LessonPage() {
         contentsCollapsed ? "xl:grid-cols-[4.5rem_1fr]" : "xl:grid-cols-[18rem_1fr]"
       }`}
     >
-      {/* Содержание курса */}
-      <aside className={`xl:block ${asideOpen ? "block" : "hidden"}`}>
+      {/* Затемнение под мобильной шторкой содержания. */}
+      {asideOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/60 xl:hidden"
+          onClick={() => setAsideOpen(false)}
+          aria-hidden="true"
+        />
+      )}
 
-        <Card className={`relative xl:sticky xl:top-24 p-3 ${contentsCollapsed ? "xl:p-2" : "xl:p-3"}`}>
+      {/* Содержание курса: на телефоне — шторка снизу, на десктопе — колонка слева. */}
+      <aside
+        className={
+          asideOpen
+            ? "sheet-panel fixed inset-x-0 bottom-0 z-50 overflow-y-auto xl:static xl:z-auto xl:block xl:max-h-none xl:animate-none xl:overflow-visible xl:rounded-none xl:border-t-0 xl:bg-transparent xl:pb-0 xl:shadow-none"
+            : "hidden xl:block"
+        }
+      >
+        {/* Мобильная шапка шторки: «ручка», заголовок, закрытие. */}
+        <div className="xl:hidden">
+          <div className="sheet-grip" />
+          <div className="flex items-center justify-between px-4 pb-2 pt-1">
+            <p className="text-sm font-bold text-fg">Содержание курса</p>
+            <button
+              className="btn btn-ghost btn-icon btn-sm"
+              onClick={() => setAsideOpen(false)}
+              aria-label="Закрыть содержание"
+            >
+              <X size={18} />
+            </button>
+          </div>
+        </div>
+
+        <Card
+          className={`relative p-3 max-xl:border-0 max-xl:bg-transparent max-xl:shadow-none max-xl:backdrop-blur-none xl:sticky xl:top-24 ${contentsCollapsed ? "xl:p-2" : "xl:p-3"}`}
+        >
           {contentsCollapsed && (
             <button
               type="button"
@@ -476,30 +508,36 @@ export default function LessonPage() {
 
         <NoteSelection lessonId={lesson.id}>{body}</NoteSelection>
 
-        <div className="mt-[var(--gap)] flex items-center justify-between gap-3">
+        {/* Навигация между уроками: на телефоне — липкая нижняя панель с явной
+            основной кнопкой «Далее»; на десктопе — обычный ряд. */}
+        <div className="action-bar mt-[var(--gap)] flex items-center gap-3 xl:static xl:bg-none xl:pb-0 xl:pt-[var(--gap)]">
           {data.prevLessonId ? (
             <Link
               to={`/learn/courses/${data.courseSlug}/lessons/${data.prevLessonId}`}
-              className="btn btn-secondary"
+              className="btn btn-secondary btn-icon shrink-0 xl:w-auto xl:px-4"
+              aria-label="Предыдущий урок"
             >
-              <ChevronRight size={16} className="rotate-180" />
-              Предыдущий
+              <ChevronRight size={18} className="rotate-180" />
+              <span className="hidden xl:inline">Предыдущий</span>
             </Link>
           ) : (
-            <span />
+            <span className="hidden xl:block" />
           )}
 
           {data.nextLessonId ? (
             <Link
               to={`/learn/courses/${data.courseSlug}/lessons/${data.nextLessonId}`}
-              className="btn btn-secondary"
+              className="btn btn-primary flex-1 xl:ml-auto xl:flex-none"
             >
-              Следующий
-              <ChevronRight size={16} />
+              Далее
+              <ChevronRight size={18} />
             </Link>
           ) : (
-            <Link to={`/learn/courses/${data.courseSlug}`} className="btn btn-secondary">
-              <Terminal size={16} />
+            <Link
+              to={`/learn/courses/${data.courseSlug}`}
+              className="btn btn-primary flex-1 xl:ml-auto xl:flex-none"
+            >
+              <Check size={16} />
               К программе курса
             </Link>
           )}

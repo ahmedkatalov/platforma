@@ -78,7 +78,8 @@ export default function CodeLesson({
         <Card className="p-[var(--pad)]">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-base font-bold text-fg">Решение</h2>
-            <div className="flex gap-2">
+            {/* Десктоп: действия в шапке. */}
+            <div className="hidden gap-2 lg:flex">
               <Button onClick={() => setCode(content.starter ?? "")}>Сбросить</Button>
               <Button variant="primary" onClick={submit} loading={isLoading}>
                 Проверить
@@ -87,6 +88,17 @@ export default function CodeLesson({
           </div>
 
           <CodeEditor value={code} onChange={setCode} language={content.language} />
+
+          {/* Телефон: действия под редактором — логичный порядок «написал → проверил»,
+              «Проверить» крупная и основная. */}
+          <div className="mt-3 flex gap-2 lg:hidden">
+            <Button className="flex-1" onClick={() => setCode(content.starter ?? "")}>
+              Сбросить
+            </Button>
+            <Button className="flex-[2]" variant="primary" onClick={submit} loading={isLoading}>
+              Проверить
+            </Button>
+          </div>
         </Card>
       </div>
 
@@ -143,10 +155,13 @@ export default function CodeLesson({
           {content.hint && (
             <div className="mt-4 border-t border-line pt-3">
               {showHint ? (
-                <p className="text-xs text-muted">Подсказка: {content.hint}</p>
+                <p className="text-sm text-muted">
+                  <span className="font-semibold text-faint">Подсказка: </span>
+                  {content.hint}
+                </p>
               ) : (
                 <button
-                  className="text-xs font-semibold text-accent hover:underline"
+                  className="btn btn-ghost btn-sm -ml-2 text-accent"
                   onClick={() => setShowHint(true)}
                 >
                   Показать подсказку

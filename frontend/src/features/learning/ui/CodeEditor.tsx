@@ -74,7 +74,7 @@ export default function CodeEditor({
         <span className="text-[11px] text-faint">{lines.length} строк</span>
       </div>
 
-      <div className="flex max-h-[32rem] font-mono text-[13px] leading-6">
+      <div className="flex max-h-[26rem] font-mono text-[13px] leading-6 lg:max-h-[32rem]">
         <div
           ref={gutterRef}
           className="select-none overflow-hidden border-r border-line bg-surface-2 px-2 py-3 text-right text-faint"
@@ -85,6 +85,8 @@ export default function CodeEditor({
           ))}
         </div>
 
+        {/* wrap="off" — код скроллится вбок, а не переносится: отступы и номера
+            строк не сбиваются (важно для YAML на узком экране). */}
         <textarea
           ref={textareaRef}
           value={value}
@@ -92,10 +94,12 @@ export default function CodeEditor({
           onKeyDown={handleKeyDown}
           readOnly={readOnly}
           rows={rows}
+          wrap="off"
           spellCheck={false}
           autoCapitalize="off"
           autoComplete="off"
-          className="flex-1 resize-none bg-transparent px-3 py-3 leading-6 text-fg outline-none"
+          autoCorrect="off"
+          className="flex-1 resize-none overflow-x-auto whitespace-pre bg-transparent px-3 py-3 leading-6 text-fg outline-none"
           aria-label="Редактор кода"
         />
       </div>
