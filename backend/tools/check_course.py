@@ -49,7 +49,7 @@ CODE = {'hint', 'task', 'checks', 'starter', 'language', 'solution', 'resources'
 CHECK = {'type', 'value', 'message'}
 RES = {'url', 'note', 'title'}
 KINDS = {'text', 'quiz', 'terminal', 'code'}
-LANGS = {'yaml', 'bash', 'hcl', 'dockerfile', 'nginx'}
+LANGS = {'yaml', 'bash', 'hcl', 'dockerfile', 'nginx', 'python'}
 CTYPES = {'contains', 'regex', 'notContains'}
 
 def unknown(obj, allowed, where):
@@ -167,6 +167,10 @@ for r, t, u in resources:
         bad('8.ссылки', f"{r}: Википедия подписана как «{t}»")
     # Если источник назван явно (Хабр:, Википедия:, Habr, Medium) — доменное правило не применяем.
     if re.match(r'\s*(Хабр|Википедия|Habr|Medium|Wikipedia)\s*:', t):
+        continue
+    # Официальные GitHub-организации проектов — валидный первоисточник, домен-правило не применяем.
+    _m = re.match(r'https?://github\.com/([\w.-]+)/', u)
+    if _m and _m.group(1).lower() in {'kubernetes','kubernetes-client','kubernetes-sigs','prometheus','grafana','hashicorp','opentofu','docker','moby','gitlabhq','aquasecurity','open-telemetry','helm','argoproj','fluxcd','cert-manager'}:
         continue
     for pat, doms in RULES:
         if re.search(pat, t):
