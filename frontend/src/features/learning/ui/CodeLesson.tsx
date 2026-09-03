@@ -5,7 +5,7 @@ import { apiErrorMessage } from "@/shared/api/baseApi";
 import type {
   Certificate, CodeCheckResult, CodeContent, LessonProgress } from "@/shared/types";
 import { Badge, Button, Card, Progress } from "@/shared/ui";
-import { Check, X } from "lucide-react";
+import { Check, ChevronRight, X } from "lucide-react";
 import { useToast } from "@/shared/ui/ToastProvider";
 
 import CodeEditor from "./CodeEditor";
@@ -55,7 +55,7 @@ export default function CodeLesson({
       setResult(data);
       if (data.passed) {
         toast.success("Все проверки пройдены");
-        onDone(data.certificate);
+        // Не перелистываем сразу: показываем результат, дальше — по кнопке.
       } else {
         toast.error("Часть проверок не пройдена — посмотрите список справа");
       }
@@ -125,6 +125,17 @@ export default function CodeLesson({
                   tone={result.passed ? "var(--success)" : "var(--warning)"}
                 />
               </div>
+
+              {result.passed && (
+                <Button
+                  variant="primary"
+                  className="mb-4 w-full"
+                  onClick={() => onDone(result.certificate)}
+                >
+                  Дальше
+                  <ChevronRight size={16} />
+                </Button>
+              )}
 
               <ul className="space-y-2">
                 {result.checks.map((check, i) => (

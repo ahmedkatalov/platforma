@@ -11,7 +11,7 @@ import { apiErrorMessage } from "@/shared/api/baseApi";
 import type {
   Certificate, LessonProgress, TaskState, TerminalContent } from "@/shared/types";
 import { Badge, Button, Card, Progress } from "@/shared/ui";
-import { Check, Terminal } from "lucide-react";
+import { Check, ChevronRight, Terminal } from "lucide-react";
 import { useToast } from "@/shared/ui/ToastProvider";
 
 import LessonResources from "./LessonResources";
@@ -60,6 +60,7 @@ export default function TerminalLesson({
     () => new Set(tasks.filter((t) => t.completedAt).map((t) => t.taskId)),
   );
   const [hintLevel, setHintLevel] = useState<Record<string, number>>({});
+  const [cert, setCert] = useState<Certificate | null>(null);
 
   const [checkTerminal] = useCheckTerminalMutation();
   const toast = useToast();
@@ -129,7 +130,8 @@ export default function TerminalLesson({
 
         if (check.lessonComplete) {
           toast.success("Все задания выполнены!");
-          onDone(check.certificate);
+          // Не перелистываем сразу: показываем «урок засчитан», дальше — по кнопке.
+          setCert(check.certificate ?? null);
         }
       }
     } catch (err) {
@@ -201,8 +203,14 @@ export default function TerminalLesson({
           </div>
         )}
         {allDone && (
-          <div className="flex items-center gap-2 rounded-[var(--radius-md)] bg-[var(--success-soft)] p-3 text-sm font-medium text-success lg:hidden">
-            <Check size={16} /> Все задания выполнены. Урок засчитан.
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-md)] bg-[var(--success-soft)] p-3 text-sm font-medium text-success lg:col-span-5">
+            <span className="flex items-center gap-2">
+              <Check size={16} /> Все задания выполнены. Урок засчитан.
+            </span>
+            <Button variant="primary" onClick={() => onDone(cert)}>
+              Дальше
+              <ChevronRight size={16} />
+            </Button>
           </div>
         )}
 
