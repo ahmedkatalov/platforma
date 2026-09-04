@@ -21,7 +21,8 @@ import Markdown from "./Markdown";
 type Answers = Record<string, string[]>;
 type Blanks = Record<string, string>;
 
-const kindOf = (q: QuizQuestion) => q.type ?? "choice";
+const kindOf = (q: QuizQuestion) =>
+  q.type === "true-false" ? "choice" : (q.type ?? "choice");
 
 // Квиз с тремя типами вопросов: варианты, порядок шагов и вписать ответ.
 export default function QuizLesson({
