@@ -192,8 +192,8 @@ export type QuizQuestion = {
   multiple?: boolean;
   /** Вопрос на повторение ранее пройденной темы. */
   review?: boolean;
-  /** Тип вопроса: choice (по умолчанию), order (порядок), blank (вписать), match (сопоставить). */
-  type?: "choice" | "order" | "blank" | "match";
+  /** Тип вопроса: choice (по умолчанию), true-false (верно/неверно), order (порядок), blank (вписать), match (сопоставить). */
+  type?: "choice" | "true-false" | "order" | "blank" | "match";
   options?: QuizOption[]; // choice
   items?: QuizItem[]; // order (приходят перемешанными)
   lefts?: QuizItem[]; // match: левые части в исходном порядке
