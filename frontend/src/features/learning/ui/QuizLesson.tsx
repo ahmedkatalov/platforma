@@ -11,7 +11,7 @@ import type {
   QuizResult,
 } from "@/shared/types";
 import { Badge, Button, Card, Input, Progress } from "@/shared/ui";
-import { Check, X, Clock, GripVertical } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, X, Clock, GripVertical } from "lucide-react";
 import { useToast } from "@/shared/ui/ToastProvider";
 
 import LessonResources from "./LessonResources";
@@ -133,15 +133,17 @@ export default function QuizLesson({
     });
   };
 
-  // const moveItem = (dir: -1 | 1, itemId: string) => {
-  //   if (!question) return;
-  //   const order = [...orderOf(question)];
-  //   const from = order.indexOf(itemId);
-  //   const to = from + dir;
-  //   if (to < 0 || to >= order.length) return;
-  //   [order[from], order[to]] = [order[to], order[from]];
-  //   setAnswers((current) => ({ ...current, [question.id]: order }));
-  // };
+  // Перестановка соседних элементов кнопками ↑↓ — работает на телефоне,
+  // в отличие от нативного drag-and-drop (тач его не запускает).
+  const moveItem = (dir: -1 | 1, itemId: string) => {
+    if (!question) return;
+    const order = [...orderOf(question)];
+    const from = order.indexOf(itemId);
+    const to = from + dir;
+    if (to < 0 || to >= order.length) return;
+    [order[from], order[to]] = [order[to], order[from]];
+    setAnswers((current) => ({ ...current, [question.id]: order }));
+  };
 
   const reorderOrderItem = (
     q: QuizQuestion,
@@ -405,6 +407,12 @@ export default function QuizLesson({
             своей левой
           </p>
         )}
+        {kind === "order" && (
+          <p className="mb-3 text-xs text-faint">
+            Двигайте шаги кнопками ↑↓ (или перетаскиванием на компьютере), чтобы
+            выстроить их по порядку
+          </p>
+        )}
 
         {/* Варианты */}
         {kind === "choice" && (
@@ -484,6 +492,26 @@ export default function QuizLesson({
                     {pos + 1}
                   </span>
                   <span className="min-w-0 flex-1 text-fg">{item.text}</span>
+                  <div className="flex shrink-0 flex-col self-center">
+                    <button
+                      type="button"
+                      aria-label="Переместить вверх"
+                      disabled={pos === 0}
+                      onClick={() => moveItem(-1, itemId)}
+                      className="grid h-7 w-8 place-items-center rounded-t-[var(--radius-sm)] border border-line text-muted transition-colors hover:bg-surface-2 disabled:opacity-30"
+                    >
+                      <ChevronUp size={15} />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="Переместить вниз"
+                      disabled={pos === orderOf(question).length - 1}
+                      onClick={() => moveItem(1, itemId)}
+                      className="grid h-7 w-8 place-items-center rounded-b-[var(--radius-sm)] border border-t-0 border-line text-muted transition-colors hover:bg-surface-2 disabled:opacity-30"
+                    >
+                      <ChevronDown size={15} />
+                    </button>
+                  </div>
                 </li>
               );
             })}
@@ -561,6 +589,26 @@ export default function QuizLesson({
                     <span className="min-w-0 flex-1 text-muted">
                       {right.text}
                     </span>
+                  </div>
+                  <div className="flex shrink-0 flex-col self-center">
+                    <button
+                      type="button"
+                      aria-label="Переместить вверх"
+                      disabled={pos === 0}
+                      onClick={() => moveItem(-1, rightId)}
+                      className="grid h-7 w-8 place-items-center rounded-t-[var(--radius-sm)] border border-line text-muted transition-colors hover:bg-surface-2 disabled:opacity-30"
+                    >
+                      <ChevronUp size={15} />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="Переместить вниз"
+                      disabled={pos === orderOf(question).length - 1}
+                      onClick={() => moveItem(1, rightId)}
+                      className="grid h-7 w-8 place-items-center rounded-b-[var(--radius-sm)] border border-t-0 border-line text-muted transition-colors hover:bg-surface-2 disabled:opacity-30"
+                    >
+                      <ChevronDown size={15} />
+                    </button>
                   </div>
                 </li>
               );
