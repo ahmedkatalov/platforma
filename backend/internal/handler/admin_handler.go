@@ -74,6 +74,7 @@ func (h *AdminHandler) Routes(courses, certificates, reports, uploads http.Handl
 	})
 
 	r.Get("/students-progress", h.studentsProgress)
+	r.Get("/activity", h.liveActivity)
 	r.Get("/requests-count", h.requestsCount)
 
 	r.Route("/access-requests", func(r chi.Router) {
@@ -387,6 +388,16 @@ func (h *AdminHandler) studentsProgress(w http.ResponseWriter, r *http.Request) 
 	items, err := h.stats.StudentsSummary(r.Context(), queryInt(r, "limit", 100, 1, 500))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Не удалось собрать успеваемость")
+		return
+	}
+	writeJSON(w, http.StatusOK, items)
+}
+
+// liveActivity — кто из студентов чем занят и когда был активен (подробно).
+func (h *AdminHandler) liveActivity(w http.ResponseWriter, r *http.Request) {
+	items, err := h.stats.LiveActivity(r.Context(), queryInt(r, "limit", 300, 1, 1000))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Не удалось собрать активность")
 		return
 	}
 	writeJSON(w, http.StatusOK, items)

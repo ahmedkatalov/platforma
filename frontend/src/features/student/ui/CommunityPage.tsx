@@ -1,5 +1,6 @@
 import { useGetCommunityQuery } from "@/shared/api/meApi";
-import type { LeaderboardEntry } from "@/shared/types";
+import { lastSeenLabel } from "@/shared/lib/time";
+import type { CurrentActivity, LeaderboardEntry } from "@/shared/types";
 import { Badge, Card, EmptyState, PageHeader, Progress, Spinner, StatCard } from "@/shared/ui";
 import { Award, BookOpen, GraduationCap, Trophy, Users, Wifi } from "lucide-react";
 
@@ -32,8 +33,16 @@ function initialsOf(name: string): string {
     .join("");
 }
 
+// Короткая подпись «чем занят»: онлайн и in_progress → «проходит», иначе последний урок.
+function activityText(cur: CurrentActivity | null, online: boolean): string {
+  if (!cur || !cur.lesson) return online ? "на платформе" : "";
+  const verb = online && cur.status === "in_progress" ? "проходит" : "последний урок:";
+  return `${verb} ${cur.lesson}`;
+}
+
 export default function CommunityPage() {
-  const { data, isLoading } = useGetCommunityQuery();
+  // Обновляем раз в минуту — чтобы «онлайн» и «чем занят» были свежими.
+  const { data, isLoading } = useGetCommunityQuery(undefined, { pollingInterval: 60_000 });
 
   if (isLoading || !data) {
     return (
@@ -44,12 +53,13 @@ export default function CommunityPage() {
   }
 
   const { overview, entries, me } = data;
+  const onlineNow = entries.filter((e) => e.online);
 
   return (
     <>
       <PageHeader
         title="Достижения"
-        subtitle="Рейтинг студентов и общий прогресс платформы"
+        subtitle="Кто чем занят, рейтинг и общий прогресс платформы"
       />
 
       <div className="grid gap-[var(--gap)] sm:grid-cols-2 xl:grid-cols-5">
@@ -79,6 +89,49 @@ export default function CommunityPage() {
           icon={<Award size={20} />}
         />
       </div>
+
+      {/* Живая активность: кто сейчас на платформе и чем занят. */}
+      <Card className="mt-[var(--gap)] p-[var(--pad)]">
+        <div className="mb-4 flex items-center gap-2">
+          <span className="h-2.5 w-2.5 rounded-full bg-success" />
+          <h2 className="text-base font-bold text-fg">Сейчас на платформе</h2>
+          <span className="text-sm text-faint">· {onlineNow.length}</span>
+        </div>
+        {onlineNow.length === 0 ? (
+          <p className="py-2 text-sm text-muted">Сейчас никого нет онлайн — загляните позже.</p>
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {onlineNow.map((e) => (
+              <div key={e.userId} className="card-flat flex items-center gap-3 p-3">
+                <span
+                  className="relative grid h-10 w-10 shrink-0 place-items-center rounded-full text-xs font-bold text-accent-fg"
+                  style={{ background: "var(--gradient)" }}
+                >
+                  {initialsOf(e.fullName)}
+                  <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-surface-solid bg-success" />
+                </span>
+                <div className="min-w-0">
+                  <p className="flex items-center gap-1.5 truncate text-sm font-semibold text-fg">
+                    {e.fullName || "Без имени"}
+                    {e.userId === me && <Badge tone="accent">Вы</Badge>}
+                  </p>
+                  <p className="truncate text-xs text-muted">
+                    {e.current?.lesson ? (
+                      <>
+                        {e.current.status === "in_progress" ? "проходит " : "последний урок: "}
+                        <span className="text-fg">{e.current.lesson}</span>
+                        {e.current.course && <span className="text-faint"> · {e.current.course}</span>}
+                      </>
+                    ) : (
+                      "на платформе"
+                    )}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
 
       {/* Легенда: какие бывают достижения и за что. */}
       <Card className="mt-[var(--gap)] p-[var(--pad)]">
@@ -139,14 +192,22 @@ export default function CommunityPage() {
                     )}
                   </span>
 
-                  {/* Имя и прогресс */}
-                  <div className="min-w-[10rem] flex-1">
-                    <div className="mb-1 flex items-center gap-2">
+                  {/* Имя, активность и прогресс */}
+                  <div className="min-w-[12rem] flex-1">
+                    <div className="mb-0.5 flex items-center gap-2">
                       <span className="truncate text-sm font-semibold text-fg">
                         {e.fullName || "Без имени"}
                       </span>
                       {isMe && <Badge tone="accent">Вы</Badge>}
                     </div>
+                    <p className="mb-1.5 truncate text-xs text-muted" title={e.current?.course}>
+                      <span className={e.online ? "text-success" : "text-faint"}>
+                        {lastSeenLabel(e.lastSeenAt, e.online)}
+                      </span>
+                      {activityText(e.current, e.online) && (
+                        <span className="text-faint"> · {activityText(e.current, e.online)}</span>
+                      )}
+                    </p>
                     <div className="flex items-center gap-2">
                       <Progress value={e.progress} />
                       <span className="shrink-0 text-xs font-medium text-muted">

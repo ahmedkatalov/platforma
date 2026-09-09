@@ -109,6 +109,14 @@ export type StudentSummary = {
   progress: number;
 };
 
+// Чем студент занят: текущий/последний урок и когда.
+export type CurrentActivity = {
+  course: string;
+  lesson: string;
+  status: "in_progress" | "completed" | "";
+  at: string | null;
+};
+
 // Доска достижений — безопасный (без e-mail) срез статистики студента.
 export type LeaderboardEntry = {
   userId: string;
@@ -122,6 +130,22 @@ export type LeaderboardEntry = {
   quizzesPassed: number;
   avgQuizScore: number;
   online: boolean;
+  lastSeenAt: string | null;
+  current: CurrentActivity | null;
+};
+
+// Подробная строка живой активности для админа (с e-mail и точным временем).
+export type AdminActivityRow = {
+  userId: string;
+  email: string;
+  fullName: string;
+  status: UserStatus;
+  online: boolean;
+  lastSeenAt: string | null;
+  minutesToday: number;
+  daysVisited: number;
+  lessonsCompleted: number;
+  current: CurrentActivity | null;
 };
 
 export type CommunityStats = {

@@ -11,6 +11,7 @@ import { tokenStorage } from "@/shared/api/tokenStorage";
 import { useTheme } from "@/shared/theme/ThemeProvider";
 import {
   LayoutGrid,
+  Activity,
   BarChart3,
   ChevronsLeft,
   ChevronsRight,
@@ -46,6 +47,7 @@ const SIDEBAR_COLLAPSED_KEY = "platforma.sidebarCollapsed";
 const ADMIN_NAV: NavItem[] = [
   { to: "/admin", label: "Обзор", icon: <LayoutGrid size={18} />, end: true },
   { to: "/admin/students", label: "Студенты", icon: <Users size={18} /> },
+  { to: "/admin/activity", label: "Активность", icon: <Activity size={18} /> },
   { to: "/admin/requests", label: "Заявки", icon: <Inbox size={18} /> },
   { to: "/admin/courses", label: "Курсы", icon: <Book size={18} /> },
   {

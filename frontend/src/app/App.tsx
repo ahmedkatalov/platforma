@@ -15,6 +15,7 @@ const AdminCertificatesPage = lazy(() => import("@/features/admin/ui/Certificate
 const AdminCoursesPage = lazy(() => import("@/features/admin/ui/CoursesPage"));
 const CourseEditorPage = lazy(() => import("@/features/admin/ui/CourseEditorPage"));
 const AdminDashboardPage = lazy(() => import("@/features/admin/ui/DashboardPage"));
+const AdminActivityPage = lazy(() => import("@/features/admin/ui/ActivityPage"));
 const RequestsPage = lazy(() => import("@/features/admin/ui/RequestsPage"));
 const SettingsPage = lazy(() => import("@/features/admin/ui/SettingsPage"));
 const StudentDetailPage = lazy(() => import("@/features/admin/ui/StudentDetailPage"));
@@ -130,6 +131,7 @@ export default function App() {
         <Route index element={<AdminDashboardPage />} />
         <Route path="students" element={<StudentsPage />} />
         <Route path="students/:id" element={<StudentDetailPage />} />
+        <Route path="activity" element={<AdminActivityPage />} />
         <Route path="requests" element={<RequestsPage />} />
         <Route path="settings" element={<SettingsPage />} />
         <Route path="courses" element={<AdminCoursesPage />} />

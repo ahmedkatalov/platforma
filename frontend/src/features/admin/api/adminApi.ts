@@ -2,6 +2,7 @@ import { baseApi } from "@/shared/api/baseApi";
 import type {
   AccessRequest,
   ActivityDay,
+  AdminActivityRow,
   AdminOverview,
   Attempt,
   AuditEntry,
@@ -119,6 +120,10 @@ export const adminApi = baseApi.injectEndpoints({
       query: (limit) => `/admin/students-progress?limit=${limit ?? 100}`,
       providesTags: ["Progress"],
     }),
+    getLiveActivity: builder.query<AdminActivityRow[], number | void>({
+      query: (limit) => `/admin/activity?limit=${limit ?? 300}`,
+      providesTags: ["Progress"],
+    }),
     getAudit: builder.query<AuditEntry[], number | void>({
       query: (limit) => `/admin/audit?limit=${limit ?? 50}`,
       providesTags: ["Audit"],
@@ -206,6 +211,7 @@ export const {
   useSetDueDateMutation,
   useUnenrollMutation,
   useGetStudentsProgressQuery,
+  useGetLiveActivityQuery,
   useGetAuditQuery,
   useGetPlatformThemeQuery,
   useSavePlatformThemeMutation,
