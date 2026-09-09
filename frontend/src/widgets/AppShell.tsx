@@ -15,6 +15,7 @@ import {
   ChevronsLeft,
   ChevronsRight,
   ChevronRight,
+  ChevronLeft,
   Check,
   X,
   LogOut,
@@ -362,6 +363,16 @@ export default function AppShell() {
               <span className="block h-0.5 w-4 rounded bg-current" />
               <span className="block h-0.5 w-4 rounded bg-current" />
             </span>
+          </button>
+
+          {/* Свернуть/развернуть боковую панель — привычный тумблер в шапке (десктоп). */}
+          <button
+            className="btn btn-ghost btn-icon hidden lg:inline-flex"
+            onClick={() => setSidebarCollapsed((v) => !v)}
+            aria-label={sidebarCollapsed ? "Развернуть панель" : "Свернуть панель"}
+            title={sidebarCollapsed ? "Развернуть панель" : "Свернуть панель"}
+          >
+            {sidebarCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
           </button>
 
           <div className="ml-auto flex items-center gap-2">

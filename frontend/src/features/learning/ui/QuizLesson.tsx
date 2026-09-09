@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from "react";
 
 import { useSubmitQuizMutation } from "@/features/learning/api/lessonApi";
 import { apiErrorMessage } from "@/shared/api/baseApi";
@@ -11,7 +11,7 @@ import type {
   QuizResult,
 } from "@/shared/types";
 import { Badge, Button, Card, Input, Progress } from "@/shared/ui";
-import { Check, ChevronDown, ChevronUp, X, Clock, GripVertical } from "lucide-react";
+import { Check, X, Clock, GripVertical } from "lucide-react";
 import { useToast } from "@/shared/ui/ToastProvider";
 
 import LessonResources from "./LessonResources";
@@ -44,9 +44,8 @@ export default function QuizLesson({
   const [blanks, setBlanks] = useState<Blanks>({});
   const [timings, setTimings] = useState<Record<string, number>>({});
   const [result, setResult] = useState<QuizResult | null>(null);
-  const [draggedOrderItemId, setDraggedOrderItemId] = useState<string | null>(
-    null,
-  );
+  const [dragId, setDragId] = useState<string | null>(null);
+  const dragRef = useRef<{ qid: string; id: string } | null>(null);
 
   const [submitQuiz, { isLoading }] = useSubmitQuizMutation();
   const toast = useToast();
@@ -60,7 +59,8 @@ export default function QuizLesson({
     setBlanks({});
     setTimings({});
     setResult(null);
-    setDraggedOrderItemId(null);
+    setDragId(null);
+    dragRef.current = null;
     questionStart.current = Date.now();
     quizStart.current = Date.now();
   };
@@ -133,35 +133,37 @@ export default function QuizLesson({
     });
   };
 
-  // Перестановка соседних элементов кнопками ↑↓ — работает на телефоне,
-  // в отличие от нативного drag-and-drop (тач его не запускает).
-  const moveItem = (dir: -1 | 1, itemId: string) => {
-    if (!question) return;
-    const order = [...orderOf(question)];
-    const from = order.indexOf(itemId);
-    const to = from + dir;
-    if (to < 0 || to >= order.length) return;
-    [order[from], order[to]] = [order[to], order[from]];
-    setAnswers((current) => ({ ...current, [question.id]: order }));
+  // Перетаскивание указателем — работает и мышью, и пальцем на телефоне
+  // (нативный HTML5 drag тач не запускает). Порядок меняется вживую при наведении.
+  const startDrag = (event: RPointerEvent<HTMLElement>, q: QuizQuestion, id: string) => {
+    if (result) return;
+    // Захватываем указатель за этот элемент: move/up продолжат приходить сюда,
+    // даже когда палец/курсор уходит на соседние строки — жест не «залипает».
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    dragRef.current = { qid: q.id, id };
+    setDragId(id);
   };
-
-  const reorderOrderItem = (
-    q: QuizQuestion,
-    draggedItemId: string,
-    targetItemId: string,
-    placeAfter: boolean,
-  ) => {
-    if (draggedItemId === targetItemId) return;
-
+  const moveDrag = (event: RPointerEvent<HTMLElement>, q: QuizQuestion) => {
+    const st = dragRef.current;
+    if (!st || st.qid !== q.id) return;
+    const el = document
+      .elementFromPoint(event.clientX, event.clientY)
+      ?.closest<HTMLElement>("[data-sort-id]");
+    const overId = el?.dataset.sortId;
+    if (!overId || overId === st.id) return;
     setAnswers((current) => {
-      const order = current[q.id] ?? seqItems(q).map((item) => item.id);
-      const nextOrder = order.filter((itemId) => itemId !== draggedItemId);
-      const targetIndex = nextOrder.indexOf(targetItemId);
-      if (targetIndex === -1) return current;
-
-      nextOrder.splice(targetIndex + (placeAfter ? 1 : 0), 0, draggedItemId);
-      return { ...current, [q.id]: nextOrder };
+      const order = [...(current[q.id] ?? seqItems(q).map((it) => it.id))];
+      const from = order.indexOf(st.id);
+      const to = order.indexOf(overId);
+      if (from < 0 || to < 0) return current;
+      order.splice(to, 0, order.splice(from, 1)[0]);
+      st.id = overId; // курсор теперь над новой позицией того же элемента
+      return { ...current, [q.id]: order };
     });
+  };
+  const endDrag = () => {
+    dragRef.current = null;
+    setDragId(null);
   };
 
   const goTo = (next: number) => {
@@ -393,7 +395,7 @@ export default function QuizLesson({
         )}
         {kind === "order" && (
           <p className="mb-3 text-xs text-faint">
-            Перетащите шаги, чтобы расставить их по порядку
+            Перетащите шаги (мышью или пальцем), чтобы расставить их по порядку
           </p>
         )}
         {kind === "blank" && (
@@ -403,16 +405,11 @@ export default function QuizLesson({
         )}
         {kind === "match" && (
           <p className="mb-3 text-xs text-faint">
-            Двигайте правые части кнопками ↑↓, чтобы каждая встала напротив
-            своей левой
+            Перетаскивайте правые части (мышью или пальцем), чтобы каждая встала
+            напротив своей левой
           </p>
         )}
-        {kind === "order" && (
-          <p className="mb-3 text-xs text-faint">
-            Двигайте шаги кнопками ↑↓ (или перетаскиванием на компьютере), чтобы
-            выстроить их по порядку
-          </p>
-        )}
+
 
         {/* Варианты */}
         {kind === "choice" && (
@@ -455,63 +452,30 @@ export default function QuizLesson({
               return (
                 <li
                   key={itemId}
-                  draggable
-                  onDragStart={(event) => {
-                    event.dataTransfer.effectAllowed = "move";
-                    event.dataTransfer.setData("text/plain", itemId);
-                    setDraggedOrderItemId(itemId);
-                  }}
-                  onDragOver={(event) => event.preventDefault()}
-                  onDrop={(event) => {
-                    event.preventDefault();
-                    const draggedItemId =
-                      event.dataTransfer.getData("text/plain") ||
-                      draggedOrderItemId;
-                    if (!draggedItemId) return;
-
-                    const bounds = event.currentTarget.getBoundingClientRect();
-                    reorderOrderItem(
-                      question,
-                      draggedItemId,
-                      itemId,
-                      event.clientY > bounds.top + bounds.height / 2,
-                    );
-                    setDraggedOrderItemId(null);
-                  }}
-                  onDragEnd={() => setDraggedOrderItemId(null)}
-                  className={`flex cursor-grab items-center gap-3 rounded-[var(--radius-md)] border border-line bg-surface-2 p-3 text-sm transition-opacity active:cursor-grabbing ${
-                    draggedOrderItemId === itemId ? "opacity-50" : ""
+                  data-sort-id={itemId}
+                  onPointerDown={(event) => startDrag(event, question, itemId)}
+                  onPointerMove={(event) => moveDrag(event, question)}
+                  onPointerUp={endDrag}
+                  onPointerCancel={endDrag}
+                  className={`flex touch-none select-none items-center gap-3 rounded-[var(--radius-md)] border bg-surface-2 p-3 text-sm transition-shadow ${
+                    result ? "" : "cursor-grab active:cursor-grabbing"
+                  } ${
+                    dragId === itemId
+                      ? "border-[var(--accent)] shadow-lg ring-2 ring-[var(--accent)]"
+                      : "border-line"
                   }`}
                 >
-                  <GripVertical
-                    size={18}
-                    className="shrink-0 text-faint"
-                    aria-hidden="true"
-                  />
+                  {!result && (
+                    <GripVertical
+                      size={18}
+                      className="shrink-0 text-faint"
+                      aria-hidden="true"
+                    />
+                  )}
                   <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-accent-soft text-xs font-bold text-accent">
                     {pos + 1}
                   </span>
                   <span className="min-w-0 flex-1 text-fg">{item.text}</span>
-                  <div className="flex shrink-0 flex-col self-center">
-                    <button
-                      type="button"
-                      aria-label="Переместить вверх"
-                      disabled={pos === 0}
-                      onClick={() => moveItem(-1, itemId)}
-                      className="grid h-7 w-8 place-items-center rounded-t-[var(--radius-sm)] border border-line text-muted transition-colors hover:bg-surface-2 disabled:opacity-30"
-                    >
-                      <ChevronUp size={15} />
-                    </button>
-                    <button
-                      type="button"
-                      aria-label="Переместить вниз"
-                      disabled={pos === orderOf(question).length - 1}
-                      onClick={() => moveItem(1, itemId)}
-                      className="grid h-7 w-8 place-items-center rounded-b-[var(--radius-sm)] border border-t-0 border-line text-muted transition-colors hover:bg-surface-2 disabled:opacity-30"
-                    >
-                      <ChevronDown size={15} />
-                    </button>
-                  </div>
                 </li>
               );
             })}
@@ -542,73 +506,32 @@ export default function QuizLesson({
                     </span>
                   </div>
 
-                  {/* Правая часть — draggable */}
+                  {/* Правая часть — перетаскивается указателем (мышь и тач) */}
                   <div
-                    draggable
-                    onDragStart={(event) => {
-                      event.dataTransfer.effectAllowed = "move";
-                      event.dataTransfer.setData("text/plain", rightId);
-                      setDraggedOrderItemId(rightId);
-                    }}
-                    onDragOver={(event) => {
-                      event.preventDefault();
-                      event.dataTransfer.dropEffect = "move";
-                    }}
-                    onDrop={(event) => {
-                      event.preventDefault();
-
-                      const draggedItemId =
-                        event.dataTransfer.getData("text/plain") ||
-                        draggedOrderItemId;
-
-                      if (!draggedItemId) return;
-
-                      const bounds =
-                        event.currentTarget.getBoundingClientRect();
-
-                      reorderOrderItem(
-                        question,
-                        draggedItemId,
-                        rightId,
-                        event.clientY > bounds.top + bounds.height / 2,
-                      );
-
-                      setDraggedOrderItemId(null);
-                    }}
-                    onDragEnd={() => setDraggedOrderItemId(null)}
-                    className={`flex min-w-0 flex-1 cursor-grab items-center gap-2 rounded-[var(--radius-md)] border border-line bg-surface p-3 text-sm transition-opacity active:cursor-grabbing ${
-                      draggedOrderItemId === rightId ? "opacity-50" : ""
+                    data-sort-id={rightId}
+                    onPointerDown={(event) => startDrag(event, question, rightId)}
+                    onPointerMove={(event) => moveDrag(event, question)}
+                    onPointerUp={endDrag}
+                    onPointerCancel={endDrag}
+                    className={`flex min-w-0 flex-1 touch-none select-none items-center gap-2 rounded-[var(--radius-md)] border bg-surface p-3 text-sm transition-shadow ${
+                      result ? "" : "cursor-grab active:cursor-grabbing"
+                    } ${
+                      dragId === rightId
+                        ? "border-[var(--accent)] shadow-lg ring-2 ring-[var(--accent)]"
+                        : "border-line"
                     }`}
                   >
-                    <GripVertical
-                      size={18}
-                      className="shrink-0 text-faint"
-                      aria-hidden="true"
-                    />
+                    {!result && (
+                      <GripVertical
+                        size={18}
+                        className="shrink-0 text-faint"
+                        aria-hidden="true"
+                      />
+                    )}
 
                     <span className="min-w-0 flex-1 text-muted">
                       {right.text}
                     </span>
-                  </div>
-                  <div className="flex shrink-0 flex-col self-center">
-                    <button
-                      type="button"
-                      aria-label="Переместить вверх"
-                      disabled={pos === 0}
-                      onClick={() => moveItem(-1, rightId)}
-                      className="grid h-7 w-8 place-items-center rounded-t-[var(--radius-sm)] border border-line text-muted transition-colors hover:bg-surface-2 disabled:opacity-30"
-                    >
-                      <ChevronUp size={15} />
-                    </button>
-                    <button
-                      type="button"
-                      aria-label="Переместить вниз"
-                      disabled={pos === orderOf(question).length - 1}
-                      onClick={() => moveItem(1, rightId)}
-                      className="grid h-7 w-8 place-items-center rounded-b-[var(--radius-sm)] border border-t-0 border-line text-muted transition-colors hover:bg-surface-2 disabled:opacity-30"
-                    >
-                      <ChevronDown size={15} />
-                    </button>
                   </div>
                 </li>
               );
