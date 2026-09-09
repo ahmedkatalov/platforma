@@ -109,6 +109,35 @@ export type StudentSummary = {
   progress: number;
 };
 
+// Доска достижений — безопасный (без e-mail) срез статистики студента.
+export type LeaderboardEntry = {
+  userId: string;
+  fullName: string;
+  lessonsTotal: number;
+  lessonsCompleted: number;
+  progress: number;
+  daysVisited: number;
+  minutesSpent: number;
+  certificates: number;
+  quizzesPassed: number;
+  avgQuizScore: number;
+  online: boolean;
+};
+
+export type CommunityStats = {
+  students: number;
+  onlineNow: number;
+  activeWeek: number;
+  lessonsCompleted: number;
+  certificates: number;
+};
+
+export type CommunityResponse = {
+  overview: CommunityStats;
+  entries: LeaderboardEntry[];
+  me: string;
+};
+
 export type AdminOverview = {
   students: number;
   activeStudents: number;

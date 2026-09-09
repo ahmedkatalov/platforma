@@ -46,6 +46,7 @@ func (h *MeHandler) Routes() http.Handler {
 	r.Patch("/", h.updateProfile)
 	r.Post("/change-password", h.auth.ChangePassword)
 	r.Get("/stats", h.myStats)
+	r.Get("/community", h.community)
 	r.Get("/attempts", h.myAttempts)
 	r.Get("/quizzes", h.myQuizzes)
 	r.Route("/notes", func(r chi.Router) {
@@ -133,6 +134,26 @@ func (h *MeHandler) myStats(w http.ResponseWriter, r *http.Request) {
 		"activity": activity,
 		"streak":   streak,
 		"quiz":     quiz,
+	})
+}
+
+// community — общая доска достижений: сводка по платформе и рейтинг студентов.
+// Доступна всем авторизованным; отдаёт только безопасные поля (без e-mail).
+func (h *MeHandler) community(w http.ResponseWriter, r *http.Request) {
+	overview, err := h.stats.Community(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Не удалось собрать статистику")
+		return
+	}
+	entries, err := h.stats.Leaderboard(r.Context(), queryInt(r, "limit", 200, 1, 500))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Не удалось собрать рейтинг")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"overview": overview,
+		"entries":  entries,
+		"me":       middleware.UserID(r.Context()),
 	})
 }
 

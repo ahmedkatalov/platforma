@@ -26,6 +26,7 @@ const StudentDashboardPage = lazy(() => import("@/features/student/ui/DashboardP
 const ProfilePage = lazy(() => import("@/features/student/ui/ProfilePage"));
 const NotesPage = lazy(() => import("@/features/student/ui/NotesPage"));
 const QuizzesPage = lazy(() => import("@/features/student/ui/QuizzesPage"));
+const CommunityPage = lazy(() => import("@/features/student/ui/CommunityPage"));
 // StatsPage тянет recharts (~100 КБ) — теперь грузится только на странице статистики.
 const StudentStatsPage = lazy(() => import("@/features/student/ui/StatsPage"));
 // Песочница тянет тяжёлый движок Linux — грузим её отдельным чанком по требованию.
@@ -158,6 +159,7 @@ export default function App() {
         />
         <Route path="notes" element={<NotesPage />} />
         <Route path="stats" element={<StudentStatsPage />} />
+        <Route path="community" element={<CommunityPage />} />
         <Route path="profile" element={<ProfilePage />} />
       </Route>
 

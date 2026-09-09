@@ -2,6 +2,7 @@ import { baseApi } from "@/shared/api/baseApi";
 import type {
   ActivityDay,
   Attempt,
+  CommunityResponse,
   ContactSettings,
   Enrollment,
   Note,
@@ -36,6 +37,10 @@ export const meApi = baseApi.injectEndpoints({
     getMyAttempts: builder.query<Attempt[], number | void>({
       query: (limit) => `/me/attempts?limit=${limit ?? 20}`,
       providesTags: ["Attempts"],
+    }),
+    getCommunity: builder.query<CommunityResponse, void>({
+      query: () => "/me/community",
+      providesTags: ["Progress"],
     }),
     getMyNotes: builder.query<Note[], void>({
       query: () => "/me/notes",
@@ -84,6 +89,7 @@ export const {
   useGetMeQuery,
   useGetMyStatsQuery,
   useGetMyAttemptsQuery,
+  useGetCommunityQuery,
   useGetMyNotesQuery,
   useCreateNoteMutation,
   useUpdateNoteMutation,

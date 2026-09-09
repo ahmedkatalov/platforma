@@ -109,6 +109,101 @@ func (r *StatsRepo) StudentSummary(ctx context.Context, userID string) (*Student
 	return &s, nil
 }
 
+// LeaderboardEntry — безопасный (без e-mail) срез статистики студента
+// для общей доски достижений, которую видят сами студенты.
+type LeaderboardEntry struct {
+	UserID           string  `json:"userId"`
+	FullName         string  `json:"fullName"`
+	LessonsTotal     int     `json:"lessonsTotal"`
+	LessonsCompleted int     `json:"lessonsCompleted"`
+	Progress         float64 `json:"progress"` // 0..100
+	DaysVisited      int     `json:"daysVisited"`
+	MinutesSpent     int     `json:"minutesSpent"`
+	Certificates     int     `json:"certificates"`
+	QuizzesPassed    int     `json:"quizzesPassed"`
+	AvgQuizScore     float64 `json:"avgQuizScore"` // 0..100
+	Online           bool    `json:"online"`
+}
+
+// CommunityStats — сводные показатели по всем студентам платформы.
+type CommunityStats struct {
+	Students         int `json:"students"`
+	OnlineNow        int `json:"onlineNow"`
+	ActiveWeek       int `json:"activeWeek"`
+	LessonsCompleted int `json:"lessonsCompleted"`
+	Certificates     int `json:"certificates"`
+}
+
+// Community — общие показатели платформы, безопасные для показа студентам.
+func (r *StatsRepo) Community(ctx context.Context) (*CommunityStats, error) {
+	var c CommunityStats
+	err := r.db.QueryRow(ctx, `
+		SELECT
+			(SELECT count(*) FROM users WHERE role = 'student'),
+			(SELECT count(*) FROM (
+				SELECT user_id, max(last_seen_at) AS ls FROM activity_days GROUP BY user_id
+			) t WHERE t.ls > now() - make_interval(mins => $1)),
+			(SELECT count(DISTINCT user_id) FROM activity_days WHERE day > CURRENT_DATE - 7),
+			(SELECT count(*) FROM lesson_progress WHERE status = 'completed'),
+			(SELECT count(*) FROM certificates WHERE revoked_at IS NULL)
+	`, int(OnlineWindow.Minutes())).Scan(&c.Students, &c.OnlineNow, &c.ActiveWeek, &c.LessonsCompleted, &c.Certificates)
+	if err != nil {
+		return nil, err
+	}
+	return &c, nil
+}
+
+// Leaderboard — рейтинг студентов по числу пройденных уроков.
+// Возвращает только безопасные поля (без e-mail и статуса).
+func (r *StatsRepo) Leaderboard(ctx context.Context, limit int) ([]LeaderboardEntry, error) {
+	if limit <= 0 || limit > 500 {
+		limit = 200
+	}
+	rows, err := r.db.Query(ctx, `
+		SELECT u.id, u.full_name,
+			(SELECT max(a.last_seen_at) FROM activity_days a WHERE a.user_id = u.id),
+			(SELECT count(*) FROM lessons l
+			   JOIN modules m ON m.id = l.module_id
+			   JOIN enrollments e ON e.course_id = m.course_id
+			  WHERE e.user_id = u.id),
+			(SELECT count(*) FROM lesson_progress p
+			   JOIN lessons l ON l.id = p.lesson_id
+			   JOIN modules m ON m.id = l.module_id
+			   JOIN enrollments e ON e.course_id = m.course_id AND e.user_id = u.id
+			  WHERE p.user_id = u.id AND p.status = 'completed'),
+			(SELECT count(*) FROM activity_days a WHERE a.user_id = u.id),
+			(SELECT COALESCE(sum(a.seconds_spent), 0) / 60 FROM activity_days a WHERE a.user_id = u.id),
+			(SELECT count(*) FROM certificates c WHERE c.user_id = u.id AND c.revoked_at IS NULL),
+			(SELECT count(*) FROM lesson_attempts la WHERE la.user_id = u.id AND la.kind = 'quiz' AND la.passed),
+			(SELECT COALESCE(avg(la.score), 0) FROM lesson_attempts la WHERE la.user_id = u.id AND la.kind = 'quiz')
+		  FROM users u
+		 WHERE u.role = 'student' AND u.status = 'active'
+		 ORDER BY 5 DESC, u.created_at ASC
+		 LIMIT $1`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	now := time.Now()
+	out := make([]LeaderboardEntry, 0, limit)
+	for rows.Next() {
+		var e LeaderboardEntry
+		var lastSeen *time.Time
+		if err := rows.Scan(&e.UserID, &e.FullName, &lastSeen,
+			&e.LessonsTotal, &e.LessonsCompleted, &e.DaysVisited, &e.MinutesSpent,
+			&e.Certificates, &e.QuizzesPassed, &e.AvgQuizScore); err != nil {
+			return nil, err
+		}
+		e.Online = IsOnline(lastSeen, now)
+		if e.LessonsTotal > 0 {
+			e.Progress = float64(e.LessonsCompleted) / float64(e.LessonsTotal) * 100
+		}
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}
+
 // StudentsSummary — та же статистика по всем студентам (для таблицы успеваемости).
 func (r *StatsRepo) StudentsSummary(ctx context.Context, limit int) ([]StudentSummary, error) {
 	if limit <= 0 || limit > 500 {
