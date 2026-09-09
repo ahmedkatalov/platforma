@@ -75,15 +75,19 @@ func (h *MeHandler) profile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Песочница-терминал доступна тем, у кого есть курс с уроками-терминалами
-	// (например DevOps). Админ видит её всегда — для превью.
-	sandbox := user.Role == domain.RoleAdmin
-	if !sandbox {
-		sandbox, _ = h.courses.HasTerminalCourse(r.Context(), user.ID)
+	// (например DevOps). Админ видит её всегда — для превью и по всем курсам.
+	var sandboxCourses []repository.SandboxCourse
+	if user.Role == domain.RoleAdmin {
+		sandboxCourses, _ = h.courses.TerminalCourses(r.Context())
+	} else {
+		sandboxCourses, _ = h.courses.SandboxCourses(r.Context(), user.ID)
 	}
+	sandbox := user.Role == domain.RoleAdmin || len(sandboxCourses) > 0
 	writeJSON(w, http.StatusOK, map[string]any{
 		"user":             user,
 		"enrollments":      enrollments,
 		"sandboxAvailable": sandbox,
+		"sandboxCourses":   sandboxCourses,
 	})
 }
 

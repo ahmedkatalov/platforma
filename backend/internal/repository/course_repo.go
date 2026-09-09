@@ -660,6 +660,59 @@ func (r *CourseRepo) HasTerminalCourse(ctx context.Context, userID string) (bool
 	return exists, err
 }
 
+// SandboxCourse — курс, для которого доступна песочница (для подписи «для …»).
+type SandboxCourse struct {
+	Slug  string `json:"slug"`
+	Title string `json:"title"`
+}
+
+// SandboxCourses — курсы студента с уроками-терминалами: для них открыта
+// песочница. Возвращаем название, чтобы показать «Песочница · <курс>».
+func (r *CourseRepo) SandboxCourses(ctx context.Context, userID string) ([]SandboxCourse, error) {
+	rows, err := r.db.Query(ctx, `
+		SELECT DISTINCT c.slug, c.title
+		  FROM enrollments e
+		  JOIN courses c ON c.id = e.course_id
+		  JOIN modules m ON m.course_id = c.id
+		  JOIN lessons l ON l.module_id = m.id
+		 WHERE e.user_id = $1 AND l.kind = 'terminal'
+		 ORDER BY c.title`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanSandboxCourses(rows)
+}
+
+// TerminalCourses — все курсы платформы с уроками-терминалами (для админа,
+// который видит песочницу без записи на курс).
+func (r *CourseRepo) TerminalCourses(ctx context.Context) ([]SandboxCourse, error) {
+	rows, err := r.db.Query(ctx, `
+		SELECT DISTINCT c.slug, c.title
+		  FROM courses c
+		  JOIN modules m ON m.course_id = c.id
+		  JOIN lessons l ON l.module_id = m.id
+		 WHERE l.kind = 'terminal'
+		 ORDER BY c.title`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanSandboxCourses(rows)
+}
+
+func scanSandboxCourses(rows pgx.Rows) ([]SandboxCourse, error) {
+	out := make([]SandboxCourse, 0, 4)
+	for rows.Next() {
+		var c SandboxCourse
+		if err := rows.Scan(&c.Slug, &c.Title); err != nil {
+			return nil, err
+		}
+		out = append(out, c)
+	}
+	return out, rows.Err()
+}
+
 // ModuleCourseID возвращает id курса, которому принадлежит глава.
 func (r *CourseRepo) ModuleCourseID(ctx context.Context, moduleID string) (string, error) {
 	var courseID string

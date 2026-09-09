@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 
 import { Badge, Button, Card, PageHeader, Spinner } from "@/shared/ui";
+import { useGetMeQuery } from "@/shared/api/meApi";
 import { useToast } from "@/shared/ui/ToastProvider";
 import { loadV86, V86_ASSETS, type V86Ctor, type V86Instance } from "@/features/learning/lib/v86";
 
@@ -177,6 +178,15 @@ const TERM_THEME = {
 
 export default function SandboxPage() {
   const toast = useToast();
+  const { data: me } = useGetMeQuery();
+  // Курс(ы), для которых открыта песочница — показываем подпись «для …».
+  const sandboxCourses = me?.sandboxCourses ?? [];
+  const courseLabel =
+    sandboxCourses.length === 1
+      ? sandboxCourses[0].title
+      : sandboxCourses.length > 1
+        ? `${sandboxCourses[0].title} и др.`
+        : "";
   const [status, setStatus] = useState<"idle" | "loading" | "running" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState("");
   const [fullscreen, setFullscreen] = useState(false);
@@ -447,9 +457,16 @@ export default function SandboxPage() {
           title="Песочница — Linux-терминал"
           subtitle="Настоящий Linux прямо в браузере: экспериментируйте свободно, ничего не сломаете"
           actions={
-            <Badge tone="accent">
-              <TerminalSquare size={14} /> beta
-            </Badge>
+            <div className="flex flex-wrap items-center gap-2">
+              {courseLabel && (
+                <Badge tone="default">
+                  <BookOpen size={14} /> для «{courseLabel}»
+                </Badge>
+              )}
+              <Badge tone="accent">
+                <TerminalSquare size={14} /> beta
+              </Badge>
+            </div>
           }
         />
       )}

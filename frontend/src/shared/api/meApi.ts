@@ -12,10 +12,12 @@ import type {
   User,
 } from "@/shared/types";
 
+export type SandboxCourse = { slug: string; title: string };
 export type MeResponse = {
   user: User;
   enrollments: Enrollment[];
   sandboxAvailable?: boolean;
+  sandboxCourses?: SandboxCourse[];
 };
 export type MyStats = {
   summary: StudentSummary;
