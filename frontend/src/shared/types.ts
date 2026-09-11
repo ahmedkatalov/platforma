@@ -111,7 +111,7 @@ export type StudentSummary = {
 
 // ИИ-помощник (Gemini).
 export type AiMessage = { role: "user" | "assistant"; text: string };
-export type AiStatus = { enabled: boolean };
+export type AiStatus = { enabled: boolean; perMinute: number; perHour: number };
 export type AiSettings = {
   enabled: boolean;
   configured: boolean; // задан хоть какой-то ключ (панель или окружение)

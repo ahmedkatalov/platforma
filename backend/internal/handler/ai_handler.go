@@ -19,6 +19,10 @@ const (
 	maxContextChars = 4000
 	maxMessageChars = 2000
 	maxMessages     = 20
+
+	// Частота вопросов к ИИ на одного студента.
+	askPerMinute = 6
+	askPerHour   = 60
 )
 
 // AIHandler — ИИ-помощник по урокам (Google Gemini). Ключ живёт на сервере,
@@ -40,8 +44,8 @@ func NewAIHandler(client *ai.Client, settings *repository.AISettingsRepo, envKey
 		envKey:    strings.TrimSpace(envKey),
 		envModel:  strings.TrimSpace(envModel),
 		envProxy:  strings.TrimSpace(envProxy),
-		perMinute: ai.NewRateLimiter(6, time.Minute),
-		perHour:   ai.NewRateLimiter(60, time.Hour),
+		perMinute: ai.NewRateLimiter(askPerMinute, time.Minute),
+		perHour:   ai.NewRateLimiter(askPerHour, time.Hour),
 	}
 }
 
@@ -100,7 +104,11 @@ func (h *AIHandler) TestConnection(ctx context.Context) (model string, err error
 
 func (h *AIHandler) status(w http.ResponseWriter, r *http.Request) {
 	_, _, _, ok := h.resolve(r.Context())
-	writeJSON(w, http.StatusOK, map[string]any{"enabled": ok})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"enabled":   ok,
+		"perMinute": askPerMinute,
+		"perHour":   askPerHour,
+	})
 }
 
 type askMessage struct {

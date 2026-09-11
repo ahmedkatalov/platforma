@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
-import { Send, Sparkles } from "lucide-react";
+import { Info, Send, Sparkles } from "lucide-react";
 
 import { useAskAiMutation } from "@/shared/api/meApi";
 import { apiErrorMessage } from "@/shared/api/baseApi";
@@ -13,11 +13,15 @@ export default function AiChatModal({
   onClose,
   context,
   lessonId,
+  perMinute = 6,
+  perHour = 60,
 }: {
   open: boolean;
   onClose: () => void;
   context: string;
   lessonId?: string;
+  perMinute?: number;
+  perHour?: number;
 }) {
   const [messages, setMessages] = useState<AiMessage[]>([]);
   const [input, setInput] = useState("");
@@ -93,6 +97,15 @@ export default function AiChatModal({
         </div>
       }
     >
+      {/* Дружелюбная памятка: сколько можно спрашивать и про возможную задержку. */}
+      <div className="mb-4 flex items-start gap-2 rounded-[var(--radius-md)] bg-surface-2 px-3 py-2 text-xs text-muted">
+        <Info size={15} className="mt-0.5 shrink-0 text-accent" />
+        <span>
+          На каждого студента — до {perMinute} вопросов в минуту и {perHour} в час. Если ИИ сейчас
+          загружен, он может ответить не сразу — просто попробуйте чуть позже.
+        </span>
+      </div>
+
       {/* Контекст: выделенный фрагмент урока. */}
       {context && (
         <div className="mb-4 rounded-[var(--radius-md)] border-l-2 border-accent bg-surface-2 px-3 py-2">

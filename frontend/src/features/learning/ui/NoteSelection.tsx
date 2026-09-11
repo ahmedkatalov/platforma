@@ -134,6 +134,8 @@ export default function NoteSelection({
           onClose={() => setAiContext(null)}
           context={aiContext ?? ""}
           lessonId={lessonId}
+          perMinute={aiStatus?.perMinute ?? 6}
+          perHour={aiStatus?.perHour ?? 60}
         />
       )}
     </div>
