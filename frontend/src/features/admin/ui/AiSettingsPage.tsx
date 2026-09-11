@@ -1,7 +1,11 @@
 import { useEffect, useState } from "react";
 import { Sparkles } from "lucide-react";
 
-import { useGetAiSettingsQuery, useSaveAiSettingsMutation } from "@/features/admin/api/adminApi";
+import {
+  useGetAiSettingsQuery,
+  useSaveAiSettingsMutation,
+  useTestAiSettingsMutation,
+} from "@/features/admin/api/adminApi";
 import { apiErrorMessage } from "@/shared/api/baseApi";
 import { Badge, Button, Card, Field, Input, PageHeader, Spinner } from "@/shared/ui";
 import { useToast } from "@/shared/ui/ToastProvider";
@@ -11,11 +15,13 @@ const DEFAULT_MODEL = "gemini-2.5-flash";
 export default function AiSettingsPage() {
   const { data, isLoading } = useGetAiSettingsQuery();
   const [save, { isLoading: saving }] = useSaveAiSettingsMutation();
+  const [test, { isLoading: testing }] = useTestAiSettingsMutation();
   const toast = useToast();
 
   const [enabled, setEnabled] = useState(false);
   const [model, setModel] = useState("");
   const [apiKey, setApiKey] = useState(""); // локальное поле — на сервер уходит только при вводе
+  const [testResult, setTestResult] = useState<{ ok: boolean; model?: string; error?: string } | null>(null);
 
   useEffect(() => {
     if (data) {
@@ -41,6 +47,23 @@ export default function AiSettingsPage() {
       toast.success("Настройки ИИ сохранены");
     } catch (err) {
       toast.error(apiErrorMessage(err, "Не удалось сохранить настройки"));
+    }
+  };
+
+  // Пробный запрос к Gemini — показывает реальную причину, если «недоступен».
+  const onTest = async () => {
+    setTestResult(null);
+    try {
+      // Если админ ввёл новый ключ, но не сохранил — сохраним перед проверкой.
+      if (apiKey.trim()) {
+        await save({ enabled, model: model.trim(), apiKey: apiKey.trim() }).unwrap();
+        setApiKey("");
+      }
+      const res = await test().unwrap();
+      setTestResult(res);
+      if (res.ok) toast.success("Gemini ответил — подключение работает");
+    } catch (err) {
+      setTestResult({ ok: false, error: apiErrorMessage(err, "Не удалось проверить") });
     }
   };
 
@@ -122,10 +145,36 @@ export default function AiSettingsPage() {
             />
           </Field>
 
-          {hasPanelKey && (
-            <Button variant="ghost" className="text-danger" onClick={onClearKey} disabled={saving}>
-              Удалить сохранённый ключ
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="secondary" onClick={onTest} loading={testing} disabled={!configured && !apiKey.trim()}>
+              Проверить подключение
             </Button>
+            {hasPanelKey && (
+              <Button variant="ghost" className="text-danger" onClick={onClearKey} disabled={saving}>
+                Удалить сохранённый ключ
+              </Button>
+            )}
+          </div>
+
+          {testResult && (
+            <div
+              className={`rounded-[var(--radius-md)] px-3 py-2 text-sm ${
+                testResult.ok
+                  ? "bg-[var(--success-soft)] text-success"
+                  : "bg-[var(--danger-soft)] text-danger"
+              }`}
+            >
+              {testResult.ok ? (
+                <>✓ Gemini ответил. Модель: {testResult.model || "по умолчанию"}.</>
+              ) : (
+                <>
+                  ✕ Не удалось: {testResult.error}
+                  {testResult.model && (
+                    <span className="block text-xs opacity-80">Модель: {testResult.model}</span>
+                  )}
+                </>
+              )}
+            </div>
           )}
 
           <label className="flex cursor-pointer items-start gap-3 rounded-[var(--radius-md)] p-2 hover:bg-surface-2">

@@ -200,6 +200,9 @@ export const adminApi = baseApi.injectEndpoints({
       query: (body) => ({ url: "/admin/ai", method: "PUT", body }),
       invalidatesTags: ["AI"],
     }),
+    testAiSettings: builder.mutation<{ ok: boolean; model?: string; error?: string }, void>({
+      query: () => ({ url: "/admin/ai/test", method: "POST" }),
+    }),
     getContacts: builder.query<{ settings: ContactSettings | null }, void>({
       query: () => "/admin/contacts",
       providesTags: ["Contacts"],
@@ -240,4 +243,5 @@ export const {
   useSaveContactsMutation,
   useGetAiSettingsQuery,
   useSaveAiSettingsMutation,
+  useTestAiSettingsMutation,
 } = adminApi;

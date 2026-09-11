@@ -27,7 +27,8 @@ type AdminHandler struct {
 	access   *repository.AccessRepo
 	contacts *repository.ContactsRepo
 	ai       *repository.AISettingsRepo
-	aiReady  bool // задан ли ключ Gemini (иначе тумблер бесполезен)
+	aiReady  bool        // задан ли ключ Gemini в окружении
+	aiTester *AIHandler  // для пробного запроса к Gemini из админки
 	userSvc  *service.UserService
 }
 
@@ -43,11 +44,13 @@ func NewAdminHandler(
 	contacts *repository.ContactsRepo,
 	aiSettings *repository.AISettingsRepo,
 	aiReady bool,
+	aiTester *AIHandler,
 	userSvc *service.UserService,
 ) *AdminHandler {
 	return &AdminHandler{users: users, courses: courses, stats: stats,
 		activity: activity, audit: audit, theme: theme, progress: progress,
-		access: access, contacts: contacts, ai: aiSettings, aiReady: aiReady, userSvc: userSvc}
+		access: access, contacts: contacts, ai: aiSettings, aiReady: aiReady,
+		aiTester: aiTester, userSvc: userSvc}
 }
 
 // Routes собирает /api/admin. Редактор курсов монтируется сюда же, чтобы не
@@ -106,6 +109,7 @@ func (h *AdminHandler) Routes(courses, certificates, reports, uploads http.Handl
 	r.Route("/ai", func(r chi.Router) {
 		r.Get("/", h.getAI)
 		r.Put("/", h.putAI)
+		r.Post("/test", h.testAI)
 	})
 
 	return r
@@ -170,6 +174,22 @@ func (h *AdminHandler) putAI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, h.aiSettingsJSON(s))
+}
+
+// testAI делает пробный запрос к Gemini и возвращает результат админу — чтобы
+// увидеть реальную причину («ключ неверный», «модель не найдена», «регион не
+// поддерживается» и т.п.), а не общее «ИИ недоступен». Только для админа.
+func (h *AdminHandler) testAI(w http.ResponseWriter, r *http.Request) {
+	if h.aiTester == nil {
+		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": "ИИ не инициализирован"})
+		return
+	}
+	model, err := h.aiTester.TestConnection(r.Context())
+	if err != nil {
+		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "model": model, "error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "model": model})
 }
 
 func (h *AdminHandler) overview(w http.ResponseWriter, r *http.Request) {

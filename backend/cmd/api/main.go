@@ -84,7 +84,7 @@ func main() {
 		progressRepo, certRepo, noteRepo, authHandler)
 	aiHandler := handler.NewAIHandler(aiClient, aiSettingsRepo, cfg.GeminiAPIKey, cfg.GeminiModel)
 	adminHandler := handler.NewAdminHandler(userRepo, courseRepo, statsRepo, activityRepo, auditRepo,
-		themeRepo, progressRepo, accessRepo, contactsRepo, aiSettingsRepo, cfg.AIConfigured(), userSvc)
+		themeRepo, progressRepo, accessRepo, contactsRepo, aiSettingsRepo, cfg.AIConfigured(), aiHandler, userSvc)
 	courseHandler := handler.NewCourseHandler(courseRepo, auditRepo, progressRepo, accessRepo)
 	lessonHandler := handler.NewLessonHandler(progressRepo, courseRepo, activityRepo, certRepo, mail, cfg)
 	themeHandler := handler.NewThemeHandler(themeRepo)
