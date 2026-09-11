@@ -1,4 +1,10 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type TouchEvent as RTouchEvent,
+} from "react";
 import clsx from "clsx";
 import { Info, Maximize2, Minimize2, Send, Sparkles, X } from "lucide-react";
 
@@ -48,6 +54,9 @@ export default function AiChatModal({
   const [input, setInput] = useState("");
   const [noticeHidden, setNoticeHidden] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+  const [dragY, setDragY] = useState(0); // смещение при свайпе вниз (телефон)
+  const dragStart = useRef<number | null>(null);
   const [askAi, { isLoading }] = useAskAiMutation();
   const toast = useToast();
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -58,11 +67,21 @@ export default function AiChatModal({
     setExpanded(readFlag(EXPANDED_KEY));
   }, []);
 
+  // Свайп для закрытия — только на телефоне.
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 767px)");
+    const apply = () => setIsMobile(mq.matches);
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
+
   // Новое выделение (или закрытие) — начинаем диалог заново.
   useEffect(() => {
     if (open) {
       setMessages([]);
       setInput("");
+      setDragY(0);
     }
   }, [open, context]);
 
@@ -94,6 +113,24 @@ export default function AiChatModal({
       writeFlag(EXPANDED_KEY, !v);
       return !v;
     });
+  };
+
+  // Свайп вниз по шапке закрывает чат (телефон).
+  const onDragStart = (e: RTouchEvent) => {
+    if (!isMobile) return;
+    dragStart.current = e.touches[0].clientY;
+  };
+  const onDragMove = (e: RTouchEvent) => {
+    if (dragStart.current === null) return;
+    const dy = e.touches[0].clientY - dragStart.current;
+    setDragY(dy > 0 ? dy : 0);
+  };
+  const onDragEnd = () => {
+    if (dragStart.current === null) return;
+    const close = dragY > 120;
+    dragStart.current = null;
+    if (close) onClose();
+    else setDragY(0);
   };
 
   const send = async () => {
@@ -143,28 +180,37 @@ export default function AiChatModal({
             ? "md:h-[92vh] md:w-[min(94vw,72rem)]"
             : "md:h-[85vh] md:max-h-[44rem] md:w-[min(92vw,46rem)]",
         )}
+        style={{
+          transform: isMobile ? `translateY(${dragY}px)` : undefined,
+          transition: dragStart.current !== null ? "none" : "transform 0.25s ease-out",
+        }}
       >
-        {/* Шапка */}
-        <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3 sm:px-5">
-          <h2 className="flex items-center gap-2 text-base font-bold text-fg">
-            <Sparkles size={18} className="text-accent" /> Спросить у ИИ
-          </h2>
-          <div className="flex items-center gap-1">
-            <button
-              className="btn btn-ghost btn-icon btn-sm hidden md:inline-flex"
-              onClick={toggleExpanded}
-              aria-label={expanded ? "Свернуть окно" : "Развернуть окно"}
-              title={expanded ? "Свернуть" : "Развернуть"}
-            >
-              {expanded ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
-            </button>
-            <button
-              className="btn btn-ghost btn-icon btn-sm"
-              onClick={onClose}
-              aria-label="Закрыть"
-            >
-              <X size={18} />
-            </button>
+        {/* Зона свайпа: грабер (телефон) + шапка. Тянешь вниз — закрывается. */}
+        <div onTouchStart={onDragStart} onTouchMove={onDragMove} onTouchEnd={onDragEnd}>
+          <div className="flex justify-center pt-2 md:hidden">
+            <span className="h-1.5 w-10 rounded-full bg-[var(--border)]" />
+          </div>
+          <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3 sm:px-5">
+            <h2 className="flex items-center gap-2 text-base font-bold text-fg">
+              <Sparkles size={18} className="text-accent" /> Спросить у ИИ
+            </h2>
+            <div className="flex items-center gap-1">
+              <button
+                className="btn btn-ghost btn-icon btn-sm hidden md:inline-flex"
+                onClick={toggleExpanded}
+                aria-label={expanded ? "Свернуть окно" : "Развернуть окно"}
+                title={expanded ? "Свернуть" : "Развернуть"}
+              >
+                {expanded ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+              </button>
+              <button
+                className="btn btn-ghost btn-icon btn-sm"
+                onClick={onClose}
+                aria-label="Закрыть"
+              >
+                <X size={18} />
+              </button>
+            </div>
           </div>
         </div>
 
