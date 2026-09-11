@@ -10,7 +10,7 @@ import type { LessonKind, LessonProgress } from "@/shared/types";
 import { hasAnyContact } from "@/shared/lib/contacts";
 import { Badge, Card, EmptyState, PageHeader, Progress, Spinner, StatCard } from "@/shared/ui";
 import { ContactLinks } from "@/shared/ui/ContactLinks";
-import { Book, BarChart3, Clock, Flame, MessageSquare, Terminal, CheckCircle } from "lucide-react";
+import { Book, BarChart3, Clock, Flame, MessageSquare, Terminal, CheckCircle, Trophy } from "lucide-react";
 
 const KIND_LABEL: Record<LessonKind, string> = {
   text: "Теория",
@@ -92,6 +92,24 @@ export default function DashboardPage() {
           icon={<Clock size={20} />}
         />
       </div>
+
+      <Card className="mt-[var(--gap)] flex flex-wrap items-center justify-between gap-4 p-[var(--pad)]">
+        <div className="flex min-w-0 items-start gap-3">
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[var(--radius-md)] bg-accent-soft text-accent">
+            <Trophy size={22} />
+          </span>
+          <div className="min-w-0">
+            <p className="text-base font-bold text-fg">Достижения и рейтинг</p>
+            <p className="mt-0.5 text-sm text-muted">
+              Смотрите общий прогресс, кто лидирует, кто сейчас онлайн и на каком этапе однокурсники.
+            </p>
+          </div>
+        </div>
+        <Link to="/learn/community" className="btn btn-primary shrink-0">
+          <Trophy size={18} />
+          Открыть рейтинг
+        </Link>
+      </Card>
 
       {sandboxAvailable && (
         <Card className="mt-[var(--gap)] flex flex-wrap items-center justify-between gap-4 p-[var(--pad)]">

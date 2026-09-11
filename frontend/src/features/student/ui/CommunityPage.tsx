@@ -40,6 +40,45 @@ function activityText(cur: CurrentActivity | null, online: boolean): string {
   return `${verb} ${cur.lesson}`;
 }
 
+type Leader = { key: string; emoji: string; title: string; entry: LeaderboardEntry; detail: string };
+
+// Лучшие в разных номинациях — считаем из безопасных полей рейтинга.
+function computeLeaders(entries: LeaderboardEntry[]): Leader[] {
+  const out: Leader[] = [];
+  const best = (
+    key: string,
+    emoji: string,
+    title: string,
+    value: (e: LeaderboardEntry) => number,
+    detail: (e: LeaderboardEntry) => string,
+    min = 1,
+  ) => {
+    let top: LeaderboardEntry | null = null;
+    for (const e of entries) {
+      if (value(e) >= min && (!top || value(e) > value(top))) top = e;
+    }
+    if (top) out.push({ key, emoji, title, entry: top, detail: detail(top) });
+  };
+
+  best("top", "🏆", "Лидер рейтинга", (e) => e.lessonsCompleted, (e) => `${e.lessonsCompleted} уроков пройдено`);
+  best("active", "🔥", "Самый активный", (e) => e.minutesSpent, (e) => `${Math.floor(e.minutesSpent / 60)} ч ${e.minutesSpent % 60} мин · ${e.daysVisited} дн.`);
+  best(
+    "scorer",
+    "⭐",
+    "Лучший в квизах",
+    (e) => (e.quizzesPassed >= 3 ? e.avgQuizScore : 0),
+    (e) => `средний балл ${Math.round(e.avgQuizScore)}%`,
+  );
+  best(
+    "closest",
+    "🚀",
+    "Ближе всех к финишу",
+    (e) => (e.progress < 100 ? e.progress : 0),
+    (e) => `${Math.round(e.progress)}% курса`,
+  );
+  return out;
+}
+
 export default function CommunityPage() {
   // Обновляем раз в минуту — чтобы «онлайн» и «чем занят» были свежими.
   const { data, isLoading } = useGetCommunityQuery(undefined, { pollingInterval: 60_000 });
@@ -54,6 +93,7 @@ export default function CommunityPage() {
 
   const { overview, entries, me } = data;
   const onlineNow = entries.filter((e) => e.online);
+  const leaders = computeLeaders(entries);
 
   return (
     <>
@@ -89,6 +129,33 @@ export default function CommunityPage() {
           icon={<Award size={20} />}
         />
       </div>
+
+      {/* Лидеры в номинациях — кто лучший, самый активный и т.д. */}
+      {leaders.length > 0 && (
+        <div className="mt-[var(--gap)] grid gap-[var(--gap)] sm:grid-cols-2 xl:grid-cols-4">
+          {leaders.map((l) => {
+            const isMe = l.entry.userId === me;
+            return (
+              <Card
+                key={l.key}
+                className={`flex items-center gap-3 p-4 ${isMe ? "ring-1 ring-accent-border" : ""}`}
+              >
+                <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-surface-2 text-2xl">
+                  {l.emoji}
+                </span>
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-faint">{l.title}</p>
+                  <p className="flex items-center gap-1.5 truncate text-sm font-bold text-fg">
+                    {l.entry.fullName || "Без имени"}
+                    {isMe && <Badge tone="accent">Вы</Badge>}
+                  </p>
+                  <p className="truncate text-xs text-muted">{l.detail}</p>
+                </div>
+              </Card>
+            );
+          })}
+        </div>
+      )}
 
       {/* Живая активность: кто сейчас на платформе и чем занят. */}
       <Card className="mt-[var(--gap)] p-[var(--pad)]">

@@ -143,7 +143,7 @@ export default function AppShell() {
         ? studentNav
         : ADMIN_NAV;
 
-  // Мобильная нижняя навигация: 4 главных пункта. Прячем её на самой странице
+  // Мобильная нижняя навигация: 5 главных пунктов. Прячем её на самой странице
   // урока (там свой липкий низ «Далее»/«Содержание») и вне зоны обучения.
   const isLessonPage = /\/learn\/courses\/[^/]+\/lessons\//.test(location.pathname);
   const showBottomNav = inStudentArea && !isAdmin && !isLessonPage;
@@ -153,6 +153,7 @@ export default function AppShell() {
     sandboxAvailable
       ? { to: "/learn/sandbox", label: "Терминал", icon: <TerminalSquare size={20} /> }
       : { to: "/learn/quizzes", label: "Квизы", icon: <Check size={20} /> },
+    { to: "/learn/community", label: "Рейтинг", icon: <Trophy size={20} /> },
     { to: "/learn/profile", label: "Профиль", icon: <Settings size={20} /> },
   ];
 
@@ -419,7 +420,7 @@ export default function AppShell() {
       {/* Мобильная нижняя навигация — только в зоне обучения, вне страницы урока. */}
       {showBottomNav && (
         <nav
-          className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t border-line bg-surface-solid pb-[var(--safe-bottom)] lg:hidden"
+          className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-line bg-surface-solid pb-[var(--safe-bottom)] lg:hidden"
           aria-label="Основная навигация"
         >
           {bottomNav.map((item) => (
