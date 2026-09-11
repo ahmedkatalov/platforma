@@ -10,7 +10,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -22,17 +24,38 @@ type Message struct {
 	Text string
 }
 
-// Client вызывает generateContent у Gemini. Ключ и модель передаются в каждый
-// вызов Ask (их источник — БД с fallback на окружение), а не хранятся в клиенте.
+// Client вызывает generateContent у Gemini. Ключ, модель и прокси передаются в
+// каждый вызов Ask (их источник — БД с fallback на окружение), а не хранятся
+// в клиенте. http-клиенты кэшируются по адресу прокси.
 type Client struct {
-	http *http.Client
+	mu      sync.Mutex
+	clients map[string]*http.Client // ключ — адрес прокси ("" = напрямую)
 }
 
 func NewClient() *Client {
-	return &Client{
-		// Таймаут меньше WriteTimeout сервера (30с), чтобы успеть ответить.
-		http: &http.Client{Timeout: 25 * time.Second},
+	return &Client{clients: make(map[string]*http.Client)}
+}
+
+// httpClient — http.Client для заданного прокси (кэшируется). Пустой proxy —
+// прямое соединение. Поддерживает http/https/socks5.
+func (c *Client) httpClient(proxy string) (*http.Client, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if cl, ok := c.clients[proxy]; ok {
+		return cl, nil
 	}
+	tr := &http.Transport{}
+	if proxy != "" {
+		u, err := url.Parse(proxy)
+		if err != nil || u.Host == "" {
+			return nil, errors.New("ai: неверный адрес прокси")
+		}
+		tr.Proxy = http.ProxyURL(u)
+	}
+	// Таймаут меньше WriteTimeout сервера (30с), чтобы успеть ответить.
+	cl := &http.Client{Timeout: 25 * time.Second, Transport: tr}
+	c.clients[proxy] = cl
+	return cl, nil
 }
 
 // --- форма запроса/ответа Gemini ---
@@ -72,14 +95,19 @@ type genResponse struct {
 var ErrBlocked = errors.New("ai: ответ заблокирован фильтрами безопасности")
 
 // Ask отправляет системную инструкцию и историю диалога, возвращает текст ответа.
-// apiKey и model берутся из настроек (БД или окружения) на каждый запрос.
-func (c *Client) Ask(ctx context.Context, apiKey, model, system string, history []Message) (string, error) {
+// apiKey, model и proxy берутся из настроек (БД или окружения) на каждый запрос.
+func (c *Client) Ask(ctx context.Context, apiKey, model, proxy, system string, history []Message) (string, error) {
 	apiKey = strings.TrimSpace(apiKey)
 	if apiKey == "" {
 		return "", errors.New("ai: не задан ключ Gemini")
 	}
 	if strings.TrimSpace(model) == "" {
 		model = defaultModel
+	}
+
+	httpClient, err := c.httpClient(strings.TrimSpace(proxy))
+	if err != nil {
+		return "", err
 	}
 
 	contents := make([]genContent, 0, len(history))
@@ -116,7 +144,7 @@ func (c *Client) Ask(ctx context.Context, apiKey, model, system string, history 
 	// Ключ — в заголовке, а не в URL: так он не попадёт в логи прокси/доступа.
 	req.Header.Set("x-goog-api-key", apiKey)
 
-	resp, err := c.http.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return "", err
 	}

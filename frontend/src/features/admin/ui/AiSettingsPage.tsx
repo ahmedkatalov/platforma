@@ -21,6 +21,7 @@ export default function AiSettingsPage() {
   const [enabled, setEnabled] = useState(false);
   const [model, setModel] = useState("");
   const [apiKey, setApiKey] = useState(""); // локальное поле — на сервер уходит только при вводе
+  const [proxy, setProxy] = useState(""); // прокси — тоже уходит только при вводе
   const [testResult, setTestResult] = useState<{ ok: boolean; model?: string; error?: string } | null>(null);
 
   useEffect(() => {
@@ -32,18 +33,25 @@ export default function AiSettingsPage() {
 
   const configured = Boolean(data?.configured);
   const hasPanelKey = Boolean(data?.hasKey);
+  const hasProxy = Boolean(data?.hasProxy);
   const source = data?.source ?? "";
+
+  // Собираем payload: ключ/прокси отправляем только если админ их ввёл.
+  const buildPayload = () => {
+    const p: { enabled: boolean; model?: string; apiKey?: string; proxy?: string } = {
+      enabled,
+      model: model.trim(),
+    };
+    if (apiKey.trim()) p.apiKey = apiKey.trim();
+    if (proxy.trim()) p.proxy = proxy.trim();
+    return p;
+  };
 
   const onSave = async () => {
     try {
-      const payload: { enabled: boolean; model?: string; apiKey?: string } = {
-        enabled,
-        model: model.trim(),
-      };
-      // Ключ отправляем только если админ его ввёл — иначе оставляем прежний.
-      if (apiKey.trim()) payload.apiKey = apiKey.trim();
-      await save(payload).unwrap();
+      await save(buildPayload()).unwrap();
       setApiKey("");
+      setProxy("");
       toast.success("Настройки ИИ сохранены");
     } catch (err) {
       toast.error(apiErrorMessage(err, "Не удалось сохранить настройки"));
@@ -54,10 +62,11 @@ export default function AiSettingsPage() {
   const onTest = async () => {
     setTestResult(null);
     try {
-      // Если админ ввёл новый ключ, но не сохранил — сохраним перед проверкой.
-      if (apiKey.trim()) {
-        await save({ enabled, model: model.trim(), apiKey: apiKey.trim() }).unwrap();
+      // Если админ ввёл новый ключ/прокси, но не сохранил — сохраним перед проверкой.
+      if (apiKey.trim() || proxy.trim()) {
+        await save(buildPayload()).unwrap();
         setApiKey("");
+        setProxy("");
       }
       const res = await test().unwrap();
       setTestResult(res);
@@ -75,6 +84,17 @@ export default function AiSettingsPage() {
       toast.success("Ключ удалён");
     } catch (err) {
       toast.error(apiErrorMessage(err, "Не удалось удалить ключ"));
+    }
+  };
+
+  const onClearProxy = async () => {
+    if (!window.confirm("Удалить сохранённый прокси?")) return;
+    try {
+      await save({ enabled, model: model.trim(), clearProxy: true }).unwrap();
+      setProxy("");
+      toast.success("Прокси удалён");
+    } catch (err) {
+      toast.error(apiErrorMessage(err, "Не удалось удалить прокси"));
     }
   };
 
@@ -145,6 +165,23 @@ export default function AiSettingsPage() {
             />
           </Field>
 
+          <Field
+            label="Прокси (если регион заблокирован)"
+            hint={
+              hasProxy
+                ? "Прокси сохранён. Оставьте пусто, чтобы не менять; введите новый — чтобы заменить."
+                : "Нужен, если Gemini отвечает «User location is not supported». Формат: http://host:порт, https://… или socks5://host:порт (можно с логином:паролем@). Прокси должен быть в поддерживаемом Google регионе."
+            }
+          >
+            <Input
+              type="password"
+              value={proxy}
+              onChange={(e) => setProxy(e.target.value)}
+              placeholder={hasProxy ? "•••••••••• (сохранён)" : "socks5://user:pass@host:1080"}
+              autoComplete="new-password"
+            />
+          </Field>
+
           <div className="flex flex-wrap items-center gap-2">
             <Button variant="secondary" onClick={onTest} loading={testing} disabled={!configured && !apiKey.trim()}>
               Проверить подключение
@@ -152,6 +189,11 @@ export default function AiSettingsPage() {
             {hasPanelKey && (
               <Button variant="ghost" className="text-danger" onClick={onClearKey} disabled={saving}>
                 Удалить сохранённый ключ
+              </Button>
+            )}
+            {hasProxy && (
+              <Button variant="ghost" className="text-danger" onClick={onClearProxy} disabled={saving}>
+                Удалить прокси
               </Button>
             )}
           </div>

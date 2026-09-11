@@ -82,7 +82,7 @@ func main() {
 	authHandler := handler.NewAuthHandler(authSvc)
 	meHandler := handler.NewMeHandler(userRepo, courseRepo, activityRepo, statsRepo, themeRepo,
 		progressRepo, certRepo, noteRepo, authHandler)
-	aiHandler := handler.NewAIHandler(aiClient, aiSettingsRepo, cfg.GeminiAPIKey, cfg.GeminiModel)
+	aiHandler := handler.NewAIHandler(aiClient, aiSettingsRepo, cfg.GeminiAPIKey, cfg.GeminiModel, cfg.GeminiProxy)
 	adminHandler := handler.NewAdminHandler(userRepo, courseRepo, statsRepo, activityRepo, auditRepo,
 		themeRepo, progressRepo, accessRepo, contactsRepo, aiSettingsRepo, cfg.AIConfigured(), aiHandler, userSvc)
 	courseHandler := handler.NewCourseHandler(courseRepo, auditRepo, progressRepo, accessRepo)

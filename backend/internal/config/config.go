@@ -37,6 +37,9 @@ type Config struct {
 	// Ключ хранится только на сервере и в браузер студента не попадает.
 	GeminiAPIKey string
 	GeminiModel  string
+	// Прокси для исходящих запросов к Gemini (http/https/socks5). Нужен, если
+	// сервер в регионе, который Google блокирует. Пусто — прямое соединение.
+	GeminiProxy string
 }
 
 func Load() *Config {
@@ -71,6 +74,7 @@ func Load() *Config {
 
 		GeminiAPIKey: strings.TrimSpace(os.Getenv("GEMINI_API_KEY")),
 		GeminiModel:  getEnv("GEMINI_MODEL", "gemini-2.5-flash"),
+		GeminiProxy:  strings.TrimSpace(os.Getenv("GEMINI_PROXY")),
 	}
 }
 

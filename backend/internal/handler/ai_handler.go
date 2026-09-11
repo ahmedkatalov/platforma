@@ -28,16 +28,18 @@ type AIHandler struct {
 	settings  *repository.AISettingsRepo
 	envKey    string // fallback-ключ из окружения (GEMINI_API_KEY)
 	envModel  string // fallback-модель из окружения (GEMINI_MODEL)
+	envProxy  string // fallback-прокси из окружения (GEMINI_PROXY)
 	perMinute *ai.RateLimiter
 	perHour   *ai.RateLimiter
 }
 
-func NewAIHandler(client *ai.Client, settings *repository.AISettingsRepo, envKey, envModel string) *AIHandler {
+func NewAIHandler(client *ai.Client, settings *repository.AISettingsRepo, envKey, envModel, envProxy string) *AIHandler {
 	return &AIHandler{
 		client:    client,
 		settings:  settings,
 		envKey:    strings.TrimSpace(envKey),
 		envModel:  strings.TrimSpace(envModel),
+		envProxy:  strings.TrimSpace(envProxy),
 		perMinute: ai.NewRateLimiter(6, time.Minute),
 		perHour:   ai.NewRateLimiter(60, time.Hour),
 	}
@@ -50,55 +52,54 @@ func (h *AIHandler) Routes() http.Handler {
 	return r
 }
 
-// resolve читает настройки один раз и возвращает эффективные ключ/модель
-// (приоритет у заданных в админке, иначе — из окружения) и признак доступности:
-// клиент есть, фича включена и ключ задан. При ошибке чтения — fail-closed,
-// чтобы status и ask не могли разойтись из-за двух отдельных запросов к БД.
-func (h *AIHandler) resolve(ctx context.Context) (key, model string, ok bool) {
-	key, model = h.envKey, h.envModel
-	if h.client == nil {
-		return key, model, false
-	}
-	s, err := h.settings.Get(ctx)
-	if err != nil {
-		return key, model, false
-	}
-	if s.APIKey != "" {
-		key = s.APIKey
-	}
-	if s.Model != "" {
-		model = s.Model
-	}
-	return key, model, s.Enabled && key != ""
-}
-
-// TestConnection делает пробный запрос к Gemini текущими ключом/моделью и
-// возвращает реальную ошибку (для диагностики в админке). Ключ игнорирует
-// флаг «включено»: проверять связь можно и при выключенном помощнике.
-func (h *AIHandler) TestConnection(ctx context.Context) (model string, err error) {
-	key, model := h.envKey, h.envModel
-	if h.client == nil {
-		return model, errors.New("клиент ИИ не инициализирован")
-	}
-	if s, e := h.settings.Get(ctx); e == nil {
+// effective — действующие ключ/модель/прокси (заданные в админке важнее
+// окружения) и флаг «включено». При ошибке чтения настроек enabled=false.
+func (h *AIHandler) effective(ctx context.Context) (key, model, proxy string, enabled bool) {
+	key, model, proxy = h.envKey, h.envModel, h.envProxy
+	if s, err := h.settings.Get(ctx); err == nil {
 		if s.APIKey != "" {
 			key = s.APIKey
 		}
 		if s.Model != "" {
 			model = s.Model
 		}
+		if s.Proxy != "" {
+			proxy = s.Proxy
+		}
+		enabled = s.Enabled
 	}
+	return key, model, proxy, enabled
+}
+
+// resolve — эффективные параметры и признак доступности (клиент есть, фича
+// включена и ключ задан). Fail-closed, чтобы status и ask не расходились.
+func (h *AIHandler) resolve(ctx context.Context) (key, model, proxy string, ok bool) {
+	if h.client == nil {
+		return h.envKey, h.envModel, h.envProxy, false
+	}
+	key, model, proxy, enabled := h.effective(ctx)
+	return key, model, proxy, enabled && key != ""
+}
+
+// TestConnection делает пробный запрос к Gemini текущими ключом/моделью/прокси
+// и возвращает реальную ошибку (для диагностики в админке). Игнорирует флаг
+// «включено»: проверять связь можно и при выключенном помощнике.
+func (h *AIHandler) TestConnection(ctx context.Context) (model string, err error) {
+	if h.client == nil {
+		return h.envModel, errors.New("клиент ИИ не инициализирован")
+	}
+	key, model, proxy, _ := h.effective(ctx)
 	if key == "" {
 		return model, errors.New("ключ Gemini не задан")
 	}
-	_, err = h.client.Ask(ctx, key, model,
+	_, err = h.client.Ask(ctx, key, model, proxy,
 		"Ты — проверка связи. Ответь ровно одним словом.",
 		[]ai.Message{{Role: "user", Text: "Ответь одним словом: OK"}})
 	return model, err
 }
 
 func (h *AIHandler) status(w http.ResponseWriter, r *http.Request) {
-	_, _, ok := h.resolve(r.Context())
+	_, _, _, ok := h.resolve(r.Context())
 	writeJSON(w, http.StatusOK, map[string]any{"enabled": ok})
 }
 
@@ -108,7 +109,7 @@ type askMessage struct {
 }
 
 func (h *AIHandler) ask(w http.ResponseWriter, r *http.Request) {
-	key, model, ok := h.resolve(r.Context())
+	key, model, proxy, ok := h.resolve(r.Context())
 	if !ok {
 		writeError(w, http.StatusServiceUnavailable, "ИИ-помощник сейчас недоступен")
 		return
@@ -148,7 +149,7 @@ func (h *AIHandler) ask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	answer, err := h.client.Ask(r.Context(), key, model, systemPrompt(body.Context), history)
+	answer, err := h.client.Ask(r.Context(), key, model, proxy, systemPrompt(body.Context), history)
 	if err != nil {
 		if errors.Is(err, ai.ErrBlocked) {
 			writeError(w, http.StatusUnprocessableEntity,

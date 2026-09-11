@@ -131,6 +131,7 @@ func (h *AdminHandler) aiSettingsJSON(s repository.AISettings) map[string]any {
 		"hasKey":     s.APIKey != "",              // ключ задан именно в панели
 		"source":     source,
 		"model":      s.Model,
+		"hasProxy":   s.Proxy != "", // прокси задан (сам адрес наружу не отдаём)
 	}
 }
 
@@ -145,24 +146,31 @@ func (h *AdminHandler) getAI(w http.ResponseWriter, r *http.Request) {
 
 func (h *AdminHandler) putAI(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Enabled  bool    `json:"enabled"`
-		Model    string  `json:"model"`
-		APIKey   *string `json:"apiKey"`   // nil — ключ не менять
-		ClearKey bool    `json:"clearKey"` // true — стереть сохранённый ключ
+		Enabled    bool    `json:"enabled"`
+		Model      string  `json:"model"`
+		APIKey     *string `json:"apiKey"`     // nil — ключ не менять
+		ClearKey   bool    `json:"clearKey"`   // true — стереть сохранённый ключ
+		Proxy      *string `json:"proxy"`      // nil — прокси не менять
+		ClearProxy bool    `json:"clearProxy"` // true — стереть прокси
 	}
 	if err := decodeJSON(w, r, &body); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
+	empty := ""
 	key := body.APIKey
 	if body.ClearKey {
-		empty := ""
 		key = &empty
+	}
+	proxy := body.Proxy
+	if body.ClearProxy {
+		proxy = &empty
 	}
 
 	actor := middleware.UserID(r.Context())
-	if err := h.ai.Update(r.Context(), body.Enabled, body.Model, key, actor); err != nil {
+	upd := repository.AIUpdate{Enabled: body.Enabled, Model: body.Model, APIKey: key, Proxy: proxy}
+	if err := h.ai.Update(r.Context(), upd, actor); err != nil {
 		writeError(w, http.StatusInternalServerError, "Не удалось сохранить настройки ИИ")
 		return
 	}

@@ -118,6 +118,7 @@ export type AiSettings = {
   hasKey: boolean; // ключ введён именно в панели
   source: "" | "panel" | "env"; // откуда берётся действующий ключ
   model: string; // модель, заданная в панели (пусто — из окружения/по умолчанию)
+  hasProxy: boolean; // задан прокси для обхода блокировки региона
 };
 export type AiAskRequest = { lessonId?: string; context?: string; messages: AiMessage[] };
 export type AiAskResponse = { answer: string };
