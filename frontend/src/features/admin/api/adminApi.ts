@@ -193,7 +193,10 @@ export const adminApi = baseApi.injectEndpoints({
       query: () => "/admin/ai",
       providesTags: ["AI"],
     }),
-    saveAiSettings: builder.mutation<AiSettings, { enabled: boolean }>({
+    saveAiSettings: builder.mutation<
+      AiSettings,
+      { enabled: boolean; model?: string; apiKey?: string; clearKey?: boolean }
+    >({
       query: (body) => ({ url: "/admin/ai", method: "PUT", body }),
       invalidatesTags: ["AI"],
     }),

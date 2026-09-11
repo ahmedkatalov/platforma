@@ -111,30 +111,65 @@ func (h *AdminHandler) Routes(courses, certificates, reports, uploads http.Handl
 	return r
 }
 
+// aiSettingsJSON — ответ без самого ключа: наружу отдаём только факт его
+// наличия и источник, чтобы ключ никогда не покидал сервер.
+func (h *AdminHandler) aiSettingsJSON(s repository.AISettings) map[string]any {
+	source := "" // где взят действующий ключ
+	switch {
+	case s.APIKey != "":
+		source = "panel"
+	case h.aiReady:
+		source = "env"
+	}
+	return map[string]any{
+		"enabled":    s.Enabled,
+		"configured": s.APIKey != "" || h.aiReady, // есть хоть какой-то ключ
+		"hasKey":     s.APIKey != "",              // ключ задан именно в панели
+		"source":     source,
+		"model":      s.Model,
+	}
+}
+
 func (h *AdminHandler) getAI(w http.ResponseWriter, r *http.Request) {
-	enabled, err := h.ai.Enabled(r.Context())
+	s, err := h.ai.Get(r.Context())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Не удалось загрузить настройки ИИ")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"enabled": enabled, "configured": h.aiReady})
+	writeJSON(w, http.StatusOK, h.aiSettingsJSON(s))
 }
 
 func (h *AdminHandler) putAI(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Enabled bool `json:"enabled"`
+		Enabled  bool    `json:"enabled"`
+		Model    string  `json:"model"`
+		APIKey   *string `json:"apiKey"`   // nil — ключ не менять
+		ClearKey bool    `json:"clearKey"` // true — стереть сохранённый ключ
 	}
 	if err := decodeJSON(w, r, &body); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+
+	key := body.APIKey
+	if body.ClearKey {
+		empty := ""
+		key = &empty
+	}
+
 	actor := middleware.UserID(r.Context())
-	if err := h.ai.SetEnabled(r.Context(), body.Enabled, actor); err != nil {
+	if err := h.ai.Update(r.Context(), body.Enabled, body.Model, key, actor); err != nil {
 		writeError(w, http.StatusInternalServerError, "Не удалось сохранить настройки ИИ")
 		return
 	}
 	h.audit.Log(r.Context(), actor, "ai.update", "platform", "", nil)
-	writeJSON(w, http.StatusOK, map[string]any{"enabled": body.Enabled, "configured": h.aiReady})
+
+	s, err := h.ai.Get(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Не удалось загрузить настройки ИИ")
+		return
+	}
+	writeJSON(w, http.StatusOK, h.aiSettingsJSON(s))
 }
 
 func (h *AdminHandler) overview(w http.ResponseWriter, r *http.Request) {

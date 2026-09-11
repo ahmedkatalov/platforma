@@ -23,20 +23,22 @@ const (
 // AIHandler — ИИ-помощник по урокам (Google Gemini). Ключ живёт на сервере,
 // студенту отдаём только текст ответа. Есть лимиты на частоту запросов.
 type AIHandler struct {
-	client     *ai.Client
-	settings   *repository.AISettingsRepo
-	configured bool
-	perMinute  *ai.RateLimiter
-	perHour    *ai.RateLimiter
+	client    *ai.Client
+	settings  *repository.AISettingsRepo
+	envKey    string // fallback-ключ из окружения (GEMINI_API_KEY)
+	envModel  string // fallback-модель из окружения (GEMINI_MODEL)
+	perMinute *ai.RateLimiter
+	perHour   *ai.RateLimiter
 }
 
-func NewAIHandler(client *ai.Client, settings *repository.AISettingsRepo, configured bool) *AIHandler {
+func NewAIHandler(client *ai.Client, settings *repository.AISettingsRepo, envKey, envModel string) *AIHandler {
 	return &AIHandler{
-		client:     client,
-		settings:   settings,
-		configured: configured,
-		perMinute:  ai.NewRateLimiter(6, time.Minute),
-		perHour:    ai.NewRateLimiter(60, time.Hour),
+		client:    client,
+		settings:  settings,
+		envKey:    strings.TrimSpace(envKey),
+		envModel:  strings.TrimSpace(envModel),
+		perMinute: ai.NewRateLimiter(6, time.Minute),
+		perHour:   ai.NewRateLimiter(60, time.Hour),
 	}
 }
 
@@ -47,17 +49,31 @@ func (h *AIHandler) Routes() http.Handler {
 	return r
 }
 
-// enabled — фича доступна, только если задан ключ И админ её не выключил.
-func (h *AIHandler) enabled(r *http.Request) bool {
-	if !h.configured || h.client == nil {
-		return false
+// resolve читает настройки один раз и возвращает эффективные ключ/модель
+// (приоритет у заданных в админке, иначе — из окружения) и признак доступности:
+// клиент есть, фича включена и ключ задан. При ошибке чтения — fail-closed,
+// чтобы status и ask не могли разойтись из-за двух отдельных запросов к БД.
+func (h *AIHandler) resolve(r *http.Request) (key, model string, ok bool) {
+	key, model = h.envKey, h.envModel
+	if h.client == nil {
+		return key, model, false
 	}
-	on, err := h.settings.Enabled(r.Context())
-	return err == nil && on
+	s, err := h.settings.Get(r.Context())
+	if err != nil {
+		return key, model, false
+	}
+	if s.APIKey != "" {
+		key = s.APIKey
+	}
+	if s.Model != "" {
+		model = s.Model
+	}
+	return key, model, s.Enabled && key != ""
 }
 
 func (h *AIHandler) status(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{"enabled": h.enabled(r)})
+	_, _, ok := h.resolve(r)
+	writeJSON(w, http.StatusOK, map[string]any{"enabled": ok})
 }
 
 type askMessage struct {
@@ -66,7 +82,8 @@ type askMessage struct {
 }
 
 func (h *AIHandler) ask(w http.ResponseWriter, r *http.Request) {
-	if !h.enabled(r) {
+	key, model, ok := h.resolve(r)
+	if !ok {
 		writeError(w, http.StatusServiceUnavailable, "ИИ-помощник сейчас недоступен")
 		return
 	}
@@ -105,7 +122,7 @@ func (h *AIHandler) ask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	answer, err := h.client.Ask(r.Context(), systemPrompt(body.Context), history)
+	answer, err := h.client.Ask(r.Context(), key, model, systemPrompt(body.Context), history)
 	if err != nil {
 		if errors.Is(err, ai.ErrBlocked) {
 			writeError(w, http.StatusUnprocessableEntity,

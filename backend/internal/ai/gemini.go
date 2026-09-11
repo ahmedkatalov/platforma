@@ -22,26 +22,18 @@ type Message struct {
 	Text string
 }
 
-// Client вызывает generateContent у Gemini.
+// Client вызывает generateContent у Gemini. Ключ и модель передаются в каждый
+// вызов Ask (их источник — БД с fallback на окружение), а не хранятся в клиенте.
 type Client struct {
-	apiKey string
-	model  string
-	http   *http.Client
+	http *http.Client
 }
 
-func NewClient(apiKey, model string) *Client {
-	if strings.TrimSpace(model) == "" {
-		model = defaultModel
-	}
+func NewClient() *Client {
 	return &Client{
-		apiKey: strings.TrimSpace(apiKey),
-		model:  model,
 		// Таймаут меньше WriteTimeout сервера (30с), чтобы успеть ответить.
 		http: &http.Client{Timeout: 25 * time.Second},
 	}
 }
-
-func (c *Client) Model() string { return c.model }
 
 // --- форма запроса/ответа Gemini ---
 
@@ -80,7 +72,16 @@ type genResponse struct {
 var ErrBlocked = errors.New("ai: ответ заблокирован фильтрами безопасности")
 
 // Ask отправляет системную инструкцию и историю диалога, возвращает текст ответа.
-func (c *Client) Ask(ctx context.Context, system string, history []Message) (string, error) {
+// apiKey и model берутся из настроек (БД или окружения) на каждый запрос.
+func (c *Client) Ask(ctx context.Context, apiKey, model, system string, history []Message) (string, error) {
+	apiKey = strings.TrimSpace(apiKey)
+	if apiKey == "" {
+		return "", errors.New("ai: не задан ключ Gemini")
+	}
+	if strings.TrimSpace(model) == "" {
+		model = defaultModel
+	}
+
 	contents := make([]genContent, 0, len(history))
 	for _, m := range history {
 		role := m.Role
@@ -106,14 +107,14 @@ func (c *Client) Ask(ctx context.Context, system string, history []Message) (str
 		return "", err
 	}
 
-	url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent", c.model)
+	url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent", model)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(payload))
 	if err != nil {
 		return "", err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	// Ключ — в заголовке, а не в URL: так он не попадёт в логи прокси/доступа.
-	req.Header.Set("x-goog-api-key", c.apiKey)
+	req.Header.Set("x-goog-api-key", apiKey)
 
 	resp, err := c.http.Do(req)
 	if err != nil {

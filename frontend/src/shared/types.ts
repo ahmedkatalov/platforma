@@ -112,7 +112,13 @@ export type StudentSummary = {
 // ИИ-помощник (Gemini).
 export type AiMessage = { role: "user" | "assistant"; text: string };
 export type AiStatus = { enabled: boolean };
-export type AiSettings = { enabled: boolean; configured: boolean };
+export type AiSettings = {
+  enabled: boolean;
+  configured: boolean; // задан хоть какой-то ключ (панель или окружение)
+  hasKey: boolean; // ключ введён именно в панели
+  source: "" | "panel" | "env"; // откуда берётся действующий ключ
+  model: string; // модель, заданная в панели (пусто — из окружения/по умолчанию)
+};
 export type AiAskRequest = { lessonId?: string; context?: string; messages: AiMessage[] };
 export type AiAskResponse = { answer: string };
 

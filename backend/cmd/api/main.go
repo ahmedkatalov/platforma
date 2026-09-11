@@ -69,20 +69,20 @@ func main() {
 		log.Println("mailer: EmailJS не настроен — коды подтверждения выводятся в лог")
 	}
 
-	// ИИ-помощник (Gemini). Без ключа клиент не создаём — фича будет отключена.
-	var aiClient *ai.Client
+	// ИИ-помощник (Gemini). Клиент создаём всегда: ключ можно задать в админке
+	// (хранится в БД) или через GEMINI_API_KEY — приоритет у ключа из админки.
+	aiClient := ai.NewClient()
 	if cfg.AIConfigured() {
-		aiClient = ai.NewClient(cfg.GeminiAPIKey, cfg.GeminiModel)
-		log.Printf("ai: Gemini подключён (модель %s)", aiClient.Model())
+		log.Printf("ai: ключ Gemini задан в окружении (модель %s)", cfg.GeminiModel)
 	} else {
-		log.Println("ai: GEMINI_API_KEY не задан — ИИ-помощник отключён")
+		log.Println("ai: GEMINI_API_KEY не задан — ключ можно ввести в админке")
 	}
 
 	// Хендлеры.
 	authHandler := handler.NewAuthHandler(authSvc)
 	meHandler := handler.NewMeHandler(userRepo, courseRepo, activityRepo, statsRepo, themeRepo,
 		progressRepo, certRepo, noteRepo, authHandler)
-	aiHandler := handler.NewAIHandler(aiClient, aiSettingsRepo, cfg.AIConfigured())
+	aiHandler := handler.NewAIHandler(aiClient, aiSettingsRepo, cfg.GeminiAPIKey, cfg.GeminiModel)
 	adminHandler := handler.NewAdminHandler(userRepo, courseRepo, statsRepo, activityRepo, auditRepo,
 		themeRepo, progressRepo, accessRepo, contactsRepo, aiSettingsRepo, cfg.AIConfigured(), userSvc)
 	courseHandler := handler.NewCourseHandler(courseRepo, auditRepo, progressRepo, accessRepo)
