@@ -109,6 +109,13 @@ export type StudentSummary = {
   progress: number;
 };
 
+// ИИ-помощник (Gemini).
+export type AiMessage = { role: "user" | "assistant"; text: string };
+export type AiStatus = { enabled: boolean };
+export type AiSettings = { enabled: boolean; configured: boolean };
+export type AiAskRequest = { lessonId?: string; context?: string; messages: AiMessage[] };
+export type AiAskResponse = { answer: string };
+
 // Чем студент занят: текущий/последний урок и когда.
 export type CurrentActivity = {
   course: string;

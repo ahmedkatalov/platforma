@@ -1,6 +1,9 @@
 import { baseApi } from "@/shared/api/baseApi";
 import type {
   ActivityDay,
+  AiAskRequest,
+  AiAskResponse,
+  AiStatus,
   Attempt,
   CommunityResponse,
   ContactSettings,
@@ -43,6 +46,13 @@ export const meApi = baseApi.injectEndpoints({
     getCommunity: builder.query<CommunityResponse, void>({
       query: () => "/me/community",
       providesTags: ["Progress"],
+    }),
+    getAiStatus: builder.query<AiStatus, void>({
+      query: () => "/ai/status",
+      providesTags: ["AI"],
+    }),
+    askAi: builder.mutation<AiAskResponse, AiAskRequest>({
+      query: (body) => ({ url: "/ai/ask", method: "POST", body }),
     }),
     getMyNotes: builder.query<Note[], void>({
       query: () => "/me/notes",
@@ -92,6 +102,8 @@ export const {
   useGetMyStatsQuery,
   useGetMyAttemptsQuery,
   useGetCommunityQuery,
+  useGetAiStatusQuery,
+  useAskAiMutation,
   useGetMyNotesQuery,
   useCreateNoteMutation,
   useUpdateNoteMutation,

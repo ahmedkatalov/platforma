@@ -26,6 +26,8 @@ type AdminHandler struct {
 	progress *repository.ProgressRepo
 	access   *repository.AccessRepo
 	contacts *repository.ContactsRepo
+	ai       *repository.AISettingsRepo
+	aiReady  bool // задан ли ключ Gemini (иначе тумблер бесполезен)
 	userSvc  *service.UserService
 }
 
@@ -39,11 +41,13 @@ func NewAdminHandler(
 	progress *repository.ProgressRepo,
 	access *repository.AccessRepo,
 	contacts *repository.ContactsRepo,
+	aiSettings *repository.AISettingsRepo,
+	aiReady bool,
 	userSvc *service.UserService,
 ) *AdminHandler {
 	return &AdminHandler{users: users, courses: courses, stats: stats,
 		activity: activity, audit: audit, theme: theme, progress: progress,
-		access: access, contacts: contacts, userSvc: userSvc}
+		access: access, contacts: contacts, ai: aiSettings, aiReady: aiReady, userSvc: userSvc}
 }
 
 // Routes собирает /api/admin. Редактор курсов монтируется сюда же, чтобы не
@@ -99,7 +103,38 @@ func (h *AdminHandler) Routes(courses, certificates, reports, uploads http.Handl
 		r.Put("/", h.putContacts)
 	})
 
+	r.Route("/ai", func(r chi.Router) {
+		r.Get("/", h.getAI)
+		r.Put("/", h.putAI)
+	})
+
 	return r
+}
+
+func (h *AdminHandler) getAI(w http.ResponseWriter, r *http.Request) {
+	enabled, err := h.ai.Enabled(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Не удалось загрузить настройки ИИ")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"enabled": enabled, "configured": h.aiReady})
+}
+
+func (h *AdminHandler) putAI(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Enabled bool `json:"enabled"`
+	}
+	if err := decodeJSON(w, r, &body); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	actor := middleware.UserID(r.Context())
+	if err := h.ai.SetEnabled(r.Context(), body.Enabled, actor); err != nil {
+		writeError(w, http.StatusInternalServerError, "Не удалось сохранить настройки ИИ")
+		return
+	}
+	h.audit.Log(r.Context(), actor, "ai.update", "platform", "", nil)
+	writeJSON(w, http.StatusOK, map[string]any{"enabled": body.Enabled, "configured": h.aiReady})
 }
 
 func (h *AdminHandler) overview(w http.ResponseWriter, r *http.Request) {

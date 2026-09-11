@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { Sparkles } from "lucide-react";
 
-import { useCreateNoteMutation } from "@/shared/api/meApi";
+import { useCreateNoteMutation, useGetAiStatusQuery } from "@/shared/api/meApi";
 import { apiErrorMessage } from "@/shared/api/baseApi";
 import { useToast } from "@/shared/ui/ToastProvider";
+import AiChatModal from "@/features/learning/ui/AiChatModal";
 
 // Обёртка вокруг содержимого урока: выделили текст — появляется кнопка
 // «Сохранить в заметки». Сохранённая цитата попадает на страницу «Заметки»
@@ -16,7 +18,10 @@ export default function NoteSelection({
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [popup, setPopup] = useState<{ x: number; y: number; text: string } | null>(null);
+  const [aiContext, setAiContext] = useState<string | null>(null);
   const [createNote, { isLoading }] = useCreateNoteMutation();
+  const { data: aiStatus } = useGetAiStatusQuery();
+  const aiEnabled = Boolean(aiStatus?.enabled);
   const toast = useToast();
 
   const hide = useCallback(() => setPopup(null), []);
@@ -81,24 +86,55 @@ export default function NoteSelection({
     }
   };
 
+  const askAi = () => {
+    if (!popup) return;
+    setAiContext(popup.text);
+    window.getSelection()?.removeAllRanges();
+    hide();
+  };
+
   return (
     <div ref={containerRef} className="relative">
       {children}
 
       {popup && (
-        <button
+        <div
           onMouseDown={(e) => {
             // mousedown раньше mouseup снимет выделение — гасим его.
             e.preventDefault();
             e.stopPropagation();
           }}
-          onClick={save}
-          disabled={isLoading}
-          className="absolute z-30 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-full border border-accent-border bg-surface-solid px-3 py-1.5 text-xs font-bold text-accent shadow-[var(--shadow-md)] transition-transform hover:scale-105"
+          className="absolute z-30 flex -translate-x-1/2 -translate-y-full items-center gap-1 whitespace-nowrap rounded-full border border-line bg-surface-solid p-1 shadow-[var(--shadow-md)]"
           style={{ left: popup.x, top: popup.y - 8 }}
         >
-          {isLoading ? "Сохраняю…" : "＋ В заметки"}
-        </button>
+          <button
+            onClick={save}
+            disabled={isLoading}
+            className="rounded-full px-3 py-1 text-xs font-bold text-accent transition-transform hover:scale-105"
+          >
+            {isLoading ? "Сохраняю…" : "＋ В заметки"}
+          </button>
+          {aiEnabled && (
+            <>
+              <span className="h-4 w-px bg-line" />
+              <button
+                onClick={askAi}
+                className="flex items-center gap-1 rounded-full px-3 py-1 text-xs font-bold text-accent transition-transform hover:scale-105"
+              >
+                <Sparkles size={13} /> Спросить у ИИ
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
+      {aiEnabled && (
+        <AiChatModal
+          open={aiContext !== null}
+          onClose={() => setAiContext(null)}
+          context={aiContext ?? ""}
+          lessonId={lessonId}
+        />
       )}
     </div>
   );

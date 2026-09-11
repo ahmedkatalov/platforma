@@ -32,6 +32,11 @@ type Config struct {
 	// Шаблон для уведомлений (сертификаты, дедлайны). По умолчанию — тот же, что для кодов.
 	EmailJSNoticeTemplateID string
 	VerificationCodeTTL     time.Duration
+
+	// Google Gemini (AI Studio) — ИИ-помощник по урокам.
+	// Ключ хранится только на сервере и в браузер студента не попадает.
+	GeminiAPIKey string
+	GeminiModel  string
 }
 
 func Load() *Config {
@@ -63,7 +68,15 @@ func Load() *Config {
 		EmailJSNoticeTemplateID: getEnv("EMAILJS_NOTICE_TEMPLATE_ID",
 			getEnv("EMAILJS_TEMPLATE_ID", "")),
 		VerificationCodeTTL: getEnvDuration("VERIFICATION_CODE_TTL", 15*time.Minute),
+
+		GeminiAPIKey: strings.TrimSpace(os.Getenv("GEMINI_API_KEY")),
+		GeminiModel:  getEnv("GEMINI_MODEL", "gemini-2.5-flash"),
 	}
+}
+
+// AIConfigured — задан ли ключ Gemini. Без него ИИ-помощник недоступен.
+func (c *Config) AIConfigured() bool {
+	return strings.TrimSpace(c.GeminiAPIKey) != ""
 }
 
 func (c *Config) Validate() error {

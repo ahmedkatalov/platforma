@@ -20,6 +20,7 @@ type Deps struct {
 	Tokens   *auth.TokenManager
 	Auth     *handler.AuthHandler
 	Me       *handler.MeHandler
+	AI       *handler.AIHandler
 	Admin    *handler.AdminHandler
 	Courses  *handler.CourseHandler
 	Lessons  *handler.LessonHandler
@@ -67,6 +68,7 @@ func New(d Deps) http.Handler {
 			r.Use(appmw.Auth(d.Tokens))
 
 			r.Mount("/me", d.Me.Routes())
+			r.Mount("/ai", d.AI.Routes())
 			r.Mount("/courses", d.Courses.StudentRoutes())
 			r.Mount("/lessons", d.Lessons.Routes())
 

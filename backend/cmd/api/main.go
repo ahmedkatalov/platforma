@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"platforma/backend/internal/ai"
 	"platforma/backend/internal/auth"
 	"platforma/backend/internal/config"
 	"platforma/backend/internal/db"
@@ -56,6 +57,7 @@ func main() {
 	reminderRepo := repository.NewReminderRepo(pool)
 	accessRepo := repository.NewAccessRepo(pool)
 	contactsRepo := repository.NewContactsRepo(pool)
+	aiSettingsRepo := repository.NewAISettingsRepo(pool)
 
 	// Сервисы.
 	tokens := auth.NewTokenManager(cfg.JWTSecret, cfg.AccessTTL, cfg.RefreshTTL)
@@ -67,12 +69,22 @@ func main() {
 		log.Println("mailer: EmailJS не настроен — коды подтверждения выводятся в лог")
 	}
 
+	// ИИ-помощник (Gemini). Без ключа клиент не создаём — фича будет отключена.
+	var aiClient *ai.Client
+	if cfg.AIConfigured() {
+		aiClient = ai.NewClient(cfg.GeminiAPIKey, cfg.GeminiModel)
+		log.Printf("ai: Gemini подключён (модель %s)", aiClient.Model())
+	} else {
+		log.Println("ai: GEMINI_API_KEY не задан — ИИ-помощник отключён")
+	}
+
 	// Хендлеры.
 	authHandler := handler.NewAuthHandler(authSvc)
 	meHandler := handler.NewMeHandler(userRepo, courseRepo, activityRepo, statsRepo, themeRepo,
 		progressRepo, certRepo, noteRepo, authHandler)
+	aiHandler := handler.NewAIHandler(aiClient, aiSettingsRepo, cfg.AIConfigured())
 	adminHandler := handler.NewAdminHandler(userRepo, courseRepo, statsRepo, activityRepo, auditRepo,
-		themeRepo, progressRepo, accessRepo, contactsRepo, userSvc)
+		themeRepo, progressRepo, accessRepo, contactsRepo, aiSettingsRepo, cfg.AIConfigured(), userSvc)
 	courseHandler := handler.NewCourseHandler(courseRepo, auditRepo, progressRepo, accessRepo)
 	lessonHandler := handler.NewLessonHandler(progressRepo, courseRepo, activityRepo, certRepo, mail, cfg)
 	themeHandler := handler.NewThemeHandler(themeRepo)
@@ -91,6 +103,7 @@ func main() {
 			Tokens:   tokens,
 			Auth:     authHandler,
 			Me:       meHandler,
+			AI:       aiHandler,
 			Admin:    adminHandler,
 			Courses:  courseHandler,
 			Lessons:  lessonHandler,

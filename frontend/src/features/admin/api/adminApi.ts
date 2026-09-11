@@ -4,6 +4,7 @@ import type {
   ActivityDay,
   AdminActivityRow,
   AdminOverview,
+  AiSettings,
   Attempt,
   AuditEntry,
   ContactSettings,
@@ -188,6 +189,14 @@ export const adminApi = baseApi.injectEndpoints({
     }),
 
     // --- Контакты (Telegram/WhatsApp) ---
+    getAiSettings: builder.query<AiSettings, void>({
+      query: () => "/admin/ai",
+      providesTags: ["AI"],
+    }),
+    saveAiSettings: builder.mutation<AiSettings, { enabled: boolean }>({
+      query: (body) => ({ url: "/admin/ai", method: "PUT", body }),
+      invalidatesTags: ["AI"],
+    }),
     getContacts: builder.query<{ settings: ContactSettings | null }, void>({
       query: () => "/admin/contacts",
       providesTags: ["Contacts"],
@@ -226,4 +235,6 @@ export const {
   useSetModuleAccessMutation,
   useGetContactsQuery,
   useSaveContactsMutation,
+  useGetAiSettingsQuery,
+  useSaveAiSettingsMutation,
 } = adminApi;

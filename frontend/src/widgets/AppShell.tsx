@@ -30,6 +30,7 @@ import {
   Book,
   TerminalSquare,
   Trophy,
+  Sparkles,
   Inbox,
   MessageSquare,
 } from "lucide-react";
@@ -56,6 +57,7 @@ const ADMIN_NAV: NavItem[] = [
     icon: <Shield size={18} />,
   },
   { to: "/admin/settings", label: "Связь", icon: <MessageSquare size={18} /> },
+  { to: "/admin/ai", label: "ИИ-помощник", icon: <Sparkles size={18} /> },
   { to: "/admin/appearance", label: "Оформление", icon: <Palette size={18} /> },
   { to: "/admin/audit", label: "Журнал", icon: <Settings size={18} /> },
 ];
