@@ -280,8 +280,8 @@ export default function LessonPage() {
       <aside
         className={`
     xl:block
-    ${asideOpen ? "fixed inset-0 z-50 block bg-black/40 p-3 backdrop-blur-sm" : "hidden"}
-    xl:static xl:z-auto xl:bg-transparent xl:p-0 xl:backdrop-blur-none
+    ${asideOpen ? "fixed inset-0 z-50 block bg-black/40 px-3 pb-3 pt-[calc(0.75rem+var(--safe-top))] backdrop-blur-sm" : "hidden"}
+    xl:static xl:z-auto xl:bg-transparent xl:p-0 xl:pt-0 xl:backdrop-blur-none
   `}
       >
         <Card
@@ -601,7 +601,7 @@ export default function LessonPage() {
       <div className="min-w-0">
         <div className="mb-4 flex flex-wrap items-center gap-2">
           <Button
-            className="fixed top-[80px] right-[24px] z-40 shadow-lg xl:hidden"
+            className="fixed right-4 top-[calc(4rem+var(--safe-top)+0.75rem)] z-30 shadow-lg xl:hidden"
             onClick={() => setAsideOpen(true)}
           >
             <Book size={16} />

@@ -154,7 +154,8 @@ export default function NoteSelection({
             {actions}
           </div>
 
-          {/* Телефон — над выделением, повыше (~на 32px выше десктопного) */}
+          {/* Телефон — над выделением, ещё выше, чтобы уйти из-под системного
+              меню браузера (Копировать/Найти). */}
           <div
             onMouseDown={(e) => {
               e.preventDefault();
@@ -163,7 +164,7 @@ export default function NoteSelection({
             className="absolute z-40 flex select-none items-center gap-1 whitespace-nowrap rounded-full border border-line bg-surface-solid p-1 shadow-[var(--shadow-md)] md:hidden"
             style={{
               left: popup.x,
-              top: popup.y - 40,
+              top: popup.y - 54,
               transform: "translate(-50%, -100%)",
               WebkitUserSelect: "none",
               userSelect: "none",
