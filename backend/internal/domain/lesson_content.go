@@ -243,12 +243,32 @@ func GradeQuiz(quiz *Quiz, answers []QuizAnswer) QuizResult {
 }
 
 // shuffleItems детерминированно перемешивает шаги на месте: порядок зависит от
-// id вопроса и шага, поэтому он стабилен между загрузками, но не совпадает с
-// правильным (который задан в seed).
+// id вопроса и шага, поэтому он стабилен между загрузками. Если хеш-порядок
+// случайно совпал с правильным (для 3-4 элементов это бывает), сдвигаем на
+// один — иначе правильный порядок был бы виден сразу, и вопрос «решён заранее».
 func shuffleItems(questionID string, items []QuizItem) {
+	if len(items) < 2 {
+		return
+	}
+	original := make([]string, len(items))
+	for i, it := range items {
+		original[i] = it.ID
+	}
 	sort.SliceStable(items, func(i, j int) bool {
 		return itemSeed(questionID, items[i].ID) < itemSeed(questionID, items[j].ID)
 	})
+	same := true
+	for i := range items {
+		if items[i].ID != original[i] {
+			same = false
+			break
+		}
+	}
+	if same {
+		first := items[0]
+		copy(items, items[1:])
+		items[len(items)-1] = first
+	}
 }
 
 func itemSeed(questionID, itemID string) uint32 {
