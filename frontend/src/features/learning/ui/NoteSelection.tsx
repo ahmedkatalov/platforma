@@ -17,9 +17,9 @@ export default function NoteSelection({
   children: ReactNode;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
-  // x — центр выделения по горизонтали; y — верх выделения (десктоп, попап сверху);
-  // cy — центр выделения по вертикали (телефон, попап по центру текста). Всё относительно контейнера.
-  const [popup, setPopup] = useState<{ x: number; y: number; cy: number; text: string } | null>(null);
+  // x — центр выделения по горизонтали, y — верх выделения (относительно контейнера).
+  // Попап всегда рисуем НАД выделением.
+  const [popup, setPopup] = useState<{ x: number; y: number; text: string } | null>(null);
   const [aiContext, setAiContext] = useState<string | null>(null);
   const [createNote, { isLoading }] = useCreateNoteMutation();
   const { data: aiStatus } = useGetAiStatusQuery();
@@ -61,7 +61,6 @@ export default function NoteSelection({
       setPopup({
         x: Math.min(Math.max(rect.left + rect.width / 2 - host.left, 120), host.width - 120),
         y: rect.top - host.top,
-        cy: rect.top + rect.height / 2 - host.top,
         text,
       });
     };
@@ -106,60 +105,76 @@ export default function NoteSelection({
     hide();
   };
 
+  const actions = (
+    <>
+      <button
+        onClick={save}
+        disabled={isLoading}
+        className="rounded-full px-3 py-1.5 text-sm font-bold text-accent transition-transform hover:scale-105"
+      >
+        {isLoading ? "Сохраняю…" : "＋ В заметки"}
+      </button>
+      {aiEnabled && (
+        <>
+          <span className="h-4 w-px bg-line" />
+          <button
+            onClick={askAi}
+            className="flex items-center gap-1 rounded-full px-3 py-1.5 text-sm font-bold text-accent transition-transform hover:scale-105"
+          >
+            <Sparkles size={14} /> Спросить у ИИ
+          </button>
+        </>
+      )}
+    </>
+  );
+
   return (
     <div ref={containerRef} className="relative">
+      {/* Попапы рисуем ПЕРЕД текстом и делаем невыбираемыми (select-none), иначе
+          при расширении выделения оно «утекает» в них и охватывает всю страницу.
+          Оба варианта — НАД выделением; на телефоне повыше, чтобы разъехаться с
+          системным меню браузера. */}
+      {popup && (
+        <>
+          {/* Десктоп/планшет */}
+          <div
+            onMouseDown={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
+            className="absolute z-30 hidden select-none items-center gap-1 whitespace-nowrap rounded-full border border-line bg-surface-solid p-1 shadow-[var(--shadow-md)] md:flex"
+            style={{
+              left: popup.x,
+              top: popup.y - 8,
+              transform: "translate(-50%, -100%)",
+              WebkitUserSelect: "none",
+              userSelect: "none",
+            }}
+          >
+            {actions}
+          </div>
+
+          {/* Телефон — над выделением, повыше (~на 32px выше десктопного) */}
+          <div
+            onMouseDown={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
+            className="absolute z-40 flex select-none items-center gap-1 whitespace-nowrap rounded-full border border-line bg-surface-solid p-1 shadow-[var(--shadow-md)] md:hidden"
+            style={{
+              left: popup.x,
+              top: popup.y - 40,
+              transform: "translate(-50%, -100%)",
+              WebkitUserSelect: "none",
+              userSelect: "none",
+            }}
+          >
+            {actions}
+          </div>
+        </>
+      )}
+
       {children}
-
-      {popup &&
-        (() => {
-          const actions = (
-            <>
-              <button
-                onClick={save}
-                disabled={isLoading}
-                className="rounded-full px-3 py-1.5 text-sm font-bold text-accent transition-transform hover:scale-105"
-              >
-                {isLoading ? "Сохраняю…" : "＋ В заметки"}
-              </button>
-              {aiEnabled && (
-                <>
-                  <span className="h-4 w-px bg-line" />
-                  <button
-                    onClick={askAi}
-                    className="flex items-center gap-1 rounded-full px-3 py-1.5 text-sm font-bold text-accent transition-transform hover:scale-105"
-                  >
-                    <Sparkles size={14} /> Спросить у ИИ
-                  </button>
-                </>
-              )}
-            </>
-          );
-          return (
-            <>
-              {/* Десктоп/планшет — попап над выделением. */}
-              <div
-                onMouseDown={(e) => {
-                  // mousedown раньше mouseup снимет выделение — гасим его.
-                  e.preventDefault();
-                  e.stopPropagation();
-                }}
-                className="absolute z-30 hidden items-center gap-1 whitespace-nowrap rounded-full border border-line bg-surface-solid p-1 shadow-[var(--shadow-md)] md:flex"
-                style={{ left: popup.x, top: popup.y - 8, transform: "translate(-50%, -100%)" }}
-              >
-                {actions}
-              </div>
-
-              {/* Телефон — попап по ЦЕНТРУ выделения (системное меню браузера
-                  рисуется над текстом, поэтому по центру наши кнопки не мешают). */}
-              <div
-                className="absolute z-40 flex max-w-[calc(100vw-1rem)] items-center gap-1 whitespace-nowrap rounded-full border border-line bg-surface-solid p-1 shadow-[var(--shadow-md)] md:hidden"
-                style={{ left: popup.x, top: popup.cy, transform: "translate(-50%, -50%)" }}
-              >
-                {actions}
-              </div>
-            </>
-          );
-        })()}
 
       {aiEnabled && (
         <AiChatModal
