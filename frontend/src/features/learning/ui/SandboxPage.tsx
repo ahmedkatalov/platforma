@@ -414,6 +414,11 @@ export default function SandboxPage() {
         memory_size: 128 * 1024 * 1024,
         vga_memory_size: 2 * 1024 * 1024,
         disable_speaker: true,
+        // Песочница — текстовый терминал (весь ввод/вывод через serial). Мышь
+        // эмулятора не нужна, а её адаптер вешает глобальные слушатели на window
+        // (mousemove/mousedown) и перехватывает курсор (pointer lock) — из-за
+        // этого мышь «привязывалась» к терминалу и тупила вне его границ.
+        disable_mouse: true,
       };
       if (initialState) options.initial_state = { buffer: initialState };
 
