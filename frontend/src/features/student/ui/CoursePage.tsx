@@ -5,6 +5,7 @@ import {
   useGetStudentCourseQuery,
   useRequestModuleAccessMutation,
 } from "@/features/admin/api/coursesApi";
+import { BookmarkButton } from "@/features/learning/ui/BookmarkButton";
 import { groupThemes, themeProgress, type Theme } from "@/features/learning/lib/themes";
 import { useGetMeQuery } from "@/shared/api/meApi";
 import { apiErrorMessage } from "@/shared/api/baseApi";
@@ -241,6 +242,9 @@ export default function CoursePage() {
                       aria-hidden="true"
                     />
                   </button>
+
+                  {/* Сохранить главу, чтобы вернуться к ней позже. */}
+                  {!locked && <BookmarkButton kind="module" refId={module.id} compact />}
 
                   {/* Справа: прогресс (если открыто) или доступ (если закрыто) */}
                   {locked ? (

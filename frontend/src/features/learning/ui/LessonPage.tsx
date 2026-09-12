@@ -55,6 +55,7 @@ function kindIcon(kind: LessonKind, size = 12) {
   return <Book size={size} />;
 }
 
+import { BookmarkButton } from "./BookmarkButton";
 import CodeLesson from "./CodeLesson";
 import NoteSelection from "./NoteSelection";
 import QuizLesson from "./QuizLesson";
@@ -619,8 +620,12 @@ export default function LessonPage() {
           {lesson.title}
         </h1>
         {lesson.summary && (
-          <p className="mb-6 text-sm text-muted">{lesson.summary}</p>
+          <p className="mb-3 text-sm text-muted">{lesson.summary}</p>
         )}
+
+        <div className="mb-6 mt-2 flex flex-wrap items-center gap-2">
+          <BookmarkButton kind="lesson" refId={lesson.id} />
+        </div>
 
         <NoteSelection lessonId={lesson.id}>{body}</NoteSelection>
 

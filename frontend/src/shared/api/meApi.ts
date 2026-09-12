@@ -5,6 +5,7 @@ import type {
   AiAskResponse,
   AiStatus,
   Attempt,
+  Bookmark,
   CommunityResponse,
   ContactSettings,
   Enrollment,
@@ -74,6 +75,21 @@ export const meApi = baseApi.injectEndpoints({
       query: () => "/me/quizzes",
       providesTags: ["Progress"],
     }),
+    getBookmarks: builder.query<Bookmark[], void>({
+      query: () => "/me/bookmarks",
+      providesTags: ["Bookmarks"],
+    }),
+    addBookmark: builder.mutation<{ message: string }, { kind: "lesson" | "module"; refId: string }>({
+      query: (body) => ({ url: "/me/bookmarks", method: "POST", body }),
+      invalidatesTags: ["Bookmarks"],
+    }),
+    removeBookmark: builder.mutation<
+      { message: string },
+      { kind: "lesson" | "module"; refId: string }
+    >({
+      query: ({ kind, refId }) => ({ url: `/me/bookmarks/${kind}/${refId}`, method: "DELETE" }),
+      invalidatesTags: ["Bookmarks"],
+    }),
     trackActivity: builder.mutation<{ message: string }, { seconds: number }>({
       query: (body) => ({ url: "/me/activity", method: "POST", body }),
     }),
@@ -109,6 +125,9 @@ export const {
   useUpdateNoteMutation,
   useDeleteNoteMutation,
   useGetMyQuizzesQuery,
+  useGetBookmarksQuery,
+  useAddBookmarkMutation,
+  useRemoveBookmarkMutation,
   useTrackActivityMutation,
   useGetPreferencesQuery,
   useSavePreferencesMutation,

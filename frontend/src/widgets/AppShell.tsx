@@ -28,6 +28,7 @@ import {
   Sun,
   Users,
   Book,
+  Bookmark,
   TerminalSquare,
   Trophy,
   Sparkles,
@@ -72,6 +73,7 @@ const STUDENT_NAV: NavItem[] = [
   },
   { to: "/learn/quizzes", label: "Квизы", icon: <Check size={18} /> },
   { to: "/learn/notes", label: "Заметки", icon: <Edit2 size={18} /> },
+  { to: "/learn/saved", label: "Сохранённое", icon: <Bookmark size={18} /> },
   { to: "/learn/stats", label: "Статистика", icon: <BarChart3 size={18} /> },
   { to: "/learn/community", label: "Достижения", icon: <Trophy size={18} /> },
 ];

@@ -438,6 +438,18 @@ export type Note = {
   updatedAt: string;
 };
 
+// Закладка: сохранённый урок (kind=lesson) или модуль/глава (kind=module).
+export type Bookmark = {
+  kind: "lesson" | "module";
+  refId: string;
+  title: string;
+  lessonKind?: LessonKind;
+  moduleTitle?: string;
+  courseSlug: string;
+  courseTitle: string;
+  createdAt: string;
+};
+
 // --- Пошаговый доступ к главам ---
 
 export type AccessRequestStatus = "pending" | "approved" | "rejected";

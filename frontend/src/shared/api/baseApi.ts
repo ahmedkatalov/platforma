@@ -83,6 +83,7 @@ export const baseApi = createApi({
     "Certificates",
     "Assets",
     "Notes",
+    "Bookmarks",
     "Access",
     "AccessRequests",
     "CourseRequests",

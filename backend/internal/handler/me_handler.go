@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 
@@ -20,9 +21,10 @@ type MeHandler struct {
 	stats    *repository.StatsRepo
 	theme    *repository.ThemeRepo
 	progress *repository.ProgressRepo
-	certs    *repository.CertificateRepo
-	notes    *repository.NoteRepo
-	auth     *AuthHandler
+	certs     *repository.CertificateRepo
+	notes     *repository.NoteRepo
+	bookmarks *repository.BookmarkRepo
+	auth      *AuthHandler
 }
 
 func NewMeHandler(
@@ -34,10 +36,12 @@ func NewMeHandler(
 	progress *repository.ProgressRepo,
 	certs *repository.CertificateRepo,
 	notes *repository.NoteRepo,
+	bookmarks *repository.BookmarkRepo,
 	auth *AuthHandler,
 ) *MeHandler {
 	return &MeHandler{users: users, courses: courses, activity: activity,
-		stats: stats, theme: theme, progress: progress, certs: certs, notes: notes, auth: auth}
+		stats: stats, theme: theme, progress: progress, certs: certs, notes: notes,
+		bookmarks: bookmarks, auth: auth}
 }
 
 func (h *MeHandler) Routes() http.Handler {
@@ -54,6 +58,11 @@ func (h *MeHandler) Routes() http.Handler {
 		r.Post("/", h.createNote)
 		r.Patch("/{id}", h.updateNote)
 		r.Delete("/{id}", h.deleteNote)
+	})
+	r.Route("/bookmarks", func(r chi.Router) {
+		r.Get("/", h.listBookmarks)
+		r.Post("/", h.addBookmark)
+		r.Delete("/{kind}/{refId}", h.removeBookmark)
 	})
 	r.Get("/certificates", h.myCertificates)
 	r.Post("/activity", h.trackActivity)
@@ -159,6 +168,48 @@ func (h *MeHandler) community(w http.ResponseWriter, r *http.Request) {
 		"entries":  entries,
 		"me":       middleware.UserID(r.Context()),
 	})
+}
+
+// listBookmarks — сохранённые уроки и модули, свежие сверху.
+func (h *MeHandler) listBookmarks(w http.ResponseWriter, r *http.Request) {
+	items, err := h.bookmarks.List(r.Context(), middleware.UserID(r.Context()))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Не удалось загрузить закладки")
+		return
+	}
+	writeJSON(w, http.StatusOK, items)
+}
+
+// addBookmark — сохранить урок (kind=lesson) или модуль (kind=module).
+func (h *MeHandler) addBookmark(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Kind  string `json:"kind"`
+		RefID string `json:"refId"`
+	}
+	if err := decodeJSON(w, r, &body); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	err := h.bookmarks.Add(r.Context(), middleware.UserID(r.Context()),
+		strings.TrimSpace(body.Kind), strings.TrimSpace(body.RefID))
+	switch {
+	case err == nil:
+		writeJSON(w, http.StatusCreated, map[string]string{"message": "Сохранено"})
+	case errors.Is(err, repository.ErrNotFound):
+		writeError(w, http.StatusNotFound, "Урок или модуль не найден")
+	default:
+		writeError(w, http.StatusBadRequest, err.Error())
+	}
+}
+
+// removeBookmark — убрать закладку.
+func (h *MeHandler) removeBookmark(w http.ResponseWriter, r *http.Request) {
+	if err := h.bookmarks.Remove(r.Context(), middleware.UserID(r.Context()),
+		chi.URLParam(r, "kind"), chi.URLParam(r, "refId")); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"message": "Закладка убрана"})
 }
 
 // listNotes — заметки студента со ссылками на уроки.

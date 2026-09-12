@@ -27,6 +27,7 @@ const CatalogPage = lazy(() => import("@/features/student/ui/CatalogPage"));
 const StudentDashboardPage = lazy(() => import("@/features/student/ui/DashboardPage"));
 const ProfilePage = lazy(() => import("@/features/student/ui/ProfilePage"));
 const NotesPage = lazy(() => import("@/features/student/ui/NotesPage"));
+const SavedPage = lazy(() => import("@/features/student/ui/SavedPage"));
 const QuizzesPage = lazy(() => import("@/features/student/ui/QuizzesPage"));
 const CommunityPage = lazy(() => import("@/features/student/ui/CommunityPage"));
 // StatsPage тянет recharts (~100 КБ) — теперь грузится только на странице статистики.
@@ -162,6 +163,7 @@ export default function App() {
           }
         />
         <Route path="notes" element={<NotesPage />} />
+        <Route path="saved" element={<SavedPage />} />
         <Route path="stats" element={<StudentStatsPage />} />
         <Route path="community" element={<CommunityPage />} />
         <Route path="profile" element={<ProfilePage />} />

@@ -52,6 +52,7 @@ func main() {
 	themeRepo := repository.NewThemeRepo(pool)
 	progressRepo := repository.NewProgressRepo(pool)
 	noteRepo := repository.NewNoteRepo(pool)
+	bookmarkRepo := repository.NewBookmarkRepo(pool)
 	certRepo := repository.NewCertificateRepo(pool)
 	assetRepo := repository.NewAssetRepo(pool)
 	reminderRepo := repository.NewReminderRepo(pool)
@@ -81,7 +82,7 @@ func main() {
 	// Хендлеры.
 	authHandler := handler.NewAuthHandler(authSvc)
 	meHandler := handler.NewMeHandler(userRepo, courseRepo, activityRepo, statsRepo, themeRepo,
-		progressRepo, certRepo, noteRepo, authHandler)
+		progressRepo, certRepo, noteRepo, bookmarkRepo, authHandler)
 	aiHandler := handler.NewAIHandler(aiClient, aiSettingsRepo, cfg.GeminiAPIKey, cfg.GeminiModel, cfg.GeminiProxy)
 	adminHandler := handler.NewAdminHandler(userRepo, courseRepo, statsRepo, activityRepo, auditRepo,
 		themeRepo, progressRepo, accessRepo, contactsRepo, aiSettingsRepo, cfg.AIConfigured(), aiHandler, userSvc)
