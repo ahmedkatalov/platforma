@@ -129,10 +129,14 @@ export default function NoteSelection({
         </div>
       )}
 
-      {/* Телефон — фиксированная панель снизу: не конфликтует с системным меню
-          выделения (Копировать/Найти), которое браузер рисует у самого текста. */}
+      {/* Телефон — фиксированная панель СВЕРХУ (под шапкой). Внизу телефон
+          показывает гугл-подсказку/поиск, а у текста — системное меню выделения;
+          сверху свободно, поэтому наши кнопки там ничему не мешают. */}
       {popup && (
-        <div className="fixed inset-x-0 bottom-0 z-40 flex items-center gap-2 border-t border-line bg-surface-solid px-3 pt-2.5 pb-[calc(0.625rem+var(--safe-bottom))] shadow-[0_-10px_30px_-15px_rgba(0,0,0,0.6)] md:hidden">
+        <div
+          className="fixed inset-x-0 z-40 flex items-center gap-2 border-b border-line bg-surface-solid px-3 py-2.5 shadow-[0_10px_30px_-15px_rgba(0,0,0,0.6)] md:hidden"
+          style={{ top: "calc(4rem + var(--safe-top))" }}
+        >
           <button
             onClick={save}
             disabled={isLoading}
