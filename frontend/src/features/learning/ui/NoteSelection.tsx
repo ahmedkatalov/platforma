@@ -29,47 +29,57 @@ export default function NoteSelection({
   const hide = useCallback(() => setPopup(null), []);
 
   useEffect(() => {
-    const onSelectionEnd = () => {
-      // Даём браузеру закончить выделение, затем читаем его.
-      window.setTimeout(() => {
-        const selection = window.getSelection();
-        const container = containerRef.current;
+    let timer = 0;
 
-        if (!selection || selection.isCollapsed || !container) {
-          setPopup(null);
-          return;
-        }
+    const evaluate = () => {
+      const selection = window.getSelection();
+      const container = containerRef.current;
 
-        const text = selection.toString().trim();
-        if (text.length < 3 || text.length > 2000) {
-          setPopup(null);
-          return;
-        }
+      if (!selection || selection.isCollapsed || !container) {
+        setPopup(null);
+        return;
+      }
 
-        // Кнопку показываем только для выделений внутри урока.
-        const range = selection.getRangeAt(0);
-        if (!container.contains(range.commonAncestorContainer)) {
-          setPopup(null);
-          return;
-        }
+      const text = selection.toString().trim();
+      if (text.length < 3 || text.length > 2000) {
+        setPopup(null);
+        return;
+      }
 
-        const rect = range.getBoundingClientRect();
-        const host = container.getBoundingClientRect();
+      // Кнопки показываем только для выделений внутри урока.
+      const range = selection.getRangeAt(0);
+      if (!container.contains(range.commonAncestorContainer)) {
+        setPopup(null);
+        return;
+      }
 
-        setPopup({
-          x: Math.min(Math.max(rect.left + rect.width / 2 - host.left, 120), host.width - 120),
-          y: rect.top - host.top,
-          cy: rect.top + rect.height / 2 - host.top,
-          text,
-        });
-      }, 0);
+      const rect = range.getBoundingClientRect();
+      // Геометрия ещё не готова (бывает в момент создания выделения) — подождём.
+      if (rect.width === 0 && rect.height === 0) return;
+      const host = container.getBoundingClientRect();
+
+      setPopup({
+        x: Math.min(Math.max(rect.left + rect.width / 2 - host.left, 120), host.width - 120),
+        y: rect.top - host.top,
+        cy: rect.top + rect.height / 2 - host.top,
+        text,
+      });
     };
 
-    document.addEventListener("mouseup", onSelectionEnd);
-    document.addEventListener("touchend", onSelectionEnd);
+    // selectionchange срабатывает сразу при выделении (в т.ч. первом на телефоне),
+    // поэтому кнопки больше не требуют «второго касания». Дебаунс — чтобы не
+    // дёргаться, пока тянут маркеры выделения.
+    const schedule = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(evaluate, 180);
+    };
+
+    document.addEventListener("selectionchange", schedule);
+    document.addEventListener("mouseup", evaluate); // на десктопе — без задержки
     return () => {
-      document.removeEventListener("mouseup", onSelectionEnd);
-      document.removeEventListener("touchend", onSelectionEnd);
+      window.clearTimeout(timer);
+      document.removeEventListener("selectionchange", schedule);
+      document.removeEventListener("mouseup", evaluate);
     };
   }, []);
 
