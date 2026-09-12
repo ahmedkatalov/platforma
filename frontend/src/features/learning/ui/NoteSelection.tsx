@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { Sparkles, X } from "lucide-react";
+import { Sparkles } from "lucide-react";
 
 import { useCreateNoteMutation, useGetAiStatusQuery } from "@/shared/api/meApi";
 import { apiErrorMessage } from "@/shared/api/baseApi";
@@ -17,7 +17,9 @@ export default function NoteSelection({
   children: ReactNode;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [popup, setPopup] = useState<{ x: number; y: number; text: string } | null>(null);
+  // x — центр выделения по горизонтали; y — верх выделения (десктоп, попап сверху);
+  // cy — центр выделения по вертикали (телефон, попап по центру текста). Всё относительно контейнера.
+  const [popup, setPopup] = useState<{ x: number; y: number; cy: number; text: string } | null>(null);
   const [aiContext, setAiContext] = useState<string | null>(null);
   const [createNote, { isLoading }] = useCreateNoteMutation();
   const { data: aiStatus } = useGetAiStatusQuery();
@@ -55,8 +57,9 @@ export default function NoteSelection({
         const host = container.getBoundingClientRect();
 
         setPopup({
-          x: Math.min(Math.max(rect.left + rect.width / 2 - host.left, 90), host.width - 90),
+          x: Math.min(Math.max(rect.left + rect.width / 2 - host.left, 120), host.width - 120),
           y: rect.top - host.top,
+          cy: rect.top + rect.height / 2 - host.top,
           text,
         });
       }, 0);
@@ -97,74 +100,56 @@ export default function NoteSelection({
     <div ref={containerRef} className="relative">
       {children}
 
-      {/* Десктоп/планшет — плавающий попап у выделения. */}
-      {popup && (
-        <div
-          onMouseDown={(e) => {
-            // mousedown раньше mouseup снимет выделение — гасим его.
-            e.preventDefault();
-            e.stopPropagation();
-          }}
-          className="absolute z-30 hidden -translate-x-1/2 -translate-y-full items-center gap-1 whitespace-nowrap rounded-full border border-line bg-surface-solid p-1 shadow-[var(--shadow-md)] md:flex"
-          style={{ left: popup.x, top: popup.y - 8 }}
-        >
-          <button
-            onClick={save}
-            disabled={isLoading}
-            className="rounded-full px-3 py-1 text-xs font-bold text-accent transition-transform hover:scale-105"
-          >
-            {isLoading ? "Сохраняю…" : "＋ В заметки"}
-          </button>
-          {aiEnabled && (
+      {popup &&
+        (() => {
+          const actions = (
             <>
-              <span className="h-4 w-px bg-line" />
               <button
-                onClick={askAi}
-                className="flex items-center gap-1 rounded-full px-3 py-1 text-xs font-bold text-accent transition-transform hover:scale-105"
+                onClick={save}
+                disabled={isLoading}
+                className="rounded-full px-3 py-1.5 text-sm font-bold text-accent transition-transform hover:scale-105"
               >
-                <Sparkles size={13} /> Спросить у ИИ
+                {isLoading ? "Сохраняю…" : "＋ В заметки"}
               </button>
+              {aiEnabled && (
+                <>
+                  <span className="h-4 w-px bg-line" />
+                  <button
+                    onClick={askAi}
+                    className="flex items-center gap-1 rounded-full px-3 py-1.5 text-sm font-bold text-accent transition-transform hover:scale-105"
+                  >
+                    <Sparkles size={14} /> Спросить у ИИ
+                  </button>
+                </>
+              )}
             </>
-          )}
-        </div>
-      )}
+          );
+          return (
+            <>
+              {/* Десктоп/планшет — попап над выделением. */}
+              <div
+                onMouseDown={(e) => {
+                  // mousedown раньше mouseup снимет выделение — гасим его.
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
+                className="absolute z-30 hidden items-center gap-1 whitespace-nowrap rounded-full border border-line bg-surface-solid p-1 shadow-[var(--shadow-md)] md:flex"
+                style={{ left: popup.x, top: popup.y - 8, transform: "translate(-50%, -100%)" }}
+              >
+                {actions}
+              </div>
 
-      {/* Телефон — фиксированная панель СВЕРХУ (под шапкой). Внизу телефон
-          показывает гугл-подсказку/поиск, а у текста — системное меню выделения;
-          сверху свободно, поэтому наши кнопки там ничему не мешают. */}
-      {popup && (
-        <div
-          className="fixed inset-x-0 z-40 flex items-center gap-2 border-b border-line bg-surface-solid px-3 py-2.5 shadow-[0_10px_30px_-15px_rgba(0,0,0,0.6)] md:hidden"
-          style={{ top: "calc(4rem + var(--safe-top))" }}
-        >
-          <button
-            onClick={save}
-            disabled={isLoading}
-            className="flex-1 rounded-[var(--radius-md)] bg-accent-soft px-3 py-2.5 text-sm font-bold text-accent"
-          >
-            {isLoading ? "Сохраняю…" : "＋ В заметки"}
-          </button>
-          {aiEnabled && (
-            <button
-              onClick={askAi}
-              className="flex flex-1 items-center justify-center gap-1.5 rounded-[var(--radius-md)] px-3 py-2.5 text-sm font-bold text-accent-fg"
-              style={{ background: "var(--gradient)" }}
-            >
-              <Sparkles size={15} /> Спросить у ИИ
-            </button>
-          )}
-          <button
-            onClick={() => {
-              window.getSelection()?.removeAllRanges();
-              hide();
-            }}
-            aria-label="Закрыть"
-            className="shrink-0 rounded-[var(--radius-md)] p-2 text-faint hover:text-fg"
-          >
-            <X size={18} />
-          </button>
-        </div>
-      )}
+              {/* Телефон — попап по ЦЕНТРУ выделения (системное меню браузера
+                  рисуется над текстом, поэтому по центру наши кнопки не мешают). */}
+              <div
+                className="absolute z-40 flex max-w-[calc(100vw-1rem)] items-center gap-1 whitespace-nowrap rounded-full border border-line bg-surface-solid p-1 shadow-[var(--shadow-md)] md:hidden"
+                style={{ left: popup.x, top: popup.cy, transform: "translate(-50%, -50%)" }}
+              >
+                {actions}
+              </div>
+            </>
+          );
+        })()}
 
       {aiEnabled && (
         <AiChatModal
