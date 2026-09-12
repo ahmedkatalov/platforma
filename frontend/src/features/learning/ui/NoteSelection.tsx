@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { Sparkles } from "lucide-react";
+import { Sparkles, X } from "lucide-react";
 
 import { useCreateNoteMutation, useGetAiStatusQuery } from "@/shared/api/meApi";
 import { apiErrorMessage } from "@/shared/api/baseApi";
@@ -97,6 +97,7 @@ export default function NoteSelection({
     <div ref={containerRef} className="relative">
       {children}
 
+      {/* Десктоп/планшет — плавающий попап у выделения. */}
       {popup && (
         <div
           onMouseDown={(e) => {
@@ -104,7 +105,7 @@ export default function NoteSelection({
             e.preventDefault();
             e.stopPropagation();
           }}
-          className="absolute z-30 flex -translate-x-1/2 -translate-y-full items-center gap-1 whitespace-nowrap rounded-full border border-line bg-surface-solid p-1 shadow-[var(--shadow-md)]"
+          className="absolute z-30 hidden -translate-x-1/2 -translate-y-full items-center gap-1 whitespace-nowrap rounded-full border border-line bg-surface-solid p-1 shadow-[var(--shadow-md)] md:flex"
           style={{ left: popup.x, top: popup.y - 8 }}
         >
           <button
@@ -125,6 +126,39 @@ export default function NoteSelection({
               </button>
             </>
           )}
+        </div>
+      )}
+
+      {/* Телефон — фиксированная панель снизу: не конфликтует с системным меню
+          выделения (Копировать/Найти), которое браузер рисует у самого текста. */}
+      {popup && (
+        <div className="fixed inset-x-0 bottom-0 z-40 flex items-center gap-2 border-t border-line bg-surface-solid px-3 pt-2.5 pb-[calc(0.625rem+var(--safe-bottom))] shadow-[0_-10px_30px_-15px_rgba(0,0,0,0.6)] md:hidden">
+          <button
+            onClick={save}
+            disabled={isLoading}
+            className="flex-1 rounded-[var(--radius-md)] bg-accent-soft px-3 py-2.5 text-sm font-bold text-accent"
+          >
+            {isLoading ? "Сохраняю…" : "＋ В заметки"}
+          </button>
+          {aiEnabled && (
+            <button
+              onClick={askAi}
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-[var(--radius-md)] px-3 py-2.5 text-sm font-bold text-accent-fg"
+              style={{ background: "var(--gradient)" }}
+            >
+              <Sparkles size={15} /> Спросить у ИИ
+            </button>
+          )}
+          <button
+            onClick={() => {
+              window.getSelection()?.removeAllRanges();
+              hide();
+            }}
+            aria-label="Закрыть"
+            className="shrink-0 rounded-[var(--radius-md)] p-2 text-faint hover:text-fg"
+          >
+            <X size={18} />
+          </button>
         </div>
       )}
 
