@@ -73,8 +73,16 @@ type genRequest struct {
 	GenerationConfig  genConfig    `json:"generationConfig"`
 }
 type genConfig struct {
-	Temperature     float64 `json:"temperature"`
-	MaxOutputTokens int     `json:"maxOutputTokens"`
+	Temperature     float64         `json:"temperature"`
+	MaxOutputTokens int             `json:"maxOutputTokens"`
+	ThinkingConfig  *thinkingConfig `json:"thinkingConfig,omitempty"`
+}
+
+// thinkingConfig управляет «размышлениями» моделей Gemini 2.5. Они тратят токены
+// из общего лимита ответа, и при небольшом лимите видимый ответ обрывается
+// (например, на пустом блоке кода). Для 2.5-flash отключаем их (budget 0).
+type thinkingConfig struct {
+	ThinkingBudget int `json:"thinkingBudget"`
 }
 type genResponse struct {
 	Candidates []struct {
@@ -119,12 +127,18 @@ func (c *Client) Ask(ctx context.Context, apiKey, model, proxy, system string, h
 		contents = append(contents, genContent{Role: role, Parts: []genPart{{Text: m.Text}}})
 	}
 
+	cfg := genConfig{
+		Temperature:     0.4,
+		MaxOutputTokens: 2048,
+	}
+	// 2.5-flash по умолчанию «думает», и размышления съедают лимит ответа —
+	// из-за этого ответ обрывался. Отключаем размышления для flash-моделей 2.5.
+	if strings.Contains(model, "2.5-flash") {
+		cfg.ThinkingConfig = &thinkingConfig{ThinkingBudget: 0}
+	}
 	reqBody := genRequest{
-		Contents: contents,
-		GenerationConfig: genConfig{
-			Temperature:     0.4,
-			MaxOutputTokens: 1024,
-		},
+		Contents:         contents,
+		GenerationConfig: cfg,
 	}
 	if strings.TrimSpace(system) != "" {
 		reqBody.SystemInstruction = &genContent{Parts: []genPart{{Text: system}}}

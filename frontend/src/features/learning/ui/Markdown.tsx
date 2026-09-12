@@ -159,6 +159,9 @@ export default function Markdown({ children }: { children: string }) {
             } | null;
             const lang = codeEl?.props?.className ?? "";
             const raw = textOf(codeEl?.props?.children).replace(/\n$/, "");
+            // Пустой блок кода (например, если ответ ИИ оборвался на открытом
+            // ```) не рисуем — иначе виден чёрный прямоугольник без текста.
+            if (raw.trim() === "") return null;
             if (lang.includes("language-flow")) return <FlowDiagram source={raw} />;
             if (lang.includes("language-anatomy")) return <CodeAnatomy source={raw} />;
             if (lang.includes("language-reveal")) return <Reveal source={raw} />;
