@@ -1,10 +1,11 @@
-import { useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 import { Check } from "lucide-react";
 
 import { Callout, CodeAnatomy, FlowDiagram, Reveal, parseCalloutType } from "./LessonBlocks";
+import { highlightToHtml, resolveLang } from "@/features/learning/lib/highlight";
 
 // Якорь для оглавления: «Права доступа» → prava-dostupa-подобный стабильный id.
 export function headingId(text: string): string {
@@ -25,12 +26,13 @@ function textOf(children: ReactNode): string {
   return "";
 }
 
-// Блок кода с кнопкой копирования — чтобы команды не перепечатывали руками.
-function CodeBlock({ children }: { children: ReactNode }) {
+// Блок кода с подсветкой синтаксиса (Prism) и кнопкой копирования.
+function CodeBlock({ code, lang }: { code: string; lang?: string }) {
   const [copied, setCopied] = useState(false);
+  const html = useMemo(() => highlightToHtml(code, lang), [code, lang]);
 
   const copy = () => {
-    void navigator.clipboard.writeText(textOf(children).trimEnd()).then(() => {
+    void navigator.clipboard.writeText(code.trimEnd()).then(() => {
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1600);
     });
@@ -38,8 +40,11 @@ function CodeBlock({ children }: { children: ReactNode }) {
 
   return (
     <div className="group relative">
-      <pre className="overflow-x-auto rounded-[var(--radius-md)] border border-line bg-[var(--bg-deep)] p-4">
-        {children}
+      <pre className="prism-code overflow-x-auto rounded-[var(--radius-md)] border border-line bg-[var(--code-bg)] p-4 font-mono text-[0.8125rem] leading-relaxed">
+        <code
+          className={`language-${resolveLang(lang)}`}
+          dangerouslySetInnerHTML={{ __html: html }}
+        />
       </pre>
       {/* На телефоне (нет наведения) кнопка видна всегда; на десктопе — по ховеру. */}
       <button
@@ -165,7 +170,7 @@ export default function Markdown({ children }: { children: string }) {
             if (lang.includes("language-flow")) return <FlowDiagram source={raw} />;
             if (lang.includes("language-anatomy")) return <CodeAnatomy source={raw} />;
             if (lang.includes("language-reveal")) return <Reveal source={raw} />;
-            return <CodeBlock>{children}</CodeBlock>;
+            return <CodeBlock code={raw} lang={lang} />;
           },
           table: ({ children }) => (
             <div className="overflow-x-auto rounded-[var(--radius-md)] border border-line">

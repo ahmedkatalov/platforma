@@ -455,3 +455,50 @@ html.glow-animated body::before {
   /* Код и моноширинный текст не должны быть микроскопическими. */
   pre, code, .font-mono { font-size: 0.8125rem; }
 }
+
+/* --- Подсветка кода (Prism), тема в стиле VS Code Dark+ --- */
+/* Единый «редакторный» фон и цвета для примеров кода и редактора, где пишут код.
+   Тёмный в любой теме приложения — как принято для кода. */
+:root {
+  --code-bg: #1e1e1e;      /* фон редактора, как в VS Code */
+  --code-fg: #d4d4d4;      /* обычный текст */
+  --code-line: #2b2b2b;    /* линии/границы внутри редактора */
+  --code-gutter: #858585;  /* номера строк */
+  --code-caret: #aeafad;   /* курсор */
+  --code-sel: #264f78;     /* выделение */
+}
+
+.prism-code { color: var(--code-fg); }
+.prism-code .token.comment,
+.prism-code .token.prolog,
+.prism-code .token.doctype,
+.prism-code .token.cdata { color: #6a9955; font-style: italic; }
+.prism-code .token.punctuation { color: #d4d4d4; }
+.prism-code .token.property,
+.prism-code .token.tag,
+.prism-code .token.symbol,
+.prism-code .token.deleted { color: #9cdcfe; }
+.prism-code .token.boolean,
+.prism-code .token.number,
+.prism-code .token.constant { color: #b5cea8; }
+.prism-code .token.selector,
+.prism-code .token.attr-name,
+.prism-code .token.string,
+.prism-code .token.char,
+.prism-code .token.inserted { color: #ce9178; }
+.prism-code .token.operator,
+.prism-code .token.entity,
+.prism-code .token.url { color: #d4d4d4; }
+.prism-code .token.atrule,
+.prism-code .token.attr-value,
+.prism-code .token.keyword { color: #569cd6; }
+.prism-code .token.function,
+.prism-code .token.class-name { color: #dcdcaa; }
+.prism-code .token.builtin { color: #4ec9b0; }
+.prism-code .token.regex,
+.prism-code .token.important,
+.prism-code .token.variable { color: #9cdcfe; }
+.prism-code .token.namespace { color: #4ec9b0; }
+.prism-code .token.important,
+.prism-code .token.bold { font-weight: 700; }
+.prism-code .token.italic { font-style: italic; }

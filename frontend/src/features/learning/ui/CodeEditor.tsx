@@ -1,7 +1,10 @@
-import { useLayoutEffect, useRef, type KeyboardEvent } from "react";
+import { useMemo, type KeyboardEvent } from "react";
 
-// Лёгкий редактор кода: номера строк, Tab-отступы и автоотступ новой строки.
-// Намеренно без Monaco — он тянет мегабайты и внешние воркеры.
+import { highlightToHtml, resolveLang } from "@/features/learning/lib/highlight";
+
+// Редактор кода с подсветкой синтаксиса (Prism) и темой в стиле VS Code Dark+.
+// Намеренно без Monaco: подсвеченный слой лежит ПОД прозрачным textarea, оба
+// имеют одинаковые метрики и скроллятся вместе одним внешним контейнером.
 export default function CodeEditor({
   value,
   onChange,
@@ -15,24 +18,9 @@ export default function CodeEditor({
   minRows?: number;
   readOnly?: boolean;
 }) {
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const gutterRef = useRef<HTMLDivElement>(null);
-
   const lines = value.split("\n");
-  const rows = Math.max(minRows, lines.length + 1);
-
-  // Номера строк прокручиваются вместе с текстом.
-  useLayoutEffect(() => {
-    const textarea = textareaRef.current;
-    const gutter = gutterRef.current;
-    if (!textarea || !gutter) return;
-
-    const sync = () => {
-      gutter.scrollTop = textarea.scrollTop;
-    };
-    textarea.addEventListener("scroll", sync);
-    return () => textarea.removeEventListener("scroll", sync);
-  }, []);
+  const rows = Math.max(minRows, lines.length);
+  const html = useMemo(() => highlightToHtml(value, language), [value, language]);
 
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     const textarea = event.currentTarget;
@@ -49,7 +37,7 @@ export default function CodeEditor({
     }
 
     if (event.key === "Enter") {
-      // Сохраняем отступ текущей строки (важно для YAML).
+      // Сохраняем отступ текущей строки (важно для YAML и вложенного кода).
       const before = value.slice(0, selectionStart);
       const lineStart = before.lastIndexOf("\n") + 1;
       const indent = before.slice(lineStart).match(/^[ \t]*/)?.[0] ?? "";
@@ -66,42 +54,55 @@ export default function CodeEditor({
   };
 
   return (
-    <div className="overflow-hidden rounded-[var(--radius-md)] border border-line bg-[var(--bg-deep)]">
-      <div className="flex items-center justify-between border-b border-line px-3 py-1.5">
-        <span className="font-mono text-[11px] uppercase tracking-wide text-faint">
-          {language ?? "text"}
+    <div className="overflow-hidden rounded-[var(--radius-md)] border border-line bg-[var(--code-bg)]">
+      <div className="flex items-center justify-between border-b border-[var(--code-line)] px-3 py-1.5">
+        <span className="font-mono text-[11px] uppercase tracking-wide text-[var(--code-gutter)]">
+          {resolveLang(language)}
         </span>
-        <span className="text-[11px] text-faint">{lines.length} строк</span>
+        <span className="text-[11px] text-[var(--code-gutter)]">{lines.length} строк</span>
       </div>
 
-      <div className="flex max-h-[26rem] font-mono text-[13px] leading-6 lg:max-h-[32rem]">
-        <div
-          ref={gutterRef}
-          className="select-none overflow-hidden border-r border-line bg-surface-2 px-2 py-3 text-right text-faint"
-          aria-hidden="true"
-        >
-          {Array.from({ length: rows }, (_, i) => (
-            <div key={i}>{i + 1}</div>
-          ))}
-        </div>
+      {/* Единый скролл-контейнер: и номера, и код скроллятся вместе. */}
+      <div className="max-h-[26rem] overflow-auto font-mono text-[13px] leading-6 lg:max-h-[32rem]">
+        <div className="flex min-w-max">
+          {/* Номера строк — липкие слева, чтобы оставаться при горизонтальной прокрутке. */}
+          <div
+            className="sticky left-0 z-[1] shrink-0 select-none border-r border-[var(--code-line)] bg-[var(--code-bg)] px-2 py-3 text-right text-[var(--code-gutter)]"
+            aria-hidden="true"
+          >
+            {Array.from({ length: rows }, (_, i) => (
+              <div key={i}>{i + 1}</div>
+            ))}
+          </div>
 
-        {/* wrap="off" — код скроллится вбок, а не переносится: отступы и номера
-            строк не сбиваются (важно для YAML на узком экране). */}
-        <textarea
-          ref={textareaRef}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          onKeyDown={handleKeyDown}
-          readOnly={readOnly}
-          rows={rows}
-          wrap="off"
-          spellCheck={false}
-          autoCapitalize="off"
-          autoComplete="off"
-          autoCorrect="off"
-          className="flex-1 resize-none overflow-x-auto whitespace-pre bg-transparent px-3 py-3 leading-6 text-fg outline-none"
-          aria-label="Редактор кода"
-        />
+          {/* Подсвеченный слой и прозрачный textarea лежат в одной ячейке грида. */}
+          <div className="relative grid">
+            <pre
+              className="prism-code pointer-events-none col-start-1 row-start-1 m-0 whitespace-pre px-3 py-3"
+              aria-hidden="true"
+            >
+              <code
+                className={`language-${resolveLang(language)}`}
+                dangerouslySetInnerHTML={{ __html: html + "\n" }}
+              />
+            </pre>
+            <textarea
+              value={value}
+              onChange={(e) => onChange(e.target.value)}
+              onKeyDown={handleKeyDown}
+              readOnly={readOnly}
+              rows={rows}
+              wrap="off"
+              spellCheck={false}
+              autoCapitalize="off"
+              autoComplete="off"
+              autoCorrect="off"
+              className="col-start-1 row-start-1 w-full resize-none overflow-hidden whitespace-pre border-0 bg-transparent px-3 py-3 leading-6 outline-none"
+              style={{ color: "transparent", caretColor: "var(--code-caret)" }}
+              aria-label="Редактор кода"
+            />
+          </div>
+        </div>
       </div>
     </div>
   );
