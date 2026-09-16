@@ -1,0 +1,516 @@
+{
+  "title": "gRPC, Protocol Buffers и Buf",
+  "summary": "Типизированные межсервисные contracts, deadlines, status codes, interceptors и проверка совместимости схем.",
+  "lessons": [
+    {
+      "title": "Protobuf schema и совместимая эволюция",
+      "kind": "text",
+      "summary": "Проектируем wire contract, который переживает разные версии сервисов.",
+      "durationMin": 14,
+      "content": {
+        "body": "## Зачем это нужно backend-разработчику\n\nProtobuf schema и совместимая эволюция — часть ежедневной работы Go backend-разработчика. Важно не только знать синтаксис, но и понимать контракт, стоимость операции, поведение при ошибке и способ проверки результата.\n\n## Ментальная модель\n\nProtobuf schema и совместимая эволюция: рассматривайте тему как набор явных входов, преобразований, выходов и отказов. Владение темой означает, что вы можете предсказать поведение до запуска и объяснить компромиссы коллеге.\n\n## Основные идеи по шагам\n\n1. Каждое поле имеет стабильный numeric tag; переименование обычно совместимо, повторное использование удалённого tag — опасно.\n2. Удалённые номера/имена помечают reserved; новые поля добавляют optional по смыслу, учитывая отсутствие и zero value.\n3. enum начинается с UNSPECIFIED = 0, чтобы zero value не означал случайное бизнес-решение.\n4. Не копируйте доменную модель целиком в proto: contract содержит нужные потребителю данные и имеет собственную версию package.\n\n## Разбор на примере\n\n```proto\nsyntax = \"proto3\";\npackage orders.v1;\n\nmessage Order {\n  string id = 1;\n  OrderStatus status = 2;\n  int64 total_minor = 3;\n}\n\nenum OrderStatus {\n  ORDER_STATUS_UNSPECIFIED = 0;\n  ORDER_STATUS_PENDING = 1;\n  ORDER_STATUS_PAID = 2;\n}\n```\n\nПолные enum names уменьшают collisions, package v1 фиксирует major API generation.\n\n## Где это встречается в production\n\nВ рабочем сервисе эта тема влияет на читаемость pull request, предсказуемость API, диагностику инцидентов и стоимость дальнейших изменений. Сначала зафиксируйте контракт тестом или примером, затем реализуйте простейшее корректное решение.\n\n## Как бывает неправильно\n\n- **Механическое копирование**\n  - Как проявляется: код компилируется, но автор не может объяснить граничные случаи\n  - Что делать: измените входные данные и предскажите результат до запуска\n- **Скрытая ошибка**\n  - Как проявляется: неверное состояние обнаруживается далеко от причины\n  - Что делать: возвращайте ошибку с контекстом и проверяйте её на нужном уровне\n- **Преждевременная сложность**\n  - Как проявляется: простая задача получает лишние абстракции и зависимости\n  - Что делать: сначала используйте стандартную библиотеку и измеримые требования\n\n## Проверьте себя\n\n1. Объясните своими словами: Protobuf schema и совместимая эволюция: рассматривайте тему как набор явных входов, преобразований, выходов и отказов. Владение темой означает, что вы можете предсказать поведение до запуска и объяснить компромиссы коллеге.\n2. Как эта тема проявляется в реальном backend-сервисе?\n3. Какую ошибку из раздела выше вы сможете распознать по симптомам?\n\n## Практика после урока\n\nВоспроизведите пример, добавьте один ошибочный вход, напишите проверку результата и объясните решение вслух за две минуты.\n\n## Запомнить\n\n- Сначала понимайте контракт и ограничения, затем выбирайте инструмент.\n- Ошибка должна быть наблюдаемой: её проверяют, логируют с контекстом и возвращают на правильный уровень.\n- Любой пример из урока измените хотя бы один раз и снова проверьте результат.\n- Production-код отличается явными таймаутами, валидацией, тестами и способом безопасного завершения.",
+        "resources": [
+          {
+            "url": "https://grpc.io/docs/languages/go/quickstart/",
+            "title": "gRPC Go",
+            "note": "Официальный quickstart и toolchain для Go."
+          },
+          {
+            "url": "https://buf.build/docs/",
+            "title": "Buf",
+            "note": "Lint, breaking-change checks и генерация protobuf."
+          }
+        ]
+      }
+    },
+    {
+      "title": "Unary и streaming RPC",
+      "kind": "text",
+      "summary": "Выбираем форму вызова под поток и backpressure.",
+      "durationMin": 15,
+      "content": {
+        "body": "## Зачем это нужно backend-разработчику\n\nUnary и streaming RPC — часть ежедневной работы Go backend-разработчика. Важно не только знать синтаксис, но и понимать контракт, стоимость операции, поведение при ошибке и способ проверки результата.\n\n## Ментальная модель\n\nUnary и streaming RPC: рассматривайте тему как набор явных входов, преобразований, выходов и отказов. Владение темой означает, что вы можете предсказать поведение до запуска и объяснить компромиссы коллеге.\n\n## Основные идеи по шагам\n\n1. Unary — один request/response; server streaming — один request/stream response; client/bidi streaming требуют явной модели завершения.\n2. Generated server interface реализует transport adapter и вызывает use case; protobuf types не должны проникать в domain.\n3. Status codes: InvalidArgument, NotFound, AlreadyExists, FailedPrecondition, Unauthenticated, PermissionDenied, Unavailable и DeadlineExceeded имеют различную семантику.\n4. Большие messages и неограниченные streams опасны по памяти; задавайте max sizes, quotas и flow-control-aware обработку.\n\n## Разбор на примере\n\n```go\nfunc (s Server) GetOrder(ctx context.Context, req *ordersv1.GetOrderRequest) (*ordersv1.GetOrderResponse, error) {\n    order, err := s.service.Get(ctx, req.GetOrderId())\n    if errors.Is(err, domain.ErrNotFound) { return nil, status.Error(codes.NotFound, \"order not found\") }\n    if err != nil { return nil, status.Error(codes.Internal, \"internal error\") }\n    return mapOrder(order), nil\n}\n```\n\nTransport mapping скрывает internal cause и сохраняет code. Logging/tracing получает cause на server boundary.\n\n## Где это встречается в production\n\nВ рабочем сервисе эта тема влияет на читаемость pull request, предсказуемость API, диагностику инцидентов и стоимость дальнейших изменений. Сначала зафиксируйте контракт тестом или примером, затем реализуйте простейшее корректное решение.\n\n## Как бывает неправильно\n\n- **Механическое копирование**\n  - Как проявляется: код компилируется, но автор не может объяснить граничные случаи\n  - Что делать: измените входные данные и предскажите результат до запуска\n- **Скрытая ошибка**\n  - Как проявляется: неверное состояние обнаруживается далеко от причины\n  - Что делать: возвращайте ошибку с контекстом и проверяйте её на нужном уровне\n- **Преждевременная сложность**\n  - Как проявляется: простая задача получает лишние абстракции и зависимости\n  - Что делать: сначала используйте стандартную библиотеку и измеримые требования\n\n## Проверьте себя\n\n1. Объясните своими словами: Unary и streaming RPC: рассматривайте тему как набор явных входов, преобразований, выходов и отказов. Владение темой означает, что вы можете предсказать поведение до запуска и объяснить компромиссы коллеге.\n2. Как эта тема проявляется в реальном backend-сервисе?\n3. Какую ошибку из раздела выше вы сможете распознать по симптомам?\n\n## Практика после урока\n\nВоспроизведите пример, добавьте один ошибочный вход, напишите проверку результата и объясните решение вслух за две минуты.\n\n## Запомнить\n\n- Сначала понимайте контракт и ограничения, затем выбирайте инструмент.\n- Ошибка должна быть наблюдаемой: её проверяют, логируют с контекстом и возвращают на правильный уровень.\n- Любой пример из урока измените хотя бы один раз и снова проверьте результат.\n- Production-код отличается явными таймаутами, валидацией, тестами и способом безопасного завершения.",
+        "resources": [
+          {
+            "url": "https://grpc.io/docs/languages/go/quickstart/",
+            "title": "gRPC Go",
+            "note": "Официальный quickstart и toolchain для Go."
+          }
+        ]
+      }
+    },
+    {
+      "title": "Deadlines, retries и interceptors",
+      "kind": "text",
+      "summary": "Не создаём бесконечные RPC и retry storms.",
+      "durationMin": 16,
+      "content": {
+        "body": "## Зачем это нужно backend-разработчику\n\nDeadlines, retries и interceptors — часть ежедневной работы Go backend-разработчика. Важно не только знать синтаксис, но и понимать контракт, стоимость операции, поведение при ошибке и способ проверки результата.\n\n## Ментальная модель\n\nDeadlines, retries и interceptors: рассматривайте тему как набор явных входов, преобразований, выходов и отказов. Владение темой означает, что вы можете предсказать поведение до запуска и объяснить компромиссы коллеге.\n\n## Основные идеи по шагам\n\n1. Клиент задаёт deadline, сервер читает ctx и передаёт его в downstream; сервер не может вернуть время после истёкшего budget.\n2. Retry допустим для идемпотентных RPC и transient codes, ограничен попытками, backoff, jitter и общим deadline.\n3. Unary/stream interceptors реализуют auth, logging, metrics, tracing и recovery, но порядок и cardinality labels требуют review.\n4. Metadata переносит authentication/correlation, но не должна содержать неограниченные/секретные данные в логах.\n\n## Разбор на примере\n\n```go\nctx, cancel := context.WithTimeout(ctx, 750*time.Millisecond)\ndefer cancel()\nresp, err := client.GetOrder(ctx, &ordersv1.GetOrderRequest{OrderId: id})\n```\n\nTimeout budget охватывает connection wait, retry и server processing. Один retry не должен обнулять общий deadline.\n\n## Где это встречается в production\n\nВ рабочем сервисе эта тема влияет на читаемость pull request, предсказуемость API, диагностику инцидентов и стоимость дальнейших изменений. Сначала зафиксируйте контракт тестом или примером, затем реализуйте простейшее корректное решение.\n\n## Как бывает неправильно\n\n- **Механическое копирование**\n  - Как проявляется: код компилируется, но автор не может объяснить граничные случаи\n  - Что делать: измените входные данные и предскажите результат до запуска\n- **Скрытая ошибка**\n  - Как проявляется: неверное состояние обнаруживается далеко от причины\n  - Что делать: возвращайте ошибку с контекстом и проверяйте её на нужном уровне\n- **Преждевременная сложность**\n  - Как проявляется: простая задача получает лишние абстракции и зависимости\n  - Что делать: сначала используйте стандартную библиотеку и измеримые требования\n\n## Проверьте себя\n\n1. Объясните своими словами: Deadlines, retries и interceptors: рассматривайте тему как набор явных входов, преобразований, выходов и отказов. Владение темой означает, что вы можете предсказать поведение до запуска и объяснить компромиссы коллеге.\n2. Как эта тема проявляется в реальном backend-сервисе?\n3. Какую ошибку из раздела выше вы сможете распознать по симптомам?\n\n## Практика после урока\n\nВоспроизведите пример, добавьте один ошибочный вход, напишите проверку результата и объясните решение вслух за две минуты.\n\n## Запомнить\n\n- Сначала понимайте контракт и ограничения, затем выбирайте инструмент.\n- Ошибка должна быть наблюдаемой: её проверяют, логируют с контекстом и возвращают на правильный уровень.\n- Любой пример из урока измените хотя бы один раз и снова проверьте результат.\n- Production-код отличается явными таймаутами, валидацией, тестами и способом безопасного завершения.",
+        "resources": [
+          {
+            "url": "https://grpc.io/docs/languages/go/quickstart/",
+            "title": "gRPC Go",
+            "note": "Официальный quickstart и toolchain для Go."
+          },
+          {
+            "url": "https://pkg.go.dev/context",
+            "title": "context",
+            "note": "Отмена, deadlines и request-scoped values."
+          }
+        ]
+      }
+    },
+    {
+      "title": "Buf lint, generation и breaking checks",
+      "kind": "text",
+      "summary": "Делаем protobuf toolchain воспроизводимым в CI.",
+      "durationMin": 17,
+      "content": {
+        "body": "## Зачем это нужно backend-разработчику\n\nBuf lint, generation и breaking checks — часть ежедневной работы Go backend-разработчика. Важно не только знать синтаксис, но и понимать контракт, стоимость операции, поведение при ошибке и способ проверки результата.\n\n## Ментальная модель\n\nBuf lint, generation и breaking checks: рассматривайте тему как набор явных входов, преобразований, выходов и отказов. Владение темой означает, что вы можете предсказать поведение до запуска и объяснить компромиссы коллеге.\n\n## Основные идеи по шагам\n\n1. buf lint проверяет style и устойчивые правила schema, buf generate вызывает закреплённые plugins.\n2. buf breaking сравнивает текущую schema с main/release baseline и ловит несовместимые удаления/tag changes.\n3. Generated code создаётся детерминированно; версии protoc plugins фиксируются, generated diff проверяется CI.\n4. Schema registry/module позволяет consumers ссылаться на contract, но ownership/release policy остаются командной ответственностью.\n\n## Разбор на примере\n\n```yaml\nversion: v2\nlint:\n  use: [STANDARD]\nbreaking:\n  use: [FILE]\nmodules:\n  - path: proto\n```\n\nКонкретный config version сверяйте с установленным Buf. Главное — единые lint/breaking policies.\n\n## Где это встречается в production\n\nВ рабочем сервисе эта тема влияет на читаемость pull request, предсказуемость API, диагностику инцидентов и стоимость дальнейших изменений. Сначала зафиксируйте контракт тестом или примером, затем реализуйте простейшее корректное решение.\n\n## Как бывает неправильно\n\n- **Механическое копирование**\n  - Как проявляется: код компилируется, но автор не может объяснить граничные случаи\n  - Что делать: измените входные данные и предскажите результат до запуска\n- **Скрытая ошибка**\n  - Как проявляется: неверное состояние обнаруживается далеко от причины\n  - Что делать: возвращайте ошибку с контекстом и проверяйте её на нужном уровне\n- **Преждевременная сложность**\n  - Как проявляется: простая задача получает лишние абстракции и зависимости\n  - Что делать: сначала используйте стандартную библиотеку и измеримые требования\n\n## Проверьте себя\n\n1. Объясните своими словами: Buf lint, generation и breaking checks: рассматривайте тему как набор явных входов, преобразований, выходов и отказов. Владение темой означает, что вы можете предсказать поведение до запуска и объяснить компромиссы коллеге.\n2. Как эта тема проявляется в реальном backend-сервисе?\n3. Какую ошибку из раздела выше вы сможете распознать по симптомам?\n\n## Практика после урока\n\nВоспроизведите пример, добавьте один ошибочный вход, напишите проверку результата и объясните решение вслух за две минуты.\n\n## Запомнить\n\n- Сначала понимайте контракт и ограничения, затем выбирайте инструмент.\n- Ошибка должна быть наблюдаемой: её проверяют, логируют с контекстом и возвращают на правильный уровень.\n- Любой пример из урока измените хотя бы один раз и снова проверьте результат.\n- Production-код отличается явными таймаутами, валидацией, тестами и способом безопасного завершения.",
+        "resources": [
+          {
+            "url": "https://buf.build/docs/",
+            "title": "Buf",
+            "note": "Lint, breaking-change checks и генерация protobuf."
+          },
+          {
+            "url": "https://grpc.io/docs/languages/go/quickstart/",
+            "title": "gRPC Go",
+            "note": "Официальный quickstart и toolchain для Go."
+          }
+        ]
+      }
+    },
+    {
+      "title": "Терминал: Protobuf и gRPC workflow",
+      "kind": "terminal",
+      "summary": "Форматируем, lint, проверяем breaking changes, генерируем и тестируем.",
+      "durationMin": 16,
+      "content": {
+        "intro": "Инструменты должны иметь закреплённые версии. Команды предполагают buf.yaml и buf.gen.yaml в repository.\n\nПеред Enter назовите ожидаемый результат. После команды прочитайте вывод и код завершения; не переходите дальше, пока не понимаете, что именно подтвердили.\n\n## Разбор команд до практики\n\nНиже каждая команда разобрана до выполнения. Сначала прочитайте назначение и назовите ожидаемый результат, затем выполняйте задание в тренажёре.\n\n### 1. Отформатируйте proto.\n\n**Команда:**\n\n```bash\nbuf format -w\n```\n\n- **Инструмент:** Buf CLI.\n- **Зачем запускать:** Единый формат уменьшает шум review.\n- **Что считать подтверждением:** Единый формат уменьшает шум review.\n- **Перед запуском:** Проверьте текущий каталог и прочитайте команду слева направо: программа, подкоманда, флаги, аргументы.\n- **После запуска:** прочитайте stdout и stderr, затем проверьте код завершения командой `echo $?`, если результат неоднозначен.\n\n### 2. Запустите lint.\n\n**Команда:**\n\n```bash\nbuf lint\n```\n\n- **Инструмент:** Buf CLI.\n- **Зачем запускать:** Проверьте naming/package/style rules.\n- **Что считать подтверждением:** Проверьте naming/package/style rules.\n- **Перед запуском:** Проверьте текущий каталог и прочитайте команду слева направо: программа, подкоманда, флаги, аргументы.\n- **После запуска:** прочитайте stdout и stderr, затем проверьте код завершения командой `echo $?`, если результат неоднозначен.\n\n### 3. Проверьте breaking относительно main.\n\n**Команда:**\n\n```bash\nbuf breaking --against \".git#branch=main\"\n```\n\n- **Инструмент:** Buf CLI.\n- **Зачем запускать:** Удалённые fields/services будут обнаружены до merge.\n- **Что считать подтверждением:** Удалённые fields/services будут обнаружены до merge.\n- **Перед запуском:** Проверьте текущий каталог и прочитайте команду слева направо: программа, подкоманда, флаги, аргументы.\n- **После запуска:** прочитайте stdout и stderr, затем проверьте код завершения командой `echo $?`, если результат неоднозначен.\n\n### 4. Сгенерируйте код.\n\n**Команда:**\n\n```bash\nbuf generate\n```\n\n- **Инструмент:** Buf CLI.\n- **Зачем запускать:** Plugins из buf.gen.yaml создают Go/grpc outputs.\n- **Что считать подтверждением:** Plugins из buf.gen.yaml создают Go/grpc outputs.\n- **Перед запуском:** Проверьте текущий каталог и прочитайте команду слева направо: программа, подкоманда, флаги, аргументы.\n- **После запуска:** прочитайте stdout и stderr, затем проверьте код завершения командой `echo $?`, если результат неоднозначен.\n\n### 5. Проверьте generated diff.\n\n**Команда:**\n\n```bash\ngit diff --exit-code\n```\n\n- **Инструмент:** Git.\n- **Зачем запускать:** CI не допускает забытый generated код.\n- **Что считать подтверждением:** CI не допускает забытый generated код.\n- **Перед запуском:** Проверьте текущий каталог и прочитайте команду слева направо: программа, подкоманда, флаги, аргументы.\n- **После запуска:** прочитайте stdout и stderr, затем проверьте код завершения командой `echo $?`, если результат неоднозначен.\n\n### 6. Запустите gRPC tests.\n\n**Команда:**\n\n```bash\ngo test ./internal/grpc/... -v\n```\n\n- **Инструмент:** Go toolchain.\n- **Зачем запускать:** Проверьте status mapping и deadlines.\n- **Что считать подтверждением:** Проверьте status mapping и deadlines.\n- **Перед запуском:** Проверьте текущий каталог и прочитайте команду слева направо: программа, подкоманда, флаги, аргументы.\n- **После запуска:** прочитайте stdout и stderr, затем проверьте код завершения командой `echo $?`, если результат неоднозначен.\n\n### 7. Исследуйте сервис через grpcurl.\n\n**Команда:**\n\n```bash\ngrpcurl -plaintext localhost:9090 list\n```\n\n- **Инструмент:** grpcurl.\n- **Зачем запускать:** Reflection в локальной среде показывает services; production policy может её отключать.\n- **Что считать подтверждением:** Reflection в локальной среде показывает services; production policy может её отключать.\n- **Перед запуском:** Проверьте текущий каталог и прочитайте команду слева направо: программа, подкоманда, флаги, аргументы.\n- **После запуска:** прочитайте stdout и stderr, затем проверьте код завершения командой `echo $?`, если результат неоднозначен.",
+        "shell": "student@go-backend",
+        "tasks": [
+          {
+            "id": "t1",
+            "prompt": "Отформатируйте proto.",
+            "predict": "Что должно измениться или появиться после этой команды? Единый формат уменьшает шум review.",
+            "hint": "Нужна команда: buf format -w",
+            "hints": [
+              "Единый формат уменьшает шум review.",
+              "Соберите команду из программы, подкоманды, флагов и аргумента. Не добавляйте sudo без причины.",
+              "`buf format -w`"
+            ],
+            "expected": [
+              "buf format -w"
+            ],
+            "success": "Готово. Единый формат уменьшает шум review."
+          },
+          {
+            "id": "t2",
+            "prompt": "Запустите lint.",
+            "predict": "Что должно измениться или появиться после этой команды? Проверьте naming/package/style rules.",
+            "hint": "Нужна команда: buf lint",
+            "hints": [
+              "Проверьте naming/package/style rules.",
+              "Соберите команду из программы, подкоманды, флагов и аргумента. Не добавляйте sudo без причины.",
+              "`buf lint`"
+            ],
+            "expected": [
+              "buf lint"
+            ],
+            "success": "Готово. Проверьте naming/package/style rules."
+          },
+          {
+            "id": "t3",
+            "prompt": "Проверьте breaking относительно main.",
+            "predict": "Что должно измениться или появиться после этой команды? Удалённые fields/services будут обнаружены до merge.",
+            "hint": "Нужна команда: buf breaking --against \".git#branch=main\"",
+            "hints": [
+              "Удалённые fields/services будут обнаружены до merge.",
+              "Соберите команду из программы, подкоманды, флагов и аргумента. Не добавляйте sudo без причины.",
+              "`buf breaking --against \".git#branch=main\"`"
+            ],
+            "expected": [
+              "buf breaking --against \".git#branch=main\""
+            ],
+            "success": "Готово. Удалённые fields/services будут обнаружены до merge."
+          },
+          {
+            "id": "t4",
+            "prompt": "Сгенерируйте код.",
+            "predict": "Что должно измениться или появиться после этой команды? Plugins из buf.gen.yaml создают Go/grpc outputs.",
+            "hint": "Нужна команда: buf generate",
+            "hints": [
+              "Plugins из buf.gen.yaml создают Go/grpc outputs.",
+              "Соберите команду из программы, подкоманды, флагов и аргумента. Не добавляйте sudo без причины.",
+              "`buf generate`"
+            ],
+            "expected": [
+              "buf generate"
+            ],
+            "success": "Готово. Plugins из buf.gen.yaml создают Go/grpc outputs."
+          },
+          {
+            "id": "t5",
+            "prompt": "Проверьте generated diff.",
+            "predict": "Что должно измениться или появиться после этой команды? CI не допускает забытый generated код.",
+            "hint": "Нужна команда: git diff --exit-code",
+            "hints": [
+              "CI не допускает забытый generated код.",
+              "Соберите команду из программы, подкоманды, флагов и аргумента. Не добавляйте sudo без причины.",
+              "`git diff --exit-code`"
+            ],
+            "expected": [
+              "git diff --exit-code"
+            ],
+            "success": "Готово. CI не допускает забытый generated код."
+          },
+          {
+            "id": "t6",
+            "prompt": "Запустите gRPC tests.",
+            "predict": "Что должно измениться или появиться после этой команды? Проверьте status mapping и deadlines.",
+            "hint": "Нужна команда: go test ./internal/grpc/... -v",
+            "hints": [
+              "Проверьте status mapping и deadlines.",
+              "Соберите команду из программы, подкоманды, флагов и аргумента. Не добавляйте sudo без причины.",
+              "`go test ./internal/grpc/... -v`"
+            ],
+            "expected": [
+              "go test ./internal/grpc/... -v"
+            ],
+            "success": "Готово. Проверьте status mapping и deadlines."
+          },
+          {
+            "id": "t7",
+            "prompt": "Исследуйте сервис через grpcurl.",
+            "predict": "Что должно измениться или появиться после этой команды? Reflection в локальной среде показывает services; production policy может её отключать.",
+            "hint": "Нужна команда: grpcurl -plaintext localhost:9090 list",
+            "hints": [
+              "Reflection в локальной среде показывает services; production policy может её отключать.",
+              "Соберите команду из программы, подкоманды, флагов и аргумента. Не добавляйте sudo без причины.",
+              "`grpcurl -plaintext localhost:9090 list`"
+            ],
+            "expected": [
+              "grpcurl -plaintext localhost:9090 list"
+            ],
+            "success": "Готово. Reflection в локальной среде показывает services; production policy может её отключать."
+          }
+        ],
+        "challenge": "Удалите proto field, запустите breaking check, затем верните его как reserved. Добавьте новое compatible поле и подтвердите generation/tests.",
+        "debug": "Читайте stderr полностью и проверяйте код завершения. Если результат неожиданен, сузьте проблему одной командой и повторите её с минимальным вводом.\n\nТипичная ошибка: форматировать generated Go вместо source proto. Всегда начните с `pwd`, `ls -la` и чтения полного сообщения об ошибке.",
+        "resources": [
+          {
+            "url": "https://buf.build/docs/",
+            "title": "Buf",
+            "note": "Lint, breaking-change checks и генерация protobuf."
+          },
+          {
+            "url": "https://grpc.io/docs/languages/go/quickstart/",
+            "title": "gRPC Go",
+            "note": "Официальный quickstart и toolchain для Go."
+          }
+        ]
+      }
+    },
+    {
+      "title": "Protobuf OrdersService",
+      "kind": "code",
+      "summary": "Создайте эволюционируемый typed contract.",
+      "durationMin": 22,
+      "content": {
+        "task": "Опишите package orders.v1: Order, GetOrderRequest/Response, ListOrdersRequest с page_size/page_token, ListOrdersResponse с next_page_token, service GetOrder/ListOrders. Enum status начинается UNSPECIFIED=0.\n\n## Порядок работы\n\n1. Прочитайте контракт и назовите вход, выход и возможные ошибки.\n2. Допишите минимальный рабочий вариант.\n3. Проверьте обычный, граничный и ошибочный сценарии.\n4. Измените одно требование и адаптируйте код без копирования готового решения.\n5. Сравните с эталоном только после собственной попытки.\n\n## Обязательная проверка\n\nЗапустите форматирование и подходящие тесты. Для Go: `go fmt ./...`, `go vet ./...` и `go test ./...`. Ошибку не скрывайте пустым обработчиком.",
+        "starter": "syntax = \"proto3\";\npackage orders.v1;\n\n// TODO",
+        "solution": "syntax = \"proto3\";\npackage orders.v1;\n\noption go_package = \"example.com/project/gen/orders/v1;ordersv1\";\n\nenum OrderStatus {\n  ORDER_STATUS_UNSPECIFIED = 0;\n  ORDER_STATUS_PENDING = 1;\n  ORDER_STATUS_PAID = 2;\n}\nmessage Order { string id = 1; OrderStatus status = 2; int64 total_minor = 3; }\nmessage GetOrderRequest { string order_id = 1; }\nmessage GetOrderResponse { Order order = 1; }\nmessage ListOrdersRequest { int32 page_size = 1; string page_token = 2; }\nmessage ListOrdersResponse { repeated Order orders = 1; string next_page_token = 2; }\nservice OrdersService {\n  rpc GetOrder(GetOrderRequest) returns (GetOrderResponse);\n  rpc ListOrders(ListOrdersRequest) returns (ListOrdersResponse);\n}",
+        "checks": [
+          {
+            "type": "contains",
+            "value": "syntax = \"proto3\"",
+            "message": "Проверка 1: в решении должна быть реализована конструкция `syntax = \"proto3\"`."
+          },
+          {
+            "type": "contains",
+            "value": "package orders.v1",
+            "message": "Проверка 2: в решении должна быть реализована конструкция `package orders.v1`."
+          },
+          {
+            "type": "contains",
+            "value": "go_package",
+            "message": "Проверка 3: в решении должна быть реализована конструкция `go_package`."
+          },
+          {
+            "type": "contains",
+            "value": "ORDER_STATUS_UNSPECIFIED = 0",
+            "message": "Проверка 4: в решении должна быть реализована конструкция `ORDER_STATUS_UNSPECIFIED = 0`."
+          },
+          {
+            "type": "contains",
+            "value": "page_token",
+            "message": "Проверка 5: в решении должна быть реализована конструкция `page_token`."
+          },
+          {
+            "type": "contains",
+            "value": "next_page_token",
+            "message": "Проверка 6: в решении должна быть реализована конструкция `next_page_token`."
+          },
+          {
+            "type": "contains",
+            "value": "service OrdersService",
+            "message": "Проверка 7: в решении должна быть реализована конструкция `service OrdersService`."
+          },
+          {
+            "type": "contains",
+            "value": "rpc GetOrder",
+            "message": "Проверка 8: в решении должна быть реализована конструкция `rpc GetOrder`."
+          },
+          {
+            "type": "contains",
+            "value": "rpc ListOrders",
+            "message": "Проверка 9: в решении должна быть реализована конструкция `rpc ListOrders`."
+          }
+        ],
+        "hint": "Сначала package/go_package и messages, затем service; не переиспользуйте tag numbers.\n\n## Шпаргалка по синтаксису\n\n- `message` описывает данные, `service` и `rpc` — удалённый контракт.\n- Номера полей являются частью wire-формата: не переиспользуйте удалённый номер, помечайте его `reserved`.\n- Нулевое значение enum оставляйте как `*_UNSPECIFIED = 0`.\n- После изменения выполните форматирование, lint, breaking-change check и генерацию кода.\n\n## Что проверяет автопроверка\n\n1. Проверка 1: в решении должна быть реализована конструкция `syntax = \"proto3\"`.\n2. Проверка 2: в решении должна быть реализована конструкция `package orders.v1`.\n3. Проверка 3: в решении должна быть реализована конструкция `go_package`.\n4. Проверка 4: в решении должна быть реализована конструкция `ORDER_STATUS_UNSPECIFIED = 0`.\n5. Проверка 5: в решении должна быть реализована конструкция `page_token`.\n6. Проверка 6: в решении должна быть реализована конструкция `next_page_token`.\n7. Проверка 7: в решении должна быть реализована конструкция `service OrdersService`.\n8. Проверка 8: в решении должна быть реализована конструкция `rpc GetOrder`.\n9. Проверка 9: в решении должна быть реализована конструкция `rpc ListOrders`.\n\nАвтопроверка подтверждает обязательные конструкции, но не заменяет компиляцию, тесты, статический анализ и проверку поведения на границах.",
+        "language": "proto",
+        "resources": [
+          {
+            "url": "https://buf.build/docs/",
+            "title": "Buf",
+            "note": "Lint, breaking-change checks и генерация protobuf."
+          },
+          {
+            "url": "https://grpc.io/docs/languages/go/quickstart/",
+            "title": "gRPC Go",
+            "note": "Официальный quickstart и toolchain для Go."
+          }
+        ]
+      }
+    },
+    {
+      "title": "Mapping domain errors в gRPC status",
+      "kind": "code",
+      "summary": "Сохраните стабильные codes и безопасные messages.",
+      "durationMin": 22,
+      "content": {
+        "task": "Реализуйте MapError(error) error: nil→nil, ErrInvalid→InvalidArgument, ErrNotFound→NotFound, ErrConflict→AlreadyExists, context deadline/cancel соответствующие codes, остальное Internal. Используйте errors.Is.\n\n## Порядок работы\n\n1. Прочитайте контракт и назовите вход, выход и возможные ошибки.\n2. Допишите минимальный рабочий вариант.\n3. Проверьте обычный, граничный и ошибочный сценарии.\n4. Измените одно требование и адаптируйте код без копирования готового решения.\n5. Сравните с эталоном только после собственной попытки.\n\n## Обязательная проверка\n\nЗапустите форматирование и подходящие тесты. Для Go: `go fmt ./...`, `go vet ./...` и `go test ./...`. Ошибку не скрывайте пустым обработчиком.",
+        "starter": "package transport\n\nfunc MapError(err error) error {\n    // TODO\n    return err\n}",
+        "solution": "package transport\n\nimport (\n    \"context\"\n    \"errors\"\n    \"google.golang.org/grpc/codes\"\n    \"google.golang.org/grpc/status\"\n)\n\nfunc MapError(err error) error {\n    if err == nil { return nil }\n    switch {\n    case errors.Is(err, ErrInvalid): return status.Error(codes.InvalidArgument, \"invalid request\")\n    case errors.Is(err, ErrNotFound): return status.Error(codes.NotFound, \"not found\")\n    case errors.Is(err, ErrConflict): return status.Error(codes.AlreadyExists, \"already exists\")\n    case errors.Is(err, context.DeadlineExceeded): return status.Error(codes.DeadlineExceeded, \"deadline exceeded\")\n    case errors.Is(err, context.Canceled): return status.Error(codes.Canceled, \"canceled\")\n    default: return status.Error(codes.Internal, \"internal error\")\n    }\n}",
+        "checks": [
+          {
+            "type": "contains",
+            "value": "err == nil",
+            "message": "Проверка 1: в решении должна быть реализована конструкция `err == nil`."
+          },
+          {
+            "type": "contains",
+            "value": "errors.Is",
+            "message": "Проверка 2: в решении должна быть реализована конструкция `errors.Is`."
+          },
+          {
+            "type": "contains",
+            "value": "codes.InvalidArgument",
+            "message": "Проверка 3: в решении должна быть реализована конструкция `codes.InvalidArgument`."
+          },
+          {
+            "type": "contains",
+            "value": "codes.NotFound",
+            "message": "Проверка 4: в решении должна быть реализована конструкция `codes.NotFound`."
+          },
+          {
+            "type": "contains",
+            "value": "codes.AlreadyExists",
+            "message": "Проверка 5: в решении должна быть реализована конструкция `codes.AlreadyExists`."
+          },
+          {
+            "type": "contains",
+            "value": "codes.DeadlineExceeded",
+            "message": "Проверка 6: в решении должна быть реализована конструкция `codes.DeadlineExceeded`."
+          },
+          {
+            "type": "contains",
+            "value": "codes.Canceled",
+            "message": "Проверка 7: в решении должна быть реализована конструкция `codes.Canceled`."
+          },
+          {
+            "type": "contains",
+            "value": "codes.Internal",
+            "message": "Проверка 8: в решении должна быть реализована конструкция `codes.Internal`."
+          }
+        ],
+        "hint": "Ordering идёт от специальных domain/context causes к безопасному default Internal.\n\n## Шпаргалка по синтаксису\n\n- Файл начинается с `package`; зависимости подключаются через `import`.\n- `func name(arg Type) (Result, error)` задаёт типизированный контракт функции.\n- `:=` объявляет локальную переменную внутри функции; `=` присваивает уже объявленной.\n- Ошибку проверяют явно: `if err != nil`; контекст добавляют через `fmt.Errorf(\"operation: %w\", err)`, а цепочку проверяют `errors.Is/As`.\n- `context.Context` передают первым аргументом по цепочке вызовов и не сохраняют в глобальном состоянии.\n- После изменения выполните `gofmt`, `go vet ./...` и `go test ./...`; для конкурентного кода добавьте `go test -race ./...`.\n\n## Что проверяет автопроверка\n\n1. Проверка 1: в решении должна быть реализована конструкция `err == nil`.\n2. Проверка 2: в решении должна быть реализована конструкция `errors.Is`.\n3. Проверка 3: в решении должна быть реализована конструкция `codes.InvalidArgument`.\n4. Проверка 4: в решении должна быть реализована конструкция `codes.NotFound`.\n5. Проверка 5: в решении должна быть реализована конструкция `codes.AlreadyExists`.\n6. Проверка 6: в решении должна быть реализована конструкция `codes.DeadlineExceeded`.\n7. Проверка 7: в решении должна быть реализована конструкция `codes.Canceled`.\n8. Проверка 8: в решении должна быть реализована конструкция `codes.Internal`.\n\nАвтопроверка подтверждает обязательные конструкции, но не заменяет компиляцию, тесты, статический анализ и проверку поведения на границах.",
+        "language": "go",
+        "resources": [
+          {
+            "url": "https://grpc.io/docs/languages/go/quickstart/",
+            "title": "gRPC Go",
+            "note": "Официальный quickstart и toolchain для Go."
+          },
+          {
+            "url": "https://pkg.go.dev/context",
+            "title": "context",
+            "note": "Отмена, deadlines и request-scoped values."
+          }
+        ]
+      }
+    },
+    {
+      "title": "Квиз модуля: gRPC, Protocol Buffers и Buf",
+      "kind": "quiz",
+      "summary": "Проверка ключевых решений и ошибок по модулю «gRPC, Protocol Buffers и Buf».",
+      "durationMin": 10,
+      "content": {
+        "intro": "Ответьте без запуска кода. Цель — проверить причинно-следственные связи. После ошибки вернитесь к уроку и воспроизведите пример своими руками. Положение правильного варианта меняется; ориентируйтесь на смысл, а не на букву ответа.",
+        "passScore": 70,
+        "questions": [
+          {
+            "id": "q1",
+            "text": "Можно ли повторно использовать tag удалённого protobuf-поля?",
+            "options": [
+              {
+                "id": "a",
+                "text": "Нет, его следует reserved, иначе старые данные могут интерпретироваться неверно",
+                "correct": true
+              },
+              {
+                "id": "b",
+                "text": "Да, всегда безопасно",
+                "correct": false
+              },
+              {
+                "id": "c",
+                "text": "Tag используется только в комментарии",
+                "correct": false
+              }
+            ],
+            "explanation": "Wire format идентифицирует поле номером."
+          },
+          {
+            "id": "q2",
+            "text": "Какой gRPC code использовать при отсутствии ресурса?",
+            "options": [
+              {
+                "id": "a",
+                "text": "codes.OK с полем error",
+                "correct": false
+              },
+              {
+                "id": "b",
+                "text": "codes.NotFound",
+                "correct": true
+              },
+              {
+                "id": "c",
+                "text": "codes.Unknown всегда",
+                "correct": false
+              }
+            ],
+            "explanation": "Stable status code нужен клиентской логике."
+          },
+          {
+            "id": "q3",
+            "text": "Где ограничивать общий budget нескольких gRPC retries?",
+            "options": [
+              {
+                "id": "a",
+                "text": "Нигде",
+                "correct": false
+              },
+              {
+                "id": "b",
+                "text": "Отдельным бесконечным context на попытку",
+                "correct": false
+              },
+              {
+                "id": "c",
+                "text": "Одним родительским context deadline плюс лимитами retry policy",
+                "correct": true
+              }
+            ],
+            "explanation": "Иначе retries умножают latency и load."
+          },
+          {
+            "id": "q4",
+            "text": "Что ловит buf breaking?",
+            "options": [
+              {
+                "id": "a",
+                "text": "Несовместимые изменения protobuf schema относительно baseline",
+                "correct": true
+              },
+              {
+                "id": "b",
+                "text": "Медленные SQL-запросы",
+                "correct": false
+              },
+              {
+                "id": "c",
+                "text": "Data race в Go",
+                "correct": false
+              }
+            ],
+            "explanation": "Wire compatibility проверяется отдельно от компиляции сервера."
+          },
+          {
+            "id": "q5",
+            "text": "Что должно быть enum value 0 в protobuf?",
+            "options": [
+              {
+                "id": "a",
+                "text": "Первое бизнес-состояние без оговорок",
+                "correct": false
+              },
+              {
+                "id": "b",
+                "text": "Явное UNSPECIFIED/UNKNOWN значение",
+                "correct": true
+              },
+              {
+                "id": "c",
+                "text": "Удалённое поле",
+                "correct": false
+              }
+            ],
+            "explanation": "Zero value должен выражать отсутствие выбора."
+          },
+          {
+            "id": "q6",
+            "text": "Заменяет ли generated gRPC code business validation?",
+            "options": [
+              {
+                "id": "a",
+                "text": "Да, полностью",
+                "correct": false
+              },
+              {
+                "id": "b",
+                "text": "gRPC не поддерживает validation",
+                "correct": false
+              },
+              {
+                "id": "c",
+                "text": "Нет; generated код обеспечивает wire types, а rules остаются в use case/domain",
+                "correct": true
+              }
+            ],
+            "explanation": "Transport schema и domain invariants различаются."
+          }
+        ],
+        "resources": [
+          {
+            "url": "https://grpc.io/docs/languages/go/quickstart/",
+            "title": "gRPC Go",
+            "note": "Официальный quickstart и toolchain для Go."
+          },
+          {
+            "url": "https://buf.build/docs/",
+            "title": "Buf",
+            "note": "Lint, breaking-change checks и генерация protobuf."
+          },
+          {
+            "url": "https://pkg.go.dev/context",
+            "title": "context",
+            "note": "Отмена, deadlines и request-scoped values."
+          }
+        ]
+      }
+    }
+  ]
+}

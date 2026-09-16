@@ -1,0 +1,511 @@
+{
+  "title": "Kubernetes и production deployment",
+  "summary": "Workloads, Services, Config/Secrets, probes, resources, autoscaling, disruption budgets, security и zero-downtime rollout.",
+  "lessons": [
+    {
+      "title": "Pod, Deployment, Service и configuration",
+      "kind": "text",
+      "summary": "Понимаем reconciliation вместо ручного управления containers.",
+      "durationMin": 14,
+      "content": {
+        "body": "## Зачем это нужно backend-разработчику\n\nPod, Deployment, Service и configuration — часть ежедневной работы Go backend-разработчика. Важно не только знать синтаксис, но и понимать контракт, стоимость операции, поведение при ошибке и способ проверки результата.\n\n## Ментальная модель\n\nPod, Deployment, Service и configuration: рассматривайте тему как набор явных входов, преобразований, выходов и отказов. Владение темой означает, что вы можете предсказать поведение до запуска и объяснить компромиссы коллеге.\n\n## Основные идеи по шагам\n\n1. Pod — минимальная scheduling unit и эфемерен; Deployment управляет ReplicaSet, rollout и desired replica count.\n2. Service даёт стабильный virtual address и выбирает ready Pods по labels; Ingress/Gateway принимает внешний HTTP traffic.\n3. ConfigMap содержит несекретную config, Secret — чувствительные bytes, но требует encryption/access policy и внешнего manager для зрелой системы.\n4. Приложение должно быть stateless между replicas; local filesystem/cache исчезает при reschedule.\n\n## Разбор на примере\n\n```yaml\napiVersion: apps/v1\nkind: Deployment\nmetadata: { name: orders-api }\nspec:\n  replicas: 3\n  selector: { matchLabels: { app: orders-api } }\n  template:\n    metadata: { labels: { app: orders-api } }\n    spec:\n      containers:\n        - name: api\n          image: registry.example/orders@sha256:<digest>\n```\n\nSelector должен неизменно совпадать с Pod labels. Image digest исключает неоднозначность tag.\n\n## Где это встречается в production\n\nВ рабочем сервисе эта тема влияет на читаемость pull request, предсказуемость API, диагностику инцидентов и стоимость дальнейших изменений. Сначала зафиксируйте контракт тестом или примером, затем реализуйте простейшее корректное решение.\n\n## Как бывает неправильно\n\n- **Механическое копирование**\n  - Как проявляется: код компилируется, но автор не может объяснить граничные случаи\n  - Что делать: измените входные данные и предскажите результат до запуска\n- **Скрытая ошибка**\n  - Как проявляется: неверное состояние обнаруживается далеко от причины\n  - Что делать: возвращайте ошибку с контекстом и проверяйте её на нужном уровне\n- **Преждевременная сложность**\n  - Как проявляется: простая задача получает лишние абстракции и зависимости\n  - Что делать: сначала используйте стандартную библиотеку и измеримые требования\n\n## Проверьте себя\n\n1. Объясните своими словами: Pod, Deployment, Service и configuration: рассматривайте тему как набор явных входов, преобразований, выходов и отказов. Владение темой означает, что вы можете предсказать поведение до запуска и объяснить компромиссы коллеге.\n2. Как эта тема проявляется в реальном backend-сервисе?\n3. Какую ошибку из раздела выше вы сможете распознать по симптомам?\n\n## Практика после урока\n\nВоспроизведите пример, добавьте один ошибочный вход, напишите проверку результата и объясните решение вслух за две минуты.\n\n## Запомнить\n\n- Сначала понимайте контракт и ограничения, затем выбирайте инструмент.\n- Ошибка должна быть наблюдаемой: её проверяют, логируют с контекстом и возвращают на правильный уровень.\n- Любой пример из урока измените хотя бы один раз и снова проверьте результат.\n- Production-код отличается явными таймаутами, валидацией, тестами и способом безопасного завершения.",
+        "resources": [
+          {
+            "url": "https://kubernetes.io/docs/concepts/",
+            "title": "Kubernetes Concepts",
+            "note": "Workloads, Services, Config, probes, resources и security."
+          }
+        ]
+      }
+    },
+    {
+      "title": "Startup, readiness, liveness и shutdown",
+      "kind": "text",
+      "summary": "Согласуем Kubernetes lifecycle с graceful Go server.",
+      "durationMin": 15,
+      "content": {
+        "body": "## Зачем это нужно backend-разработчику\n\nStartup, readiness, liveness и shutdown — часть ежедневной работы Go backend-разработчика. Важно не только знать синтаксис, но и понимать контракт, стоимость операции, поведение при ошибке и способ проверки результата.\n\n## Ментальная модель\n\nStartup, readiness, liveness и shutdown: рассматривайте тему как набор явных входов, преобразований, выходов и отказов. Владение темой означает, что вы можете предсказать поведение до запуска и объяснить компромиссы коллеге.\n\n## Основные идеи по шагам\n\n1. startupProbe защищает медленный старт от преждевременной liveness; после успеха liveness проверяет жив ли процесс.\n2. readiness исключает Pod из Service endpoints при startup, overload/drain или критичной dependency failure.\n3. При termination kubelet запускает preStop, отправляет SIGTERM и ждёт terminationGracePeriodSeconds; приложение снимает readiness и делает Shutdown.\n4. Probe timeout/period/failureThreshold согласуются с latency и не вызывают self-inflicted overload.\n\n## Разбор на примере\n\n```yaml\nstartupProbe:\n  httpGet: { path: /healthz, port: http }\n  periodSeconds: 2\n  failureThreshold: 30\nreadinessProbe:\n  httpGet: { path: /readyz, port: http }\nlivenessProbe:\n  httpGet: { path: /healthz, port: http }\n```\n\nLiveness process-local, readiness dependency-aware и быстрая. Endpoint не требует authentication, но доступ ограничивает network policy.\n\n## Где это встречается в production\n\nВ рабочем сервисе эта тема влияет на читаемость pull request, предсказуемость API, диагностику инцидентов и стоимость дальнейших изменений. Сначала зафиксируйте контракт тестом или примером, затем реализуйте простейшее корректное решение.\n\n## Как бывает неправильно\n\n- **Механическое копирование**\n  - Как проявляется: код компилируется, но автор не может объяснить граничные случаи\n  - Что делать: измените входные данные и предскажите результат до запуска\n- **Скрытая ошибка**\n  - Как проявляется: неверное состояние обнаруживается далеко от причины\n  - Что делать: возвращайте ошибку с контекстом и проверяйте её на нужном уровне\n- **Преждевременная сложность**\n  - Как проявляется: простая задача получает лишние абстракции и зависимости\n  - Что делать: сначала используйте стандартную библиотеку и измеримые требования\n\n## Проверьте себя\n\n1. Объясните своими словами: Startup, readiness, liveness и shutdown: рассматривайте тему как набор явных входов, преобразований, выходов и отказов. Владение темой означает, что вы можете предсказать поведение до запуска и объяснить компромиссы коллеге.\n2. Как эта тема проявляется в реальном backend-сервисе?\n3. Какую ошибку из раздела выше вы сможете распознать по симптомам?\n\n## Практика после урока\n\nВоспроизведите пример, добавьте один ошибочный вход, напишите проверку результата и объясните решение вслух за две минуты.\n\n## Запомнить\n\n- Сначала понимайте контракт и ограничения, затем выбирайте инструмент.\n- Ошибка должна быть наблюдаемой: её проверяют, логируют с контекстом и возвращают на правильный уровень.\n- Любой пример из урока измените хотя бы один раз и снова проверьте результат.\n- Production-код отличается явными таймаутами, валидацией, тестами и способом безопасного завершения.",
+        "resources": [
+          {
+            "url": "https://kubernetes.io/docs/concepts/",
+            "title": "Kubernetes Concepts",
+            "note": "Workloads, Services, Config, probes, resources и security."
+          },
+          {
+            "url": "https://pkg.go.dev/net/http",
+            "title": "net/http",
+            "note": "HTTP-клиент, сервер, handlers и transport стандартной библиотеки."
+          }
+        ]
+      }
+    },
+    {
+      "title": "Requests, limits, HPA и PDB",
+      "kind": "text",
+      "summary": "Даём scheduler честную модель и избегаем CPU throttling/OOM surprises.",
+      "durationMin": 16,
+      "content": {
+        "body": "## Зачем это нужно backend-разработчику\n\nRequests, limits, HPA и PDB — часть ежедневной работы Go backend-разработчика. Важно не только знать синтаксис, но и понимать контракт, стоимость операции, поведение при ошибке и способ проверки результата.\n\n## Ментальная модель\n\nRequests, limits, HPA и PDB: рассматривайте тему как набор явных входов, преобразований, выходов и отказов. Владение темой означает, что вы можете предсказать поведение до запуска и объяснить компромиссы коллеге.\n\n## Основные идеи по шагам\n\n1. CPU/memory requests влияют на scheduling и HPA utilization; limits ограничивают, memory limit может привести к OOMKill, CPU limit — throttling.\n2. Значения берут из profiling/load tests и наблюдаемости, а не копируют между сервисами.\n3. HPA scaling lag требует headroom; метрика должна коррелировать с load и не создавать нестабильный feedback loop.\n4. PodDisruptionBudget ограничивает добровольные disruptions, topology spread/anti-affinity размещают replicas по failure domains.\n\n## Разбор на примере\n\n```yaml\nresources:\n  requests: { cpu: 200m, memory: 128Mi }\n  limits: { memory: 256Mi }\n---\napiVersion: policy/v1\nkind: PodDisruptionBudget\nspec:\n  minAvailable: 2\n```\n\nCPU limit намеренно может отсутствовать по принятой cluster policy; решение документируется и измеряется.\n\n## Где это встречается в production\n\nВ рабочем сервисе эта тема влияет на читаемость pull request, предсказуемость API, диагностику инцидентов и стоимость дальнейших изменений. Сначала зафиксируйте контракт тестом или примером, затем реализуйте простейшее корректное решение.\n\n## Как бывает неправильно\n\n- **Механическое копирование**\n  - Как проявляется: код компилируется, но автор не может объяснить граничные случаи\n  - Что делать: измените входные данные и предскажите результат до запуска\n- **Скрытая ошибка**\n  - Как проявляется: неверное состояние обнаруживается далеко от причины\n  - Что делать: возвращайте ошибку с контекстом и проверяйте её на нужном уровне\n- **Преждевременная сложность**\n  - Как проявляется: простая задача получает лишние абстракции и зависимости\n  - Что делать: сначала используйте стандартную библиотеку и измеримые требования\n\n## Проверьте себя\n\n1. Объясните своими словами: Requests, limits, HPA и PDB: рассматривайте тему как набор явных входов, преобразований, выходов и отказов. Владение темой означает, что вы можете предсказать поведение до запуска и объяснить компромиссы коллеге.\n2. Как эта тема проявляется в реальном backend-сервисе?\n3. Какую ошибку из раздела выше вы сможете распознать по симптомам?\n\n## Практика после урока\n\nВоспроизведите пример, добавьте один ошибочный вход, напишите проверку результата и объясните решение вслух за две минуты.\n\n## Запомнить\n\n- Сначала понимайте контракт и ограничения, затем выбирайте инструмент.\n- Ошибка должна быть наблюдаемой: её проверяют, логируют с контекстом и возвращают на правильный уровень.\n- Любой пример из урока измените хотя бы один раз и снова проверьте результат.\n- Production-код отличается явными таймаутами, валидацией, тестами и способом безопасного завершения.",
+        "resources": [
+          {
+            "url": "https://kubernetes.io/docs/concepts/",
+            "title": "Kubernetes Concepts",
+            "note": "Workloads, Services, Config, probes, resources и security."
+          },
+          {
+            "url": "https://prometheus.io/docs/guides/go-application/",
+            "title": "Prometheus Go application",
+            "note": "Инструментирование Go-приложения метриками."
+          }
+        ]
+      }
+    },
+    {
+      "title": "SecurityContext, rollout и migrations",
+      "kind": "text",
+      "summary": "Поставляем least-privilege workload и сохраняем совместимость версий.",
+      "durationMin": 17,
+      "content": {
+        "body": "## Зачем это нужно backend-разработчику\n\nSecurityContext, rollout и migrations — часть ежедневной работы Go backend-разработчика. Важно не только знать синтаксис, но и понимать контракт, стоимость операции, поведение при ошибке и способ проверки результата.\n\n## Ментальная модель\n\nSecurityContext, rollout и migrations: рассматривайте тему как набор явных входов, преобразований, выходов и отказов. Владение темой означает, что вы можете предсказать поведение до запуска и объяснить компромиссы коллеге.\n\n## Основные идеи по шагам\n\n1. runAsNonRoot, readOnlyRootFilesystem, allowPrivilegeEscalation:false, drop ALL capabilities и seccomp RuntimeDefault — разумная база.\n2. ServiceAccount не получает лишние RBAC права; automount token отключают, если workload не вызывает Kubernetes API.\n3. RollingUpdate maxUnavailable/maxSurge и readiness управляют сменой replicas; canary/blue-green нужны более рискованным changes.\n4. Миграции schema запускаются отдельным контролируемым Job/step до совместимого app rollout; не каждая replica одновременно.\n\n## Разбор на примере\n\n```yaml\nsecurityContext:\n  runAsNonRoot: true\n  allowPrivilegeEscalation: false\n  readOnlyRootFilesystem: true\n  capabilities:\n    drop: [\"ALL\"]\n  seccompProfile:\n    type: RuntimeDefault\n```\n\nContainer image и Pod security дополняют друг друга. Writable /tmp при необходимости монтируется emptyDir.\n\n## Где это встречается в production\n\nВ рабочем сервисе эта тема влияет на читаемость pull request, предсказуемость API, диагностику инцидентов и стоимость дальнейших изменений. Сначала зафиксируйте контракт тестом или примером, затем реализуйте простейшее корректное решение.\n\n## Как бывает неправильно\n\n- **Механическое копирование**\n  - Как проявляется: код компилируется, но автор не может объяснить граничные случаи\n  - Что делать: измените входные данные и предскажите результат до запуска\n- **Скрытая ошибка**\n  - Как проявляется: неверное состояние обнаруживается далеко от причины\n  - Что делать: возвращайте ошибку с контекстом и проверяйте её на нужном уровне\n- **Преждевременная сложность**\n  - Как проявляется: простая задача получает лишние абстракции и зависимости\n  - Что делать: сначала используйте стандартную библиотеку и измеримые требования\n\n## Проверьте себя\n\n1. Объясните своими словами: SecurityContext, rollout и migrations: рассматривайте тему как набор явных входов, преобразований, выходов и отказов. Владение темой означает, что вы можете предсказать поведение до запуска и объяснить компромиссы коллеге.\n2. Как эта тема проявляется в реальном backend-сервисе?\n3. Какую ошибку из раздела выше вы сможете распознать по симптомам?\n\n## Практика после урока\n\nВоспроизведите пример, добавьте один ошибочный вход, напишите проверку результата и объясните решение вслух за две минуты.\n\n## Запомнить\n\n- Сначала понимайте контракт и ограничения, затем выбирайте инструмент.\n- Ошибка должна быть наблюдаемой: её проверяют, логируют с контекстом и возвращают на правильный уровень.\n- Любой пример из урока измените хотя бы один раз и снова проверьте результат.\n- Production-код отличается явными таймаутами, валидацией, тестами и способом безопасного завершения.",
+        "resources": [
+          {
+            "url": "https://kubernetes.io/docs/concepts/",
+            "title": "Kubernetes Concepts",
+            "note": "Workloads, Services, Config, probes, resources и security."
+          },
+          {
+            "url": "https://github.com/pressly/goose",
+            "title": "goose v3",
+            "note": "Версионирование и применение миграций БД."
+          }
+        ]
+      }
+    },
+    {
+      "title": "Терминал: безопасная диагностика rollout",
+      "kind": "terminal",
+      "summary": "Читаем desired/actual state, events, logs и endpoints до изменения ресурсов.",
+      "durationMin": 16,
+      "content": {
+        "intro": "Команды по умолчанию read-only, кроме apply/rollout undo. Всегда задавайте namespace/context и проверяйте diff перед записью.\n\nПеред Enter назовите ожидаемый результат. После команды прочитайте вывод и код завершения; не переходите дальше, пока не понимаете, что именно подтвердили.\n\n## Разбор команд до практики\n\nНиже каждая команда разобрана до выполнения. Сначала прочитайте назначение и назовите ожидаемый результат, затем выполняйте задание в тренажёре.\n\n### 1. Проверьте текущий context.\n\n**Команда:**\n\n```bash\nkubectl config current-context\n```\n\n- **Инструмент:** kubectl.\n- **Зачем запускать:** Не выполняйте команды в неизвестном cluster.\n- **Что считать подтверждением:** Не выполняйте команды в неизвестном cluster.\n- **Перед запуском:** Проверьте активный Docker/Kubernetes-контекст и точное имя ресурса: команда может менять состояние учебного окружения.\n- **После запуска:** прочитайте stdout и stderr, затем проверьте код завершения командой `echo $?`, если результат неоднозначен.\n\n### 2. Покажите Deployment.\n\n**Команда:**\n\n```bash\nkubectl -n backend get deploy orders-api -o wide\n```\n\n- **Инструмент:** kubectl.\n- **Зачем запускать:** Сравните desired, ready, available и image.\n- **Что считать подтверждением:** Сравните desired, ready, available и image.\n- **Перед запуском:** Проверьте активный Docker/Kubernetes-контекст и точное имя ресурса: команда может менять состояние учебного окружения.\n- **После запуска:** прочитайте stdout и stderr, затем проверьте код завершения командой `echo $?`, если результат неоднозначен.\n\n### 3. Опишите rollout и events.\n\n**Команда:**\n\n```bash\nkubectl -n backend describe deploy orders-api\n```\n\n- **Инструмент:** kubectl.\n- **Зачем запускать:** Conditions/events объясняют scheduling/probe/image failures.\n- **Что считать подтверждением:** Conditions/events объясняют scheduling/probe/image failures.\n- **Перед запуском:** Проверьте активный Docker/Kubernetes-контекст и точное имя ресурса: команда может менять состояние учебного окружения.\n- **После запуска:** прочитайте stdout и stderr, затем проверьте код завершения командой `echo $?`, если результат неоднозначен.\n\n### 4. Следите за rollout.\n\n**Команда:**\n\n```bash\nkubectl -n backend rollout status deploy/orders-api --timeout=3m\n```\n\n- **Инструмент:** kubectl.\n- **Зачем запускать:** Команда имеет конечный timeout и exit code.\n- **Что считать подтверждением:** Команда имеет конечный timeout и exit code.\n- **Перед запуском:** Проверьте активный Docker/Kubernetes-контекст и точное имя ресурса: команда может менять состояние учебного окружения.\n- **После запуска:** прочитайте stdout и stderr, затем проверьте код завершения командой `echo $?`, если результат неоднозначен.\n\n### 5. Покажите Pods по label.\n\n**Команда:**\n\n```bash\nkubectl -n backend get pods -l app=orders-api -o wide\n```\n\n- **Инструмент:** kubectl.\n- **Зачем запускать:** Проверьте распределение nodes и readiness.\n- **Что считать подтверждением:** Проверьте распределение nodes и readiness.\n- **Перед запуском:** Проверьте активный Docker/Kubernetes-контекст и точное имя ресурса: команда может менять состояние учебного окружения.\n- **После запуска:** прочитайте stdout и stderr, затем проверьте код завершения командой `echo $?`, если результат неоднозначен.\n\n### 6. Покажите последние логи всех replicas.\n\n**Команда:**\n\n```bash\nkubectl -n backend logs -l app=orders-api --all-containers --tail=100 --prefix\n```\n\n- **Инструмент:** kubectl.\n- **Зачем запускать:** Prefix связывает строки с Pods/containers.\n- **Что считать подтверждением:** Prefix связывает строки с Pods/containers.\n- **Перед запуском:** Проверьте активный Docker/Kubernetes-контекст и точное имя ресурса: команда может менять состояние учебного окружения.\n- **После запуска:** прочитайте stdout и stderr, затем проверьте код завершения командой `echo $?`, если результат неоднозначен.\n\n### 7. Проверьте Service endpoints.\n\n**Команда:**\n\n```bash\nkubectl -n backend get endpointslices -l kubernetes.io/service-name=orders-api\n```\n\n- **Инструмент:** kubectl.\n- **Зачем запускать:** Только ready endpoints получают traffic по умолчанию.\n- **Что считать подтверждением:** Только ready endpoints получают traffic по умолчанию.\n- **Перед запуском:** Проверьте активный Docker/Kubernetes-контекст и точное имя ресурса: команда может менять состояние учебного окружения.\n- **После запуска:** прочитайте stdout и stderr, затем проверьте код завершения командой `echo $?`, если результат неоднозначен.",
+        "shell": "student@go-backend",
+        "tasks": [
+          {
+            "id": "t1",
+            "prompt": "Проверьте текущий context.",
+            "predict": "Что должно измениться или появиться после этой команды? Не выполняйте команды в неизвестном cluster.",
+            "hint": "Нужна команда: kubectl config current-context",
+            "hints": [
+              "Не выполняйте команды в неизвестном cluster.",
+              "Соберите команду из программы, подкоманды, флагов и аргумента. Не добавляйте sudo без причины.",
+              "`kubectl config current-context`"
+            ],
+            "expected": [
+              "kubectl config current-context"
+            ],
+            "success": "Готово. Не выполняйте команды в неизвестном cluster."
+          },
+          {
+            "id": "t2",
+            "prompt": "Покажите Deployment.",
+            "predict": "Что должно измениться или появиться после этой команды? Сравните desired, ready, available и image.",
+            "hint": "Нужна команда: kubectl -n backend get deploy orders-api -o wide",
+            "hints": [
+              "Сравните desired, ready, available и image.",
+              "Соберите команду из программы, подкоманды, флагов и аргумента. Не добавляйте sudo без причины.",
+              "`kubectl -n backend get deploy orders-api -o wide`"
+            ],
+            "expected": [
+              "kubectl -n backend get deploy orders-api -o wide"
+            ],
+            "success": "Готово. Сравните desired, ready, available и image."
+          },
+          {
+            "id": "t3",
+            "prompt": "Опишите rollout и events.",
+            "predict": "Что должно измениться или появиться после этой команды? Conditions/events объясняют scheduling/probe/image failures.",
+            "hint": "Нужна команда: kubectl -n backend describe deploy orders-api",
+            "hints": [
+              "Conditions/events объясняют scheduling/probe/image failures.",
+              "Соберите команду из программы, подкоманды, флагов и аргумента. Не добавляйте sudo без причины.",
+              "`kubectl -n backend describe deploy orders-api`"
+            ],
+            "expected": [
+              "kubectl -n backend describe deploy orders-api"
+            ],
+            "success": "Готово. Conditions/events объясняют scheduling/probe/image failures."
+          },
+          {
+            "id": "t4",
+            "prompt": "Следите за rollout.",
+            "predict": "Что должно измениться или появиться после этой команды? Команда имеет конечный timeout и exit code.",
+            "hint": "Нужна команда: kubectl -n backend rollout status deploy/orders-api --timeout=3m",
+            "hints": [
+              "Команда имеет конечный timeout и exit code.",
+              "Соберите команду из программы, подкоманды, флагов и аргумента. Не добавляйте sudo без причины.",
+              "`kubectl -n backend rollout status deploy/orders-api --timeout=3m`"
+            ],
+            "expected": [
+              "kubectl -n backend rollout status deploy/orders-api --timeout=3m"
+            ],
+            "success": "Готово. Команда имеет конечный timeout и exit code."
+          },
+          {
+            "id": "t5",
+            "prompt": "Покажите Pods по label.",
+            "predict": "Что должно измениться или появиться после этой команды? Проверьте распределение nodes и readiness.",
+            "hint": "Нужна команда: kubectl -n backend get pods -l app=orders-api -o wide",
+            "hints": [
+              "Проверьте распределение nodes и readiness.",
+              "Соберите команду из программы, подкоманды, флагов и аргумента. Не добавляйте sudo без причины.",
+              "`kubectl -n backend get pods -l app=orders-api -o wide`"
+            ],
+            "expected": [
+              "kubectl -n backend get pods -l app=orders-api -o wide"
+            ],
+            "success": "Готово. Проверьте распределение nodes и readiness."
+          },
+          {
+            "id": "t6",
+            "prompt": "Покажите последние логи всех replicas.",
+            "predict": "Что должно измениться или появиться после этой команды? Prefix связывает строки с Pods/containers.",
+            "hint": "Нужна команда: kubectl -n backend logs -l app=orders-api --all-containers --tail=100 --prefix",
+            "hints": [
+              "Prefix связывает строки с Pods/containers.",
+              "Соберите команду из программы, подкоманды, флагов и аргумента. Не добавляйте sudo без причины.",
+              "`kubectl -n backend logs -l app=orders-api --all-containers --tail=100 --prefix`"
+            ],
+            "expected": [
+              "kubectl -n backend logs -l app=orders-api --all-containers --tail=100 --prefix"
+            ],
+            "success": "Готово. Prefix связывает строки с Pods/containers."
+          },
+          {
+            "id": "t7",
+            "prompt": "Проверьте Service endpoints.",
+            "predict": "Что должно измениться или появиться после этой команды? Только ready endpoints получают traffic по умолчанию.",
+            "hint": "Нужна команда: kubectl -n backend get endpointslices -l kubernetes.io/service-name=orders-api",
+            "hints": [
+              "Только ready endpoints получают traffic по умолчанию.",
+              "Соберите команду из программы, подкоманды, флагов и аргумента. Не добавляйте sudo без причины.",
+              "`kubectl -n backend get endpointslices -l kubernetes.io/service-name=orders-api`"
+            ],
+            "expected": [
+              "kubectl -n backend get endpointslices -l kubernetes.io/service-name=orders-api"
+            ],
+            "success": "Готово. Только ready endpoints получают traffic по умолчанию."
+          }
+        ],
+        "challenge": "Сымитируйте локально failed readiness новой версии, наблюдайте остановку rollout, исправьте probe и докажите zero-downtime requests через непрерывный smoke test.",
+        "debug": "Читайте stderr полностью и проверяйте код завершения. Если результат неожиданен, сузьте проблему одной командой и повторите её с минимальным вводом.\n\nТипичная ошибка: предполагать context по имени terminal. Всегда начните с `pwd`, `ls -la` и чтения полного сообщения об ошибке.",
+        "resources": [
+          {
+            "url": "https://kubernetes.io/docs/concepts/",
+            "title": "Kubernetes Concepts",
+            "note": "Workloads, Services, Config, probes, resources и security."
+          },
+          {
+            "url": "https://opentelemetry.io/docs/languages/go/",
+            "title": "OpenTelemetry Go",
+            "note": "Трейсы, метрики, логи и экспорт телеметрии."
+          }
+        ]
+      }
+    },
+    {
+      "title": "Deployment production baseline",
+      "kind": "code",
+      "summary": "Допишите безопасный rolling workload с probes/resources.",
+      "durationMin": 22,
+      "content": {
+        "task": "Создайте Deployment orders-api: 3 replicas, digest image, containerPort http:8080, rolling maxUnavailable 0/maxSurge 1, startup/readiness/liveness, requests/limits, non-root/read-only/drop caps/seccomp, terminationGrace 30, config/secret refs.\n\n## Порядок работы\n\n1. Прочитайте контракт и назовите вход, выход и возможные ошибки.\n2. Допишите минимальный рабочий вариант.\n3. Проверьте обычный, граничный и ошибочный сценарии.\n4. Измените одно требование и адаптируйте код без копирования готового решения.\n5. Сравните с эталоном только после собственной попытки.\n\n## Обязательная проверка\n\nЗапустите форматирование и подходящие тесты. Для Go: `go fmt ./...`, `go vet ./...` и `go test ./...`. Ошибку не скрывайте пустым обработчиком.",
+        "starter": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: orders-api\nspec:\n  # TODO",
+        "solution": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: orders-api\nspec:\n  replicas: 3\n  strategy:\n    type: RollingUpdate\n    rollingUpdate: { maxUnavailable: 0, maxSurge: 1 }\n  selector: { matchLabels: { app: orders-api } }\n  template:\n    metadata: { labels: { app: orders-api } }\n    spec:\n      terminationGracePeriodSeconds: 30\n      containers:\n        - name: api\n          image: registry.example/orders@sha256:replace-with-real-digest\n          ports: [{ name: http, containerPort: 8080 }]\n          envFrom:\n            - configMapRef: { name: orders-api }\n            - secretRef: { name: orders-api }\n          startupProbe: { httpGet: { path: /healthz, port: http }, periodSeconds: 2, failureThreshold: 30 }\n          readinessProbe: { httpGet: { path: /readyz, port: http }, periodSeconds: 5, timeoutSeconds: 2 }\n          livenessProbe: { httpGet: { path: /healthz, port: http }, periodSeconds: 10, timeoutSeconds: 2 }\n          resources:\n            requests: { cpu: 200m, memory: 128Mi }\n            limits: { memory: 256Mi }\n          securityContext:\n            runAsNonRoot: true\n            readOnlyRootFilesystem: true\n            allowPrivilegeEscalation: false\n            capabilities: { drop: [\"ALL\"] }\n            seccompProfile: { type: RuntimeDefault }",
+        "checks": [
+          {
+            "type": "contains",
+            "value": "replicas: 3",
+            "message": "Проверка 1: в решении должна быть реализована конструкция `replicas: 3`."
+          },
+          {
+            "type": "contains",
+            "value": "maxUnavailable: 0",
+            "message": "Проверка 2: в решении должна быть реализована конструкция `maxUnavailable: 0`."
+          },
+          {
+            "type": "contains",
+            "value": "maxSurge: 1",
+            "message": "Проверка 3: в решении должна быть реализована конструкция `maxSurge: 1`."
+          },
+          {
+            "type": "contains",
+            "value": "terminationGracePeriodSeconds: 30",
+            "message": "Проверка 4: в решении должна быть реализована конструкция `terminationGracePeriodSeconds: 30`."
+          },
+          {
+            "type": "contains",
+            "value": "startupProbe:",
+            "message": "Проверка 5: в решении должна быть реализована конструкция `startupProbe:`."
+          },
+          {
+            "type": "contains",
+            "value": "readinessProbe:",
+            "message": "Проверка 6: в решении должна быть реализована конструкция `readinessProbe:`."
+          },
+          {
+            "type": "contains",
+            "value": "livenessProbe:",
+            "message": "Проверка 7: в решении должна быть реализована конструкция `livenessProbe:`."
+          },
+          {
+            "type": "contains",
+            "value": "requests:",
+            "message": "Проверка 8: в решении должна быть реализована конструкция `requests:`."
+          },
+          {
+            "type": "contains",
+            "value": "runAsNonRoot: true",
+            "message": "Проверка 9: в решении должна быть реализована конструкция `runAsNonRoot: true`."
+          },
+          {
+            "type": "contains",
+            "value": "readOnlyRootFilesystem: true",
+            "message": "Проверка 10: в решении должна быть реализована конструкция `readOnlyRootFilesystem: true`."
+          },
+          {
+            "type": "contains",
+            "value": "drop: [\"ALL\"]",
+            "message": "Проверка 11: в решении должна быть реализована конструкция `drop: [\"ALL\"]`."
+          }
+        ],
+        "hint": "Сначала selector/template labels, затем rollout/lifecycle, probes, resources и security.\n\n## Шпаргалка по синтаксису\n\n- Отступ задаёт вложенность: используйте пробелы, не табуляцию.\n- Пара `key: value` создаёт поле, а строка с `-` — элемент списка.\n- Строки с двоеточиями, `#` или неоднозначными значениями лучше заключать в кавычки.\n- Сначала проверьте синтаксис и схему, затем изучите итоговый diff; секреты не помещайте в открытый YAML.\n\n## Что проверяет автопроверка\n\n1. Проверка 1: в решении должна быть реализована конструкция `replicas: 3`.\n2. Проверка 2: в решении должна быть реализована конструкция `maxUnavailable: 0`.\n3. Проверка 3: в решении должна быть реализована конструкция `maxSurge: 1`.\n4. Проверка 4: в решении должна быть реализована конструкция `terminationGracePeriodSeconds: 30`.\n5. Проверка 5: в решении должна быть реализована конструкция `startupProbe:`.\n6. Проверка 6: в решении должна быть реализована конструкция `readinessProbe:`.\n7. Проверка 7: в решении должна быть реализована конструкция `livenessProbe:`.\n8. Проверка 8: в решении должна быть реализована конструкция `requests:`.\n9. Проверка 9: в решении должна быть реализована конструкция `runAsNonRoot: true`.\n10. Проверка 10: в решении должна быть реализована конструкция `readOnlyRootFilesystem: true`.\n11. Проверка 11: в решении должна быть реализована конструкция `drop: [\"ALL\"]`.\n\nАвтопроверка подтверждает обязательные конструкции, но не заменяет компиляцию, тесты, статический анализ и проверку поведения на границах.",
+        "language": "yaml",
+        "resources": [
+          {
+            "url": "https://kubernetes.io/docs/concepts/",
+            "title": "Kubernetes Concepts",
+            "note": "Workloads, Services, Config, probes, resources и security."
+          }
+        ]
+      }
+    },
+    {
+      "title": "Service и PodDisruptionBudget",
+      "kind": "code",
+      "summary": "Свяжите networking и availability.",
+      "durationMin": 22,
+      "content": {
+        "task": "Создайте ClusterIP Service orders-api с port 80→named http и selector app=orders-api; PDB minAvailable=2 для тех же labels.\n\n## Порядок работы\n\n1. Прочитайте контракт и назовите вход, выход и возможные ошибки.\n2. Допишите минимальный рабочий вариант.\n3. Проверьте обычный, граничный и ошибочный сценарии.\n4. Измените одно требование и адаптируйте код без копирования готового решения.\n5. Сравните с эталоном только после собственной попытки.\n\n## Обязательная проверка\n\nЗапустите форматирование и подходящие тесты. Для Go: `go fmt ./...`, `go vet ./...` и `go test ./...`. Ошибку не скрывайте пустым обработчиком.",
+        "starter": "apiVersion: v1\nkind: Service\n# TODO",
+        "solution": "apiVersion: v1\nkind: Service\nmetadata:\n  name: orders-api\nspec:\n  type: ClusterIP\n  selector: { app: orders-api }\n  ports:\n    - name: http\n      port: 80\n      targetPort: http\n---\napiVersion: policy/v1\nkind: PodDisruptionBudget\nmetadata:\n  name: orders-api\nspec:\n  minAvailable: 2\n  selector:\n    matchLabels: { app: orders-api }",
+        "checks": [
+          {
+            "type": "contains",
+            "value": "kind: Service",
+            "message": "Проверка 1: в решении должна быть реализована конструкция `kind: Service`."
+          },
+          {
+            "type": "contains",
+            "value": "type: ClusterIP",
+            "message": "Проверка 2: в решении должна быть реализована конструкция `type: ClusterIP`."
+          },
+          {
+            "type": "contains",
+            "value": "selector: { app: orders-api }",
+            "message": "Проверка 3: в решении должна быть реализована конструкция `selector: { app: orders-api }`."
+          },
+          {
+            "type": "contains",
+            "value": "targetPort: http",
+            "message": "Проверка 4: в решении должна быть реализована конструкция `targetPort: http`."
+          },
+          {
+            "type": "contains",
+            "value": "kind: PodDisruptionBudget",
+            "message": "Проверка 5: в решении должна быть реализована конструкция `kind: PodDisruptionBudget`."
+          },
+          {
+            "type": "contains",
+            "value": "minAvailable: 2",
+            "message": "Проверка 6: в решении должна быть реализована конструкция `minAvailable: 2`."
+          },
+          {
+            "type": "contains",
+            "value": "matchLabels: { app: orders-api }",
+            "message": "Проверка 7: в решении должна быть реализована конструкция `matchLabels: { app: orders-api }`."
+          }
+        ],
+        "hint": "Одинаковые labels связывают Deployment, Service и PDB; named port уменьшает drift.\n\n## Шпаргалка по синтаксису\n\n- Отступ задаёт вложенность: используйте пробелы, не табуляцию.\n- Пара `key: value` создаёт поле, а строка с `-` — элемент списка.\n- Строки с двоеточиями, `#` или неоднозначными значениями лучше заключать в кавычки.\n- Сначала проверьте синтаксис и схему, затем изучите итоговый diff; секреты не помещайте в открытый YAML.\n\n## Что проверяет автопроверка\n\n1. Проверка 1: в решении должна быть реализована конструкция `kind: Service`.\n2. Проверка 2: в решении должна быть реализована конструкция `type: ClusterIP`.\n3. Проверка 3: в решении должна быть реализована конструкция `selector: { app: orders-api }`.\n4. Проверка 4: в решении должна быть реализована конструкция `targetPort: http`.\n5. Проверка 5: в решении должна быть реализована конструкция `kind: PodDisruptionBudget`.\n6. Проверка 6: в решении должна быть реализована конструкция `minAvailable: 2`.\n7. Проверка 7: в решении должна быть реализована конструкция `matchLabels: { app: orders-api }`.\n\nАвтопроверка подтверждает обязательные конструкции, но не заменяет компиляцию, тесты, статический анализ и проверку поведения на границах.",
+        "language": "yaml",
+        "resources": [
+          {
+            "url": "https://kubernetes.io/docs/concepts/",
+            "title": "Kubernetes Concepts",
+            "note": "Workloads, Services, Config, probes, resources и security."
+          }
+        ]
+      }
+    },
+    {
+      "title": "Квиз модуля: Kubernetes и production deployment",
+      "kind": "quiz",
+      "summary": "Проверка ключевых решений и ошибок по модулю «Kubernetes и production deployment».",
+      "durationMin": 10,
+      "content": {
+        "intro": "Ответьте без запуска кода. Цель — проверить причинно-следственные связи. После ошибки вернитесь к уроку и воспроизведите пример своими руками. Положение правильного варианта меняется; ориентируйтесь на смысл, а не на букву ответа.",
+        "passScore": 70,
+        "questions": [
+          {
+            "id": "q1",
+            "text": "Почему Pod нельзя считать постоянной машиной?",
+            "options": [
+              {
+                "id": "a",
+                "text": "Он может быть пересоздан с новым IP/узлом, поэтому состояние хранится во внешней системе",
+                "correct": true
+              },
+              {
+                "id": "b",
+                "text": "Pod никогда не перезапускается",
+                "correct": false
+              },
+              {
+                "id": "c",
+                "text": "Deployment хранит локальные файлы навсегда",
+                "correct": false
+              }
+            ],
+            "explanation": "Kubernetes управляет заменяемыми replicas."
+          },
+          {
+            "id": "q2",
+            "text": "Что должно произойти при SIGTERM?",
+            "options": [
+              {
+                "id": "a",
+                "text": "Process игнорирует signal",
+                "correct": false
+              },
+              {
+                "id": "b",
+                "text": "Pod перестаёт быть ready, завершает active work в grace period и закрывает ресурсы",
+                "correct": true
+              },
+              {
+                "id": "c",
+                "text": "Liveness начинает миграцию",
+                "correct": false
+              }
+            ],
+            "explanation": "Lifecycle должен минимизировать оборванные запросы."
+          },
+          {
+            "id": "q3",
+            "text": "Для чего нужен resource request?",
+            "options": [
+              {
+                "id": "a",
+                "text": "Только для названия Pod",
+                "correct": false
+              },
+              {
+                "id": "b",
+                "text": "Он шифрует memory",
+                "correct": false
+              },
+              {
+                "id": "c",
+                "text": "Для scheduling capacity и расчёта некоторых autoscaling metrics",
+                "correct": true
+              }
+            ],
+            "explanation": "Scheduler резервирует узел исходя из requests."
+          },
+          {
+            "id": "q4",
+            "text": "Почему не запускать migrations из каждой replica на startup?",
+            "options": [
+              {
+                "id": "a",
+                "text": "Concurrent migrations создают гонки/locks и смешивают lifecycle schema с readiness приложения",
+                "correct": true
+              },
+              {
+                "id": "b",
+                "text": "Kubernetes запрещает SQL",
+                "correct": false
+              },
+              {
+                "id": "c",
+                "text": "Replica не имеет сети",
+                "correct": false
+              }
+            ],
+            "explanation": "Отдельный Job даёт ownership, timeout и наблюдаемость."
+          },
+          {
+            "id": "q5",
+            "text": "Чем readiness отличается от liveness?",
+            "options": [
+              {
+                "id": "a",
+                "text": "Они всегда идентичны",
+                "correct": false
+              },
+              {
+                "id": "b",
+                "text": "Readiness управляет новым трафиком, liveness решает нужен ли restart процесса",
+                "correct": true
+              },
+              {
+                "id": "c",
+                "text": "Readiness меняет image digest",
+                "correct": false
+              }
+            ],
+            "explanation": "Неверная liveness может усилить dependency outage."
+          },
+          {
+            "id": "q6",
+            "text": "Что произойдёт при превышении memory limit?",
+            "options": [
+              {
+                "id": "a",
+                "text": "CPU станет быстрее",
+                "correct": false
+              },
+              {
+                "id": "b",
+                "text": "Secret удалится",
+                "correct": false
+              },
+              {
+                "id": "c",
+                "text": "Container может быть завершён OOM killer и перезапущен policy",
+                "correct": true
+              }
+            ],
+            "explanation": "Memory limit — жёсткая граница, не request."
+          }
+        ],
+        "resources": [
+          {
+            "url": "https://kubernetes.io/docs/concepts/",
+            "title": "Kubernetes Concepts",
+            "note": "Workloads, Services, Config, probes, resources и security."
+          },
+          {
+            "url": "https://github.com/pressly/goose",
+            "title": "goose v3",
+            "note": "Версионирование и применение миграций БД."
+          },
+          {
+            "url": "https://opentelemetry.io/docs/languages/go/",
+            "title": "OpenTelemetry Go",
+            "note": "Трейсы, метрики, логи и экспорт телеметрии."
+          }
+        ]
+      }
+    }
+  ]
+}

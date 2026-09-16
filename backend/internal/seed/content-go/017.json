@@ -1,0 +1,511 @@
+{
+  "title": "Kafka, NATS JetStream и событийная обработка",
+  "summary": "Delivery semantics, partitions, consumer groups, schema evolution, outbox/inbox, DLQ и идемпотентные consumers.",
+  "lessons": [
+    {
+      "title": "Сообщения, порядок и delivery semantics",
+      "kind": "text",
+      "summary": "Проектируем систему, в которой повтор и перестановка являются нормальными событиями.",
+      "durationMin": 14,
+      "content": {
+        "body": "## Зачем это нужно backend-разработчику\n\nСообщения, порядок и delivery semantics — часть ежедневной работы Go backend-разработчика. Важно не только знать синтаксис, но и понимать контракт, стоимость операции, поведение при ошибке и способ проверки результата.\n\n## Ментальная модель\n\nСообщения, порядок и delivery semantics: рассматривайте тему как набор явных входов, преобразований, выходов и отказов. Владение темой означает, что вы можете предсказать поведение до запуска и объяснить компромиссы коллеге.\n\n## Основные идеи по шагам\n\n1. At-most-once может потерять сообщение, at-least-once может доставить повторно, exactly-once всегда имеет ограниченную область гарантий.\n2. Ordering обычно гарантируется внутри partition/subject stream, а не глобально; ключ partition должен соответствовать aggregate, которому нужен порядок.\n3. Acknowledgement после side effect уменьшает потерю, но crash между side effect и ack создаёт дубль.\n4. Consumer обязан иметь idempotency key/message ID, bounded processing time, retry policy и наблюдаемую lag/age.\n\n## Разбор на примере\n\n```text\npublish event(id=E1, aggregate=order-42)\nconsumer applies side effect\nprocess crashes before ack\nbroker redelivers E1\ninbox UNIQUE(E1) prevents duplicate side effect\n```\n\nПовторная доставка — ожидаемая ветка. Inbox/unique constraint делает обработку повторяемой.\n\n## Где это встречается в production\n\nВ рабочем сервисе эта тема влияет на читаемость pull request, предсказуемость API, диагностику инцидентов и стоимость дальнейших изменений. Сначала зафиксируйте контракт тестом или примером, затем реализуйте простейшее корректное решение.\n\n## Как бывает неправильно\n\n- **Механическое копирование**\n  - Как проявляется: код компилируется, но автор не может объяснить граничные случаи\n  - Что делать: измените входные данные и предскажите результат до запуска\n- **Скрытая ошибка**\n  - Как проявляется: неверное состояние обнаруживается далеко от причины\n  - Что делать: возвращайте ошибку с контекстом и проверяйте её на нужном уровне\n- **Преждевременная сложность**\n  - Как проявляется: простая задача получает лишние абстракции и зависимости\n  - Что делать: сначала используйте стандартную библиотеку и измеримые требования\n\n## Проверьте себя\n\n1. Объясните своими словами: Сообщения, порядок и delivery semantics: рассматривайте тему как набор явных входов, преобразований, выходов и отказов. Владение темой означает, что вы можете предсказать поведение до запуска и объяснить компромиссы коллеге.\n2. Как эта тема проявляется в реальном backend-сервисе?\n3. Какую ошибку из раздела выше вы сможете распознать по симптомам?\n\n## Практика после урока\n\nВоспроизведите пример, добавьте один ошибочный вход, напишите проверку результата и объясните решение вслух за две минуты.\n\n## Запомнить\n\n- Сначала понимайте контракт и ограничения, затем выбирайте инструмент.\n- Ошибка должна быть наблюдаемой: её проверяют, логируют с контекстом и возвращают на правильный уровень.\n- Любой пример из урока измените хотя бы один раз и снова проверьте результат.\n- Production-код отличается явными таймаутами, валидацией, тестами и способом безопасного завершения.",
+        "resources": [
+          {
+            "url": "https://github.com/twmb/franz-go",
+            "title": "franz-go",
+            "note": "Современный Kafka-клиент без зависимости от librdkafka."
+          },
+          {
+            "url": "https://docs.nats.io/using-nats/developer/develop_jetstream",
+            "title": "NATS JetStream",
+            "note": "Streams, consumers, acknowledgements и delivery semantics."
+          }
+        ]
+      }
+    },
+    {
+      "title": "Kafka и franz-go",
+      "kind": "text",
+      "summary": "Используем log, partitions и consumer groups осознанно.",
+      "durationMin": 15,
+      "content": {
+        "body": "## Зачем это нужно backend-разработчику\n\nKafka и franz-go — часть ежедневной работы Go backend-разработчика. Важно не только знать синтаксис, но и понимать контракт, стоимость операции, поведение при ошибке и способ проверки результата.\n\n## Ментальная модель\n\nKafka и franz-go: рассматривайте тему как набор явных входов, преобразований, выходов и отказов. Владение темой означает, что вы можете предсказать поведение до запуска и объяснить компромиссы коллеге.\n\n## Основные идеи по шагам\n\n1. Topic разбит на partitions; record с одинаковым key стабильно маршрутизируется, сохраняя порядок внутри partition.\n2. Consumer group распределяет partitions между members; rebalance требует корректно остановить/закончить обработку и commit offsets.\n3. franz-go — pure Go Kafka client с transactions, idempotent producer, cooperative balancing и observability hooks.\n4. Producer acknowledgements, replication, min.insync.replicas и delivery timeout задают durability/latency trade-off; payload size ограничивается.\n\n## Разбор на примере\n\n```go\nrecord := &kgo.Record{\n    Topic: \"orders.events.v1\",\n    Key:   []byte(orderID),\n    Value: payload,\n}\nclient.Produce(ctx, record, func(r *kgo.Record, err error) {\n    // observe delivery result\n})\n```\n\nOrder ID как key сохраняет порядок событий одного заказа. Async callback обязан наблюдать ошибку.\n\n## Где это встречается в production\n\nВ рабочем сервисе эта тема влияет на читаемость pull request, предсказуемость API, диагностику инцидентов и стоимость дальнейших изменений. Сначала зафиксируйте контракт тестом или примером, затем реализуйте простейшее корректное решение.\n\n## Как бывает неправильно\n\n- **Механическое копирование**\n  - Как проявляется: код компилируется, но автор не может объяснить граничные случаи\n  - Что делать: измените входные данные и предскажите результат до запуска\n- **Скрытая ошибка**\n  - Как проявляется: неверное состояние обнаруживается далеко от причины\n  - Что делать: возвращайте ошибку с контекстом и проверяйте её на нужном уровне\n- **Преждевременная сложность**\n  - Как проявляется: простая задача получает лишние абстракции и зависимости\n  - Что делать: сначала используйте стандартную библиотеку и измеримые требования\n\n## Проверьте себя\n\n1. Объясните своими словами: Kafka и franz-go: рассматривайте тему как набор явных входов, преобразований, выходов и отказов. Владение темой означает, что вы можете предсказать поведение до запуска и объяснить компромиссы коллеге.\n2. Как эта тема проявляется в реальном backend-сервисе?\n3. Какую ошибку из раздела выше вы сможете распознать по симптомам?\n\n## Практика после урока\n\nВоспроизведите пример, добавьте один ошибочный вход, напишите проверку результата и объясните решение вслух за две минуты.\n\n## Запомнить\n\n- Сначала понимайте контракт и ограничения, затем выбирайте инструмент.\n- Ошибка должна быть наблюдаемой: её проверяют, логируют с контекстом и возвращают на правильный уровень.\n- Любой пример из урока измените хотя бы один раз и снова проверьте результат.\n- Production-код отличается явными таймаутами, валидацией, тестами и способом безопасного завершения.",
+        "resources": [
+          {
+            "url": "https://github.com/twmb/franz-go",
+            "title": "franz-go",
+            "note": "Современный Kafka-клиент без зависимости от librdkafka."
+          }
+        ]
+      }
+    },
+    {
+      "title": "NATS JetStream",
+      "kind": "text",
+      "summary": "Выбираем lightweight messaging, durable streams и consumers.",
+      "durationMin": 16,
+      "content": {
+        "body": "## Зачем это нужно backend-разработчику\n\nNATS JetStream — часть ежедневной работы Go backend-разработчика. Важно не только знать синтаксис, но и понимать контракт, стоимость операции, поведение при ошибке и способ проверки результата.\n\n## Ментальная модель\n\nNATS JetStream: рассматривайте тему как набор явных входов, преобразований, выходов и отказов. Владение темой означает, что вы можете предсказать поведение до запуска и объяснить компромиссы коллеге.\n\n## Основные идеи по шагам\n\n1. Core NATS — ephemeral pub/sub; JetStream добавляет persisted streams, consumers, acknowledgements и redelivery.\n2. Subject hierarchy помогает routing, stream связывает subject patterns с retention/storage policy.\n3. Durable consumer хранит state, pull consumer удобен для controlled batch/flow, AckExplicit подтверждает обработку.\n4. AckWait/MaxDeliver/BackOff согласуются с максимальным processing time; слишком короткий AckWait порождает параллельные дубли.\n\n## Разбор на примере\n\n```go\nconsumer, err := stream.CreateOrUpdateConsumer(ctx, jetstream.ConsumerConfig{\n    Durable: \"billing-v1\",\n    AckPolicy: jetstream.AckExplicitPolicy,\n    MaxDeliver: 8,\n})\n```\n\nConsumer identity и retry parameters являются production schema. Message ack происходит после успешного commit.\n\n## Где это встречается в production\n\nВ рабочем сервисе эта тема влияет на читаемость pull request, предсказуемость API, диагностику инцидентов и стоимость дальнейших изменений. Сначала зафиксируйте контракт тестом или примером, затем реализуйте простейшее корректное решение.\n\n## Как бывает неправильно\n\n- **Механическое копирование**\n  - Как проявляется: код компилируется, но автор не может объяснить граничные случаи\n  - Что делать: измените входные данные и предскажите результат до запуска\n- **Скрытая ошибка**\n  - Как проявляется: неверное состояние обнаруживается далеко от причины\n  - Что делать: возвращайте ошибку с контекстом и проверяйте её на нужном уровне\n- **Преждевременная сложность**\n  - Как проявляется: простая задача получает лишние абстракции и зависимости\n  - Что делать: сначала используйте стандартную библиотеку и измеримые требования\n\n## Проверьте себя\n\n1. Объясните своими словами: NATS JetStream: рассматривайте тему как набор явных входов, преобразований, выходов и отказов. Владение темой означает, что вы можете предсказать поведение до запуска и объяснить компромиссы коллеге.\n2. Как эта тема проявляется в реальном backend-сервисе?\n3. Какую ошибку из раздела выше вы сможете распознать по симптомам?\n\n## Практика после урока\n\nВоспроизведите пример, добавьте один ошибочный вход, напишите проверку результата и объясните решение вслух за две минуты.\n\n## Запомнить\n\n- Сначала понимайте контракт и ограничения, затем выбирайте инструмент.\n- Ошибка должна быть наблюдаемой: её проверяют, логируют с контекстом и возвращают на правильный уровень.\n- Любой пример из урока измените хотя бы один раз и снова проверьте результат.\n- Production-код отличается явными таймаутами, валидацией, тестами и способом безопасного завершения.",
+        "resources": [
+          {
+            "url": "https://docs.nats.io/using-nats/developer/develop_jetstream",
+            "title": "NATS JetStream",
+            "note": "Streams, consumers, acknowledgements и delivery semantics."
+          }
+        ]
+      }
+    },
+    {
+      "title": "Transactional outbox, inbox и DLQ",
+      "kind": "text",
+      "summary": "Связываем локальную transaction с надёжной публикацией без dual write.",
+      "durationMin": 17,
+      "content": {
+        "body": "## Зачем это нужно backend-разработчику\n\nTransactional outbox, inbox и DLQ — часть ежедневной работы Go backend-разработчика. Важно не только знать синтаксис, но и понимать контракт, стоимость операции, поведение при ошибке и способ проверки результата.\n\n## Ментальная модель\n\nTransactional outbox, inbox и DLQ: рассматривайте тему как набор явных входов, преобразований, выходов и отказов. Владение темой означает, что вы можете предсказать поведение до запуска и объяснить компромиссы коллеге.\n\n## Основные идеи по шагам\n\n1. Use case вставляет business rows и outbox event в одной PostgreSQL transaction; commit означает событие готово к доставке.\n2. Publisher читает незаблокированные rows через FOR UPDATE SKIP LOCKED, публикует и отмечает delivered; он сам идемпотентен.\n3. Consumer создаёт inbox row с UNIQUE(event_id) в той же transaction, что и локальный side effect.\n4. DLQ сохраняет original event, error class, attempts и timestamps; replay требует исправленной причины, authorization и audit.\n\n## Разбор на примере\n\n```sql\nWITH batch AS (\n  SELECT id FROM outbox\n  WHERE published_at IS NULL AND available_at <= now()\n  ORDER BY id\n  FOR UPDATE SKIP LOCKED\n  LIMIT 100\n)\nSELECT o.* FROM outbox o JOIN batch USING (id);\n```\n\nSKIP LOCKED распределяет rows между workers. Publish/mark gap всё равно допускает дубль, поэтому event ID стабилен.\n\n## Где это встречается в production\n\nВ рабочем сервисе эта тема влияет на читаемость pull request, предсказуемость API, диагностику инцидентов и стоимость дальнейших изменений. Сначала зафиксируйте контракт тестом или примером, затем реализуйте простейшее корректное решение.\n\n## Как бывает неправильно\n\n- **Механическое копирование**\n  - Как проявляется: код компилируется, но автор не может объяснить граничные случаи\n  - Что делать: измените входные данные и предскажите результат до запуска\n- **Скрытая ошибка**\n  - Как проявляется: неверное состояние обнаруживается далеко от причины\n  - Что делать: возвращайте ошибку с контекстом и проверяйте её на нужном уровне\n- **Преждевременная сложность**\n  - Как проявляется: простая задача получает лишние абстракции и зависимости\n  - Что делать: сначала используйте стандартную библиотеку и измеримые требования\n\n## Проверьте себя\n\n1. Объясните своими словами: Transactional outbox, inbox и DLQ: рассматривайте тему как набор явных входов, преобразований, выходов и отказов. Владение темой означает, что вы можете предсказать поведение до запуска и объяснить компромиссы коллеге.\n2. Как эта тема проявляется в реальном backend-сервисе?\n3. Какую ошибку из раздела выше вы сможете распознать по симптомам?\n\n## Практика после урока\n\nВоспроизведите пример, добавьте один ошибочный вход, напишите проверку результата и объясните решение вслух за две минуты.\n\n## Запомнить\n\n- Сначала понимайте контракт и ограничения, затем выбирайте инструмент.\n- Ошибка должна быть наблюдаемой: её проверяют, логируют с контекстом и возвращают на правильный уровень.\n- Любой пример из урока измените хотя бы один раз и снова проверьте результат.\n- Production-код отличается явными таймаутами, валидацией, тестами и способом безопасного завершения.",
+        "resources": [
+          {
+            "url": "https://www.postgresql.org/docs/18/",
+            "title": "PostgreSQL 18 Documentation",
+            "note": "Актуальная стабильная документация PostgreSQL на сентябрь 2026."
+          },
+          {
+            "url": "https://github.com/twmb/franz-go",
+            "title": "franz-go",
+            "note": "Современный Kafka-клиент без зависимости от librdkafka."
+          },
+          {
+            "url": "https://docs.nats.io/using-nats/developer/develop_jetstream",
+            "title": "NATS JetStream",
+            "note": "Streams, consumers, acknowledgements и delivery semantics."
+          }
+        ]
+      }
+    },
+    {
+      "title": "Терминал: проверяем event pipeline",
+      "kind": "terminal",
+      "summary": "Поднимаем зависимости, запускаем producer/consumer и моделируем повтор.",
+      "durationMin": 16,
+      "content": {
+        "intro": "Команды предполагают Compose profiles kafka/nats. Все сообщения учебные; не очищайте shared topics/streams.\n\nПеред Enter назовите ожидаемый результат. После команды прочитайте вывод и код завершения; не переходите дальше, пока не понимаете, что именно подтвердили.\n\n## Разбор команд до практики\n\nНиже каждая команда разобрана до выполнения. Сначала прочитайте назначение и назовите ожидаемый результат, затем выполняйте задание в тренажёре.\n\n### 1. Поднимите messaging profile.\n\n**Команда:**\n\n```bash\ndocker compose --profile messaging up -d\n```\n\n- **Инструмент:** Docker CLI.\n- **Зачем запускать:** Запустятся broker и связанные локальные сервисы.\n- **Что считать подтверждением:** Запустятся broker и связанные локальные сервисы.\n- **Перед запуском:** Проверьте активный Docker/Kubernetes-контекст и точное имя ресурса: команда может менять состояние учебного окружения.\n- **После запуска:** прочитайте stdout и stderr, затем проверьте код завершения командой `echo $?`, если результат неоднозначен.\n\n### 2. Проверьте состояние контейнеров.\n\n**Команда:**\n\n```bash\ndocker compose ps\n```\n\n- **Инструмент:** Docker CLI.\n- **Зачем запускать:** Убедитесь в health, а не только Up.\n- **Что считать подтверждением:** Убедитесь в health, а не только Up.\n- **Перед запуском:** Проверьте активный Docker/Kubernetes-контекст и точное имя ресурса: команда может менять состояние учебного окружения.\n- **После запуска:** прочитайте stdout и stderr, затем проверьте код завершения командой `echo $?`, если результат неоднозначен.\n\n### 3. Запустите тест producer.\n\n**Команда:**\n\n```bash\ngo test ./internal/messaging -run TestProducer -v\n```\n\n- **Инструмент:** Go toolchain.\n- **Зачем запускать:** Delivery callback/error должен быть проверен.\n- **Что считать подтверждением:** Delivery callback/error должен быть проверен.\n- **Перед запуском:** Проверьте текущий каталог и прочитайте команду слева направо: программа, подкоманда, флаги, аргументы.\n- **После запуска:** прочитайте stdout и stderr, затем проверьте код завершения командой `echo $?`, если результат неоднозначен.\n\n### 4. Запустите consumer integration test.\n\n**Команда:**\n\n```bash\ngo test ./internal/messaging -run TestConsumerIdempotency -tags=integration -v\n```\n\n- **Инструмент:** Go toolchain.\n- **Зачем запускать:** Дважды доставленный ID создаёт один side effect.\n- **Что считать подтверждением:** Дважды доставленный ID создаёт один side effect.\n- **Перед запуском:** Проверьте текущий каталог и прочитайте команду слева направо: программа, подкоманда, флаги, аргументы.\n- **После запуска:** прочитайте stdout и stderr, затем проверьте код завершения командой `echo $?`, если результат неоднозначен.\n\n### 5. Остановите consumer process.\n\n**Команда:**\n\n```bash\ndocker compose stop worker\n```\n\n- **Инструмент:** Docker CLI.\n- **Зачем запускать:** Broker сохранит durable workload для redelivery.\n- **Что считать подтверждением:** Broker сохранит durable workload для redelivery.\n- **Перед запуском:** Проверьте активный Docker/Kubernetes-контекст и точное имя ресурса: команда может менять состояние учебного окружения.\n- **После запуска:** прочитайте stdout и stderr, затем проверьте код завершения командой `echo $?`, если результат неоднозначен.\n\n### 6. Запустите worker снова.\n\n**Команда:**\n\n```bash\ndocker compose start worker\n```\n\n- **Инструмент:** Docker CLI.\n- **Зачем запускать:** Неподтверждённое сообщение будет обработано повторно.\n- **Что считать подтверждением:** Неподтверждённое сообщение будет обработано повторно.\n- **Перед запуском:** Проверьте активный Docker/Kubernetes-контекст и точное имя ресурса: команда может менять состояние учебного окружения.\n- **После запуска:** прочитайте stdout и stderr, затем проверьте код завершения командой `echo $?`, если результат неоднозначен.\n\n### 7. Посмотрите сервисные логи.\n\n**Команда:**\n\n```bash\ndocker compose logs --tail=100 worker\n```\n\n- **Инструмент:** Docker CLI.\n- **Зачем запускать:** Ищите event_id, attempt, latency и result без payload secrets.\n- **Что считать подтверждением:** Ищите event_id, attempt, latency и result без payload secrets.\n- **Перед запуском:** Проверьте активный Docker/Kubernetes-контекст и точное имя ресурса: команда может менять состояние учебного окружения.\n- **После запуска:** прочитайте stdout и stderr, затем проверьте код завершения командой `echo $?`, если результат неоднозначен.",
+        "shell": "student@go-backend",
+        "tasks": [
+          {
+            "id": "t1",
+            "prompt": "Поднимите messaging profile.",
+            "predict": "Что должно измениться или появиться после этой команды? Запустятся broker и связанные локальные сервисы.",
+            "hint": "Нужна команда: docker compose --profile messaging up -d",
+            "hints": [
+              "Запустятся broker и связанные локальные сервисы.",
+              "Соберите команду из программы, подкоманды, флагов и аргумента. Не добавляйте sudo без причины.",
+              "`docker compose --profile messaging up -d`"
+            ],
+            "expected": [
+              "docker compose --profile messaging up -d"
+            ],
+            "success": "Готово. Запустятся broker и связанные локальные сервисы."
+          },
+          {
+            "id": "t2",
+            "prompt": "Проверьте состояние контейнеров.",
+            "predict": "Что должно измениться или появиться после этой команды? Убедитесь в health, а не только Up.",
+            "hint": "Нужна команда: docker compose ps",
+            "hints": [
+              "Убедитесь в health, а не только Up.",
+              "Соберите команду из программы, подкоманды, флагов и аргумента. Не добавляйте sudo без причины.",
+              "`docker compose ps`"
+            ],
+            "expected": [
+              "docker compose ps"
+            ],
+            "success": "Готово. Убедитесь в health, а не только Up."
+          },
+          {
+            "id": "t3",
+            "prompt": "Запустите тест producer.",
+            "predict": "Что должно измениться или появиться после этой команды? Delivery callback/error должен быть проверен.",
+            "hint": "Нужна команда: go test ./internal/messaging -run TestProducer -v",
+            "hints": [
+              "Delivery callback/error должен быть проверен.",
+              "Соберите команду из программы, подкоманды, флагов и аргумента. Не добавляйте sudo без причины.",
+              "`go test ./internal/messaging -run TestProducer -v`"
+            ],
+            "expected": [
+              "go test ./internal/messaging -run TestProducer -v"
+            ],
+            "success": "Готово. Delivery callback/error должен быть проверен."
+          },
+          {
+            "id": "t4",
+            "prompt": "Запустите consumer integration test.",
+            "predict": "Что должно измениться или появиться после этой команды? Дважды доставленный ID создаёт один side effect.",
+            "hint": "Нужна команда: go test ./internal/messaging -run TestConsumerIdempotency -tags=integration -v",
+            "hints": [
+              "Дважды доставленный ID создаёт один side effect.",
+              "Соберите команду из программы, подкоманды, флагов и аргумента. Не добавляйте sudo без причины.",
+              "`go test ./internal/messaging -run TestConsumerIdempotency -tags=integration -v`"
+            ],
+            "expected": [
+              "go test ./internal/messaging -run TestConsumerIdempotency -tags=integration -v"
+            ],
+            "success": "Готово. Дважды доставленный ID создаёт один side effect."
+          },
+          {
+            "id": "t5",
+            "prompt": "Остановите consumer process.",
+            "predict": "Что должно измениться или появиться после этой команды? Broker сохранит durable workload для redelivery.",
+            "hint": "Нужна команда: docker compose stop worker",
+            "hints": [
+              "Broker сохранит durable workload для redelivery.",
+              "Соберите команду из программы, подкоманды, флагов и аргумента. Не добавляйте sudo без причины.",
+              "`docker compose stop worker`"
+            ],
+            "expected": [
+              "docker compose stop worker"
+            ],
+            "success": "Готово. Broker сохранит durable workload для redelivery."
+          },
+          {
+            "id": "t6",
+            "prompt": "Запустите worker снова.",
+            "predict": "Что должно измениться или появиться после этой команды? Неподтверждённое сообщение будет обработано повторно.",
+            "hint": "Нужна команда: docker compose start worker",
+            "hints": [
+              "Неподтверждённое сообщение будет обработано повторно.",
+              "Соберите команду из программы, подкоманды, флагов и аргумента. Не добавляйте sudo без причины.",
+              "`docker compose start worker`"
+            ],
+            "expected": [
+              "docker compose start worker"
+            ],
+            "success": "Готово. Неподтверждённое сообщение будет обработано повторно."
+          },
+          {
+            "id": "t7",
+            "prompt": "Посмотрите сервисные логи.",
+            "predict": "Что должно измениться или появиться после этой команды? Ищите event_id, attempt, latency и result без payload secrets.",
+            "hint": "Нужна команда: docker compose logs --tail=100 worker",
+            "hints": [
+              "Ищите event_id, attempt, latency и result без payload secrets.",
+              "Соберите команду из программы, подкоманды, флагов и аргумента. Не добавляйте sudo без причины.",
+              "`docker compose logs --tail=100 worker`"
+            ],
+            "expected": [
+              "docker compose logs --tail=100 worker"
+            ],
+            "success": "Готово. Ищите event_id, attempt, latency и result без payload secrets."
+          }
+        ],
+        "challenge": "Отправьте один event, остановите worker после side effect до ack, восстановите его и докажите через UNIQUE inbox, что side effect произошёл ровно один раз.",
+        "debug": "Читайте stderr полностью и проверяйте код завершения. Если результат неожиданен, сузьте проблему одной командой и повторите её с минимальным вводом.\n\nТипичная ошибка: поднимать production stack из учебного compose. Всегда начните с `pwd`, `ls -la` и чтения полного сообщения об ошибке.",
+        "resources": [
+          {
+            "url": "https://github.com/twmb/franz-go",
+            "title": "franz-go",
+            "note": "Современный Kafka-клиент без зависимости от librdkafka."
+          },
+          {
+            "url": "https://docs.nats.io/using-nats/developer/develop_jetstream",
+            "title": "NATS JetStream",
+            "note": "Streams, consumers, acknowledgements и delivery semantics."
+          },
+          {
+            "url": "https://www.postgresql.org/docs/18/",
+            "title": "PostgreSQL 18 Documentation",
+            "note": "Актуальная стабильная документация PostgreSQL на сентябрь 2026."
+          }
+        ]
+      }
+    },
+    {
+      "title": "Версионируемый event envelope",
+      "kind": "code",
+      "summary": "Опишите стабильный межсервисный контракт и metadata.",
+      "durationMin": 22,
+      "content": {
+        "task": "Создайте пример order.created.v1: event_id, event_type, occurred_at RFC3339, producer, aggregate_id, traceparent, data с order_id/user_id/total_minor. Никаких секретов/PII сверх необходимости.\n\n## Порядок работы\n\n1. Прочитайте контракт и назовите вход, выход и возможные ошибки.\n2. Допишите минимальный рабочий вариант.\n3. Проверьте обычный, граничный и ошибочный сценарии.\n4. Измените одно требование и адаптируйте код без копирования готового решения.\n5. Сравните с эталоном только после собственной попытки.\n\n## Обязательная проверка\n\nЗапустите форматирование и подходящие тесты. Для Go: `go fmt ./...`, `go vet ./...` и `go test ./...`. Ошибку не скрывайте пустым обработчиком.",
+        "starter": "{\n  \"event_id\": \"\",\n  \"event_type\": \"\",\n  \"data\": {}\n}",
+        "solution": "{\n  \"event_id\": \"0198d2d2-7ca0-7b12-9f5b-8f8bb2aa0011\",\n  \"event_type\": \"order.created.v1\",\n  \"occurred_at\": \"2026-09-14T12:00:00Z\",\n  \"producer\": \"orders-api\",\n  \"aggregate_id\": \"order-42\",\n  \"traceparent\": \"00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01\",\n  \"data\": {\n    \"order_id\": \"order-42\",\n    \"user_id\": \"user-7\",\n    \"total_minor\": 129900\n  }\n}",
+        "checks": [
+          {
+            "type": "contains",
+            "value": "event_id",
+            "message": "Проверка 1: в решении должна быть реализована конструкция `event_id`."
+          },
+          {
+            "type": "contains",
+            "value": "order.created.v1",
+            "message": "Проверка 2: в решении должна быть реализована конструкция `order.created.v1`."
+          },
+          {
+            "type": "contains",
+            "value": "occurred_at",
+            "message": "Проверка 3: в решении должна быть реализована конструкция `occurred_at`."
+          },
+          {
+            "type": "contains",
+            "value": "producer",
+            "message": "Проверка 4: в решении должна быть реализована конструкция `producer`."
+          },
+          {
+            "type": "contains",
+            "value": "aggregate_id",
+            "message": "Проверка 5: в решении должна быть реализована конструкция `aggregate_id`."
+          },
+          {
+            "type": "contains",
+            "value": "traceparent",
+            "message": "Проверка 6: в решении должна быть реализована конструкция `traceparent`."
+          },
+          {
+            "type": "contains",
+            "value": "total_minor",
+            "message": "Проверка 7: в решении должна быть реализована конструкция `total_minor`."
+          }
+        ],
+        "hint": "Envelope содержит общие routing/diagnostic поля, data — versioned business payload.\n\n## Шпаргалка по синтаксису\n\n- Объект заключён в `{ }`, массив — в `[ ]`; ключи и строки используют двойные кавычки.\n- Между элементами нужна запятая, после последнего элемента запятой нет; комментарии стандарт JSON не поддерживает.\n- Явно храните версию формата и проверяйте вход по схеме до использования значений.\n\n## Что проверяет автопроверка\n\n1. Проверка 1: в решении должна быть реализована конструкция `event_id`.\n2. Проверка 2: в решении должна быть реализована конструкция `order.created.v1`.\n3. Проверка 3: в решении должна быть реализована конструкция `occurred_at`.\n4. Проверка 4: в решении должна быть реализована конструкция `producer`.\n5. Проверка 5: в решении должна быть реализована конструкция `aggregate_id`.\n6. Проверка 6: в решении должна быть реализована конструкция `traceparent`.\n7. Проверка 7: в решении должна быть реализована конструкция `total_minor`.\n\nАвтопроверка подтверждает обязательные конструкции, но не заменяет компиляцию, тесты, статический анализ и проверку поведения на границах.",
+        "language": "json",
+        "resources": [
+          {
+            "url": "https://github.com/twmb/franz-go",
+            "title": "franz-go",
+            "note": "Современный Kafka-клиент без зависимости от librdkafka."
+          },
+          {
+            "url": "https://docs.nats.io/using-nats/developer/develop_jetstream",
+            "title": "NATS JetStream",
+            "note": "Streams, consumers, acknowledgements и delivery semantics."
+          },
+          {
+            "url": "https://opentelemetry.io/docs/languages/go/",
+            "title": "OpenTelemetry Go",
+            "note": "Трейсы, метрики, логи и экспорт телеметрии."
+          }
+        ]
+      }
+    },
+    {
+      "title": "Идемпотентный consumer handler",
+      "kind": "code",
+      "summary": "Защитите side effect одной БД transaction.",
+      "durationMin": 22,
+      "content": {
+        "task": "Реализуйте Handle(ctx,event): tx.WithTx; InsertInbox(event.ID) возвращает inserted bool; если false — success без side effect; если true — Apply и commit. Ошибки оборачивать.\n\n## Порядок работы\n\n1. Прочитайте контракт и назовите вход, выход и возможные ошибки.\n2. Допишите минимальный рабочий вариант.\n3. Проверьте обычный, граничный и ошибочный сценарии.\n4. Измените одно требование и адаптируйте код без копирования готового решения.\n5. Сравните с эталоном только после собственной попытки.\n\n## Обязательная проверка\n\nЗапустите форматирование и подходящие тесты. Для Go: `go fmt ./...`, `go vet ./...` и `go test ./...`. Ошибку не скрывайте пустым обработчиком.",
+        "starter": "package consumer\n\nimport \"context\"\n\nfunc (h Handler) Handle(ctx context.Context, event Event) error {\n    // TODO\n    return nil\n}",
+        "solution": "package consumer\n\nimport (\n    \"context\"\n    \"fmt\"\n)\n\nfunc (h Handler) Handle(ctx context.Context, event Event) error {\n    return h.tx.WithTx(ctx, func(store Store) error {\n        inserted, err := store.InsertInbox(ctx, event.ID)\n        if err != nil { return fmt.Errorf(\"insert inbox: %w\", err) }\n        if !inserted { return nil }\n        if err := store.Apply(ctx, event); err != nil { return fmt.Errorf(\"apply event %s: %w\", event.ID, err) }\n        return nil\n    })\n}",
+        "checks": [
+          {
+            "type": "contains",
+            "value": "h.tx.WithTx",
+            "message": "Проверка 1: в решении должна быть реализована конструкция `h.tx.WithTx`."
+          },
+          {
+            "type": "contains",
+            "value": "store.InsertInbox",
+            "message": "Проверка 2: в решении должна быть реализована конструкция `store.InsertInbox`."
+          },
+          {
+            "type": "contains",
+            "value": "if !inserted",
+            "message": "Проверка 3: в решении должна быть реализована конструкция `if !inserted`."
+          },
+          {
+            "type": "contains",
+            "value": "store.Apply",
+            "message": "Проверка 4: в решении должна быть реализована конструкция `store.Apply`."
+          },
+          {
+            "type": "contains",
+            "value": "event.ID",
+            "message": "Проверка 5: в решении должна быть реализована конструкция `event.ID`."
+          },
+          {
+            "type": "contains",
+            "value": "fmt.Errorf",
+            "message": "Проверка 6: в решении должна быть реализована конструкция `fmt.Errorf`."
+          },
+          {
+            "type": "contains",
+            "value": "%w",
+            "message": "Проверка 7: в решении должна быть реализована конструкция `%w`."
+          }
+        ],
+        "hint": "Inbox insert и side effect должны выполняться одним Tx-scoped store.\n\n## Шпаргалка по синтаксису\n\n- Файл начинается с `package`; зависимости подключаются через `import`.\n- `func name(arg Type) (Result, error)` задаёт типизированный контракт функции.\n- `:=` объявляет локальную переменную внутри функции; `=` присваивает уже объявленной.\n- Ошибку проверяют явно: `if err != nil`; контекст добавляют через `fmt.Errorf(\"operation: %w\", err)`, а цепочку проверяют `errors.Is/As`.\n- `context.Context` передают первым аргументом по цепочке вызовов и не сохраняют в глобальном состоянии.\n- После изменения выполните `gofmt`, `go vet ./...` и `go test ./...`; для конкурентного кода добавьте `go test -race ./...`.\n\n## Что проверяет автопроверка\n\n1. Проверка 1: в решении должна быть реализована конструкция `h.tx.WithTx`.\n2. Проверка 2: в решении должна быть реализована конструкция `store.InsertInbox`.\n3. Проверка 3: в решении должна быть реализована конструкция `if !inserted`.\n4. Проверка 4: в решении должна быть реализована конструкция `store.Apply`.\n5. Проверка 5: в решении должна быть реализована конструкция `event.ID`.\n6. Проверка 6: в решении должна быть реализована конструкция `fmt.Errorf`.\n7. Проверка 7: в решении должна быть реализована конструкция `%w`.\n\nАвтопроверка подтверждает обязательные конструкции, но не заменяет компиляцию, тесты, статический анализ и проверку поведения на границах.",
+        "language": "go",
+        "resources": [
+          {
+            "url": "https://www.postgresql.org/docs/18/",
+            "title": "PostgreSQL 18 Documentation",
+            "note": "Актуальная стабильная документация PostgreSQL на сентябрь 2026."
+          },
+          {
+            "url": "https://pkg.go.dev/context",
+            "title": "context",
+            "note": "Отмена, deadlines и request-scoped values."
+          }
+        ]
+      }
+    },
+    {
+      "title": "Квиз модуля: Kafka, NATS JetStream и событийная обработка",
+      "kind": "quiz",
+      "summary": "Проверка ключевых решений и ошибок по модулю «Kafka, NATS JetStream и событийная обработка».",
+      "durationMin": 10,
+      "content": {
+        "intro": "Ответьте без запуска кода. Цель — проверить причинно-следственные связи. После ошибки вернитесь к уроку и воспроизведите пример своими руками. Положение правильного варианта меняется; ориентируйтесь на смысл, а не на букву ответа.",
+        "passScore": 70,
+        "questions": [
+          {
+            "id": "q1",
+            "text": "Почему at-least-once consumer должен быть идемпотентным?",
+            "options": [
+              {
+                "id": "a",
+                "text": "Crash после side effect, но до ack приводит к повторной доставке",
+                "correct": true
+              },
+              {
+                "id": "b",
+                "text": "Broker никогда не повторяет сообщения",
+                "correct": false
+              },
+              {
+                "id": "c",
+                "text": "Чтобы выключить partitions",
+                "correct": false
+              }
+            ],
+            "explanation": "Ack и side effect обычно не входят в одну атомарную transaction."
+          },
+          {
+            "id": "q2",
+            "text": "Где Kafka гарантирует порядок records?",
+            "options": [
+              {
+                "id": "a",
+                "text": "Глобально между всеми topics",
+                "correct": false
+              },
+              {
+                "id": "b",
+                "text": "Внутри одной partition",
+                "correct": true
+              },
+              {
+                "id": "c",
+                "text": "Только внутри JSON объекта",
+                "correct": false
+              }
+            ],
+            "explanation": "Partition — единица упорядочивания и parallelism."
+          },
+          {
+            "id": "q3",
+            "text": "Чем Core NATS отличается от JetStream?",
+            "options": [
+              {
+                "id": "a",
+                "text": "Core NATS хранит всё навсегда",
+                "correct": false
+              },
+              {
+                "id": "b",
+                "text": "JetStream — SQL database",
+                "correct": false
+              },
+              {
+                "id": "c",
+                "text": "JetStream добавляет persistence, durable consumers и redelivery",
+                "correct": true
+              }
+            ],
+            "explanation": "Выбор зависит от требований доставки."
+          },
+          {
+            "id": "q4",
+            "text": "Как outbox устраняет dual-write между БД и broker?",
+            "options": [
+              {
+                "id": "a",
+                "text": "Business change и outbox row commit в одной локальной БД transaction",
+                "correct": true
+              },
+              {
+                "id": "b",
+                "text": "Он создаёт distributed transaction с браузером",
+                "correct": false
+              },
+              {
+                "id": "c",
+                "text": "Он запрещает retries",
+                "correct": false
+              }
+            ],
+            "explanation": "Publisher асинхронно доставляет уже committed intent."
+          },
+          {
+            "id": "q5",
+            "text": "Как выбрать Kafka partition key для заказов?",
+            "options": [
+              {
+                "id": "a",
+                "text": "Случайный байт для каждого event независимо",
+                "correct": false
+              },
+              {
+                "id": "b",
+                "text": "Order ID, если нужен порядок событий каждого заказа",
+                "correct": true
+              },
+              {
+                "id": "c",
+                "text": "Текущий offset",
+                "correct": false
+              }
+            ],
+            "explanation": "Key определяет colocated ordering и distribution."
+          },
+          {
+            "id": "q6",
+            "text": "Когда ack сообщения делать безопаснее?",
+            "options": [
+              {
+                "id": "a",
+                "text": "До начала обработки всегда",
+                "correct": false
+              },
+              {
+                "id": "b",
+                "text": "Никогда",
+                "correct": false
+              },
+              {
+                "id": "c",
+                "text": "После успешного commit идемпотентного side effect",
+                "correct": true
+              }
+            ],
+            "explanation": "Ранний ack создаёт потерю при последующей ошибке."
+          }
+        ],
+        "resources": [
+          {
+            "url": "https://github.com/twmb/franz-go",
+            "title": "franz-go",
+            "note": "Современный Kafka-клиент без зависимости от librdkafka."
+          },
+          {
+            "url": "https://docs.nats.io/using-nats/developer/develop_jetstream",
+            "title": "NATS JetStream",
+            "note": "Streams, consumers, acknowledgements и delivery semantics."
+          },
+          {
+            "url": "https://www.postgresql.org/docs/18/",
+            "title": "PostgreSQL 18 Documentation",
+            "note": "Актуальная стабильная документация PostgreSQL на сентябрь 2026."
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,521 @@
+{
+  "title": "Логи, метрики, трассировка и SLO",
+  "summary": "log/slog, Prometheus, OpenTelemetry, RED/USE signals, безопасные health probes и actionable alerts.",
+  "lessons": [
+    {
+      "title": "Структурированные логи с log/slog",
+      "kind": "text",
+      "summary": "Пишем события, которые можно искать и связывать без парсинга фраз.",
+      "durationMin": 14,
+      "content": {
+        "body": "## Зачем это нужно backend-разработчику\n\nСтруктурированные логи с log/slog — часть ежедневной работы Go backend-разработчика. Важно не только знать синтаксис, но и понимать контракт, стоимость операции, поведение при ошибке и способ проверки результата.\n\n## Ментальная модель\n\nСтруктурированные логи с log/slog: рассматривайте тему как набор явных входов, преобразований, выходов и отказов. Владение темой означает, что вы можете предсказать поведение до запуска и объяснить компромиссы коллеге.\n\n## Основные идеи по шагам\n\n1. Лог — событие с level, message и typed attributes: service, env, request_id, trace_id, operation, duration и error class.\n2. Не логируйте passwords, tokens, cookies, authorization headers, полные payment/PII payloads; применяйте allowlist/redaction.\n3. Одну ошибку логируют один раз на ownership boundary; внутренние слои добавляют context через wrapping.\n4. Высокочастотные success logs могут быть sampled; audit events хранят отдельно с integrity/access policy.\n\n## Разбор на примере\n\n```go\nlogger.ErrorContext(ctx, \"create order failed\",\n    slog.String(\"operation\", \"orders.create\"),\n    slog.String(\"error_class\", classify(err)),\n    slog.Duration(\"duration\", elapsed),\n    slog.Any(\"error\", err),\n)\n```\n\nНе добавляйте сырой request body. Context handler может автоматически включить trace/request IDs через wrapper.\n\n## Где это встречается в production\n\nВ рабочем сервисе эта тема влияет на читаемость pull request, предсказуемость API, диагностику инцидентов и стоимость дальнейших изменений. Сначала зафиксируйте контракт тестом или примером, затем реализуйте простейшее корректное решение.\n\n## Как бывает неправильно\n\n- **Механическое копирование**\n  - Как проявляется: код компилируется, но автор не может объяснить граничные случаи\n  - Что делать: измените входные данные и предскажите результат до запуска\n- **Скрытая ошибка**\n  - Как проявляется: неверное состояние обнаруживается далеко от причины\n  - Что делать: возвращайте ошибку с контекстом и проверяйте её на нужном уровне\n- **Преждевременная сложность**\n  - Как проявляется: простая задача получает лишние абстракции и зависимости\n  - Что делать: сначала используйте стандартную библиотеку и измеримые требования\n\n## Проверьте себя\n\n1. Объясните своими словами: Структурированные логи с log/slog: рассматривайте тему как набор явных входов, преобразований, выходов и отказов. Владение темой означает, что вы можете предсказать поведение до запуска и объяснить компромиссы коллеге.\n2. Как эта тема проявляется в реальном backend-сервисе?\n3. Какую ошибку из раздела выше вы сможете распознать по симптомам?\n\n## Практика после урока\n\nВоспроизведите пример, добавьте один ошибочный вход, напишите проверку результата и объясните решение вслух за две минуты.\n\n## Запомнить\n\n- Сначала понимайте контракт и ограничения, затем выбирайте инструмент.\n- Ошибка должна быть наблюдаемой: её проверяют, логируют с контекстом и возвращают на правильный уровень.\n- Любой пример из урока измените хотя бы один раз и снова проверьте результат.\n- Production-код отличается явными таймаутами, валидацией, тестами и способом безопасного завершения.",
+        "resources": [
+          {
+            "url": "https://pkg.go.dev/",
+            "title": "Go Packages",
+            "note": "Документация стандартной библиотеки и модулей сообщества."
+          },
+          {
+            "url": "https://opentelemetry.io/docs/languages/go/",
+            "title": "OpenTelemetry Go",
+            "note": "Трейсы, метрики, логи и экспорт телеметрии."
+          }
+        ]
+      }
+    },
+    {
+      "title": "Prometheus и cardinality",
+      "kind": "text",
+      "summary": "Измеряем rates, errors, durations и saturation без взрыва series.",
+      "durationMin": 15,
+      "content": {
+        "body": "## Зачем это нужно backend-разработчику\n\nPrometheus и cardinality — часть ежедневной работы Go backend-разработчика. Важно не только знать синтаксис, но и понимать контракт, стоимость операции, поведение при ошибке и способ проверки результата.\n\n## Ментальная модель\n\nPrometheus и cardinality: рассматривайте тему как набор явных входов, преобразований, выходов и отказов. Владение темой означает, что вы можете предсказать поведение до запуска и объяснить компромиссы коллеге.\n\n## Основные идеи по шагам\n\n1. Counter только растёт, gauge меняется вверх/вниз, histogram распределяет latency/size и позволяет aggregate quantiles.\n2. RED для request service: Rate, Errors, Duration; USE для resources: Utilization, Saturation, Errors.\n3. Labels должны иметь ограниченную cardinality: route template/status class/method допустимы, user_id/order_id/raw URL — нет.\n4. Buckets выбирают вокруг SLO и реального latency range; среднее скрывает хвост, а client-side quantile summary плохо агрегируется.\n\n## Разбор на примере\n\n```go\nrequestDuration := prometheus.NewHistogramVec(\n    prometheus.HistogramOpts{Name: \"http_server_request_duration_seconds\", Buckets: []float64{.01,.025,.05,.1,.25,.5,1,2.5}},\n    []string{\"method\", \"route\", \"status_class\"},\n)\n```\n\nroute — нормализованный template /v1/orders/{id}, не r.URL.Path. Иначе каждый ID создаёт series.\n\n## Где это встречается в production\n\nВ рабочем сервисе эта тема влияет на читаемость pull request, предсказуемость API, диагностику инцидентов и стоимость дальнейших изменений. Сначала зафиксируйте контракт тестом или примером, затем реализуйте простейшее корректное решение.\n\n## Как бывает неправильно\n\n- **Механическое копирование**\n  - Как проявляется: код компилируется, но автор не может объяснить граничные случаи\n  - Что делать: измените входные данные и предскажите результат до запуска\n- **Скрытая ошибка**\n  - Как проявляется: неверное состояние обнаруживается далеко от причины\n  - Что делать: возвращайте ошибку с контекстом и проверяйте её на нужном уровне\n- **Преждевременная сложность**\n  - Как проявляется: простая задача получает лишние абстракции и зависимости\n  - Что делать: сначала используйте стандартную библиотеку и измеримые требования\n\n## Проверьте себя\n\n1. Объясните своими словами: Prometheus и cardinality: рассматривайте тему как набор явных входов, преобразований, выходов и отказов. Владение темой означает, что вы можете предсказать поведение до запуска и объяснить компромиссы коллеге.\n2. Как эта тема проявляется в реальном backend-сервисе?\n3. Какую ошибку из раздела выше вы сможете распознать по симптомам?\n\n## Практика после урока\n\nВоспроизведите пример, добавьте один ошибочный вход, напишите проверку результата и объясните решение вслух за две минуты.\n\n## Запомнить\n\n- Сначала понимайте контракт и ограничения, затем выбирайте инструмент.\n- Ошибка должна быть наблюдаемой: её проверяют, логируют с контекстом и возвращают на правильный уровень.\n- Любой пример из урока измените хотя бы один раз и снова проверьте результат.\n- Production-код отличается явными таймаутами, валидацией, тестами и способом безопасного завершения.",
+        "resources": [
+          {
+            "url": "https://prometheus.io/docs/guides/go-application/",
+            "title": "Prometheus Go application",
+            "note": "Инструментирование Go-приложения метриками."
+          }
+        ]
+      }
+    },
+    {
+      "title": "OpenTelemetry traces и context propagation",
+      "kind": "text",
+      "summary": "Видим один запрос через HTTP, SQL, broker и worker.",
+      "durationMin": 16,
+      "content": {
+        "body": "## Зачем это нужно backend-разработчику\n\nOpenTelemetry traces и context propagation — часть ежедневной работы Go backend-разработчика. Важно не только знать синтаксис, но и понимать контракт, стоимость операции, поведение при ошибке и способ проверки результата.\n\n## Ментальная модель\n\nOpenTelemetry traces и context propagation: рассматривайте тему как набор явных входов, преобразований, выходов и отказов. Владение темой означает, что вы можете предсказать поведение до запуска и объяснить компромиссы коллеге.\n\n## Основные идеи по шагам\n\n1. Trace состоит из spans с parent-child links, attributes, events и status; trace context распространяется стандартным W3C traceparent.\n2. Instrumentations для net/http, pgx, gRPC и broker уменьшают ручной код, но span names/attributes/cardinality требуют единой semantic convention.\n3. Ошибку record в span только там, где она наблюдаема; не записывайте секреты или большие payload в attributes.\n4. Sampling выбирает стоимость/полезность: head sampling прост, tail sampling может сохранять редкие errors/slow traces в collector.\n\n## Разбор на примере\n\n```go\nctx, span := tracer.Start(ctx, \"orders.create\")\ndefer span.End()\nspan.SetAttributes(attribute.String(\"order.type\", cmd.Type))\nif err != nil { span.RecordError(err) }\n```\n\nBusiness attribute имеет bounded values. Order ID при необходимости correlation может попасть в logs, но не в metric labels.\n\n## Где это встречается в production\n\nВ рабочем сервисе эта тема влияет на читаемость pull request, предсказуемость API, диагностику инцидентов и стоимость дальнейших изменений. Сначала зафиксируйте контракт тестом или примером, затем реализуйте простейшее корректное решение.\n\n## Как бывает неправильно\n\n- **Механическое копирование**\n  - Как проявляется: код компилируется, но автор не может объяснить граничные случаи\n  - Что делать: измените входные данные и предскажите результат до запуска\n- **Скрытая ошибка**\n  - Как проявляется: неверное состояние обнаруживается далеко от причины\n  - Что делать: возвращайте ошибку с контекстом и проверяйте её на нужном уровне\n- **Преждевременная сложность**\n  - Как проявляется: простая задача получает лишние абстракции и зависимости\n  - Что делать: сначала используйте стандартную библиотеку и измеримые требования\n\n## Проверьте себя\n\n1. Объясните своими словами: OpenTelemetry traces и context propagation: рассматривайте тему как набор явных входов, преобразований, выходов и отказов. Владение темой означает, что вы можете предсказать поведение до запуска и объяснить компромиссы коллеге.\n2. Как эта тема проявляется в реальном backend-сервисе?\n3. Какую ошибку из раздела выше вы сможете распознать по симптомам?\n\n## Практика после урока\n\nВоспроизведите пример, добавьте один ошибочный вход, напишите проверку результата и объясните решение вслух за две минуты.\n\n## Запомнить\n\n- Сначала понимайте контракт и ограничения, затем выбирайте инструмент.\n- Ошибка должна быть наблюдаемой: её проверяют, логируют с контекстом и возвращают на правильный уровень.\n- Любой пример из урока измените хотя бы один раз и снова проверьте результат.\n- Production-код отличается явными таймаутами, валидацией, тестами и способом безопасного завершения.",
+        "resources": [
+          {
+            "url": "https://opentelemetry.io/docs/languages/go/",
+            "title": "OpenTelemetry Go",
+            "note": "Трейсы, метрики, логи и экспорт телеметрии."
+          },
+          {
+            "url": "https://grpc.io/docs/languages/go/quickstart/",
+            "title": "gRPC Go",
+            "note": "Официальный quickstart и toolchain для Go."
+          }
+        ]
+      }
+    },
+    {
+      "title": "Health, readiness, SLI/SLO и alerts",
+      "kind": "text",
+      "summary": "Отделяем процесс жив от instance готов обслуживать и предупреждаем по влиянию на пользователя.",
+      "durationMin": 17,
+      "content": {
+        "body": "## Зачем это нужно backend-разработчику\n\nHealth, readiness, SLI/SLO и alerts — часть ежедневной работы Go backend-разработчика. Важно не только знать синтаксис, но и понимать контракт, стоимость операции, поведение при ошибке и способ проверки результата.\n\n## Ментальная модель\n\nHealth, readiness, SLI/SLO и alerts: рассматривайте тему как набор явных входов, преобразований, выходов и отказов. Владение темой означает, что вы можете предсказать поведение до запуска и объяснить компромиссы коллеге.\n\n## Основные идеи по шагам\n\n1. Liveness отвечает, нужно ли перезапустить процесс; readiness — следует ли направлять новый трафик; startup даёт медленному старту отдельное окно.\n2. Liveness не должна падать из-за внешней БД и создавать restart storm; readiness проверяет критические dependencies с коротким timeout.\n3. SLI — измерение, SLO — целевой уровень за окно, error budget — допустимая доля плохих событий.\n4. Alert должен быть actionable и связан с user impact/burn rate; dashboard без owner/runbook не является response plan.\n\n## Разбор на примере\n\n```text\nSLI = good_requests / valid_requests\nSLO = 99.9% за 30 дней\nerror budget = 0.1%\nalert = быстрый/медленный burn rate бюджета\n```\n\nИсключения из denominator документируются. Planned maintenance не вычёркивается произвольно после инцидента.\n\n## Где это встречается в production\n\nВ рабочем сервисе эта тема влияет на читаемость pull request, предсказуемость API, диагностику инцидентов и стоимость дальнейших изменений. Сначала зафиксируйте контракт тестом или примером, затем реализуйте простейшее корректное решение.\n\n## Как бывает неправильно\n\n- **Механическое копирование**\n  - Как проявляется: код компилируется, но автор не может объяснить граничные случаи\n  - Что делать: измените входные данные и предскажите результат до запуска\n- **Скрытая ошибка**\n  - Как проявляется: неверное состояние обнаруживается далеко от причины\n  - Что делать: возвращайте ошибку с контекстом и проверяйте её на нужном уровне\n- **Преждевременная сложность**\n  - Как проявляется: простая задача получает лишние абстракции и зависимости\n  - Что делать: сначала используйте стандартную библиотеку и измеримые требования\n\n## Проверьте себя\n\n1. Объясните своими словами: Health, readiness, SLI/SLO и alerts: рассматривайте тему как набор явных входов, преобразований, выходов и отказов. Владение темой означает, что вы можете предсказать поведение до запуска и объяснить компромиссы коллеге.\n2. Как эта тема проявляется в реальном backend-сервисе?\n3. Какую ошибку из раздела выше вы сможете распознать по симптомам?\n\n## Практика после урока\n\nВоспроизведите пример, добавьте один ошибочный вход, напишите проверку результата и объясните решение вслух за две минуты.\n\n## Запомнить\n\n- Сначала понимайте контракт и ограничения, затем выбирайте инструмент.\n- Ошибка должна быть наблюдаемой: её проверяют, логируют с контекстом и возвращают на правильный уровень.\n- Любой пример из урока измените хотя бы один раз и снова проверьте результат.\n- Production-код отличается явными таймаутами, валидацией, тестами и способом безопасного завершения.",
+        "resources": [
+          {
+            "url": "https://prometheus.io/docs/guides/go-application/",
+            "title": "Prometheus Go application",
+            "note": "Инструментирование Go-приложения метриками."
+          },
+          {
+            "url": "https://kubernetes.io/docs/concepts/",
+            "title": "Kubernetes Concepts",
+            "note": "Workloads, Services, Config, probes, resources и security."
+          },
+          {
+            "url": "https://opentelemetry.io/docs/languages/go/",
+            "title": "OpenTelemetry Go",
+            "note": "Трейсы, метрики, логи и экспорт телеметрии."
+          }
+        ]
+      }
+    },
+    {
+      "title": "Терминал: наблюдаем работающий сервис",
+      "kind": "terminal",
+      "summary": "Читаем метрики, profiles, structured logs и trace context.",
+      "durationMin": 16,
+      "content": {
+        "intro": "Debug endpoints bind только к защищённому admin interface/network. Не открывайте pprof публичному интернету.\n\nПеред Enter назовите ожидаемый результат. После команды прочитайте вывод и код завершения; не переходите дальше, пока не понимаете, что именно подтвердили.\n\n## Разбор команд до практики\n\nНиже каждая команда разобрана до выполнения. Сначала прочитайте назначение и назовите ожидаемый результат, затем выполняйте задание в тренажёре.\n\n### 1. Проверьте metrics endpoint.\n\n**Команда:**\n\n```bash\ncurl -sS http://localhost:9090/metrics\n```\n\n- **Инструмент:** curl.\n- **Зачем запускать:** Найдите application и runtime metrics.\n- **Что считать подтверждением:** Найдите application и runtime metrics.\n- **Перед запуском:** Проверьте адрес, порт и таймаут; команда должна обращаться только к разрешённой учебной цели.\n- **После запуска:** прочитайте stdout и stderr, затем проверьте код завершения командой `echo $?`, если результат неоднозначен.\n\n### 2. Отфильтруйте HTTP metric локально.\n\n**Команда:**\n\n```bash\ncurl -sS http://localhost:9090/metrics | rg http_server_request\n```\n\n- **Инструмент:** curl.\n- **Зачем запускать:** Проверьте route templates и buckets.\n- **Что считать подтверждением:** Проверьте route templates и buckets.\n- **Перед запуском:** Проверьте адрес, порт и таймаут; команда должна обращаться только к разрешённой учебной цели.\n- **После запуска:** прочитайте stdout и stderr, затем проверьте код завершения командой `echo $?`, если результат неоднозначен.\n\n### 3. Проверьте readiness.\n\n**Команда:**\n\n```bash\ncurl -i --max-time 2 http://localhost:8080/readyz\n```\n\n- **Инструмент:** curl.\n- **Зачем запускать:** Status отражает способность принимать новый трафик.\n- **Что считать подтверждением:** Status отражает способность принимать новый трафик.\n- **Перед запуском:** Проверьте адрес, порт и таймаут; команда должна обращаться только к разрешённой учебной цели.\n- **После запуска:** прочитайте stdout и stderr, затем проверьте код завершения командой `echo $?`, если результат неоднозначен.\n\n### 4. Получите goroutine profile.\n\n**Команда:**\n\n```bash\ncurl -sS http://localhost:6060/debug/pprof/goroutine?debug=1\n```\n\n- **Инструмент:** curl.\n- **Зачем запускать:** Stacks помогают найти блокировки; endpoint должен быть приватным.\n- **Что считать подтверждением:** Stacks помогают найти блокировки; endpoint должен быть приватным.\n- **Перед запуском:** Проверьте адрес, порт и таймаут; команда должна обращаться только к разрешённой учебной цели.\n- **После запуска:** прочитайте stdout и stderr, затем проверьте код завершения командой `echo $?`, если результат неоднозначен.\n\n### 5. Получите Go 1.27 leak profile.\n\n**Команда:**\n\n```bash\ncurl -sS http://localhost:6060/debug/pprof/goroutineleak?debug=1\n```\n\n- **Инструмент:** curl.\n- **Зачем запускать:** Профиль показывает вероятно потерянные goroutines.\n- **Что считать подтверждением:** Профиль показывает вероятно потерянные goroutines.\n- **Перед запуском:** Проверьте адрес, порт и таймаут; команда должна обращаться только к разрешённой учебной цели.\n- **После запуска:** прочитайте stdout и stderr, затем проверьте код завершения командой `echo $?`, если результат неоднозначен.\n\n### 6. Снимите 30-секундный CPU profile.\n\n**Команда:**\n\n```bash\ngo tool pprof -http=:0 http://localhost:6060/debug/pprof/profile?seconds=30\n```\n\n- **Инструмент:** Go toolchain.\n- **Зачем запускать:** Анализируйте под representative load.\n- **Что считать подтверждением:** Анализируйте под representative load.\n- **Перед запуском:** Проверьте текущий каталог и прочитайте команду слева направо: программа, подкоманда, флаги, аргументы.\n- **После запуска:** прочитайте stdout и stderr, затем проверьте код завершения командой `echo $?`, если результат неоднозначен.\n\n### 7. Посмотрите JSON logs Compose.\n\n**Команда:**\n\n```bash\ndocker compose logs --tail=100 api\n```\n\n- **Инструмент:** Docker CLI.\n- **Зачем запускать:** Коррелируйте request_id/trace_id и error class.\n- **Что считать подтверждением:** Коррелируйте request_id/trace_id и error class.\n- **Перед запуском:** Проверьте активный Docker/Kubernetes-контекст и точное имя ресурса: команда может менять состояние учебного окружения.\n- **После запуска:** прочитайте stdout и stderr, затем проверьте код завершения командой `echo $?`, если результат неоднозначен.",
+        "shell": "student@go-backend",
+        "tasks": [
+          {
+            "id": "t1",
+            "prompt": "Проверьте metrics endpoint.",
+            "predict": "Что должно измениться или появиться после этой команды? Найдите application и runtime metrics.",
+            "hint": "Нужна команда: curl -sS http://localhost:9090/metrics",
+            "hints": [
+              "Найдите application и runtime metrics.",
+              "Соберите команду из программы, подкоманды, флагов и аргумента. Не добавляйте sudo без причины.",
+              "`curl -sS http://localhost:9090/metrics`"
+            ],
+            "expected": [
+              "curl -sS http://localhost:9090/metrics"
+            ],
+            "success": "Готово. Найдите application и runtime metrics."
+          },
+          {
+            "id": "t2",
+            "prompt": "Отфильтруйте HTTP metric локально.",
+            "predict": "Что должно измениться или появиться после этой команды? Проверьте route templates и buckets.",
+            "hint": "Нужна команда: curl -sS http://localhost:9090/metrics | rg http_server_request",
+            "hints": [
+              "Проверьте route templates и buckets.",
+              "Соберите команду из программы, подкоманды, флагов и аргумента. Не добавляйте sudo без причины.",
+              "`curl -sS http://localhost:9090/metrics | rg http_server_request`"
+            ],
+            "expected": [
+              "curl -sS http://localhost:9090/metrics | rg http_server_request"
+            ],
+            "success": "Готово. Проверьте route templates и buckets."
+          },
+          {
+            "id": "t3",
+            "prompt": "Проверьте readiness.",
+            "predict": "Что должно измениться или появиться после этой команды? Status отражает способность принимать новый трафик.",
+            "hint": "Нужна команда: curl -i --max-time 2 http://localhost:8080/readyz",
+            "hints": [
+              "Status отражает способность принимать новый трафик.",
+              "Соберите команду из программы, подкоманды, флагов и аргумента. Не добавляйте sudo без причины.",
+              "`curl -i --max-time 2 http://localhost:8080/readyz`"
+            ],
+            "expected": [
+              "curl -i --max-time 2 http://localhost:8080/readyz"
+            ],
+            "success": "Готово. Status отражает способность принимать новый трафик."
+          },
+          {
+            "id": "t4",
+            "prompt": "Получите goroutine profile.",
+            "predict": "Что должно измениться или появиться после этой команды? Stacks помогают найти блокировки; endpoint должен быть приватным.",
+            "hint": "Нужна команда: curl -sS http://localhost:6060/debug/pprof/goroutine?debug=1",
+            "hints": [
+              "Stacks помогают найти блокировки; endpoint должен быть приватным.",
+              "Соберите команду из программы, подкоманды, флагов и аргумента. Не добавляйте sudo без причины.",
+              "`curl -sS http://localhost:6060/debug/pprof/goroutine?debug=1`"
+            ],
+            "expected": [
+              "curl -sS http://localhost:6060/debug/pprof/goroutine?debug=1"
+            ],
+            "success": "Готово. Stacks помогают найти блокировки; endpoint должен быть приватным."
+          },
+          {
+            "id": "t5",
+            "prompt": "Получите Go 1.27 leak profile.",
+            "predict": "Что должно измениться или появиться после этой команды? Профиль показывает вероятно потерянные goroutines.",
+            "hint": "Нужна команда: curl -sS http://localhost:6060/debug/pprof/goroutineleak?debug=1",
+            "hints": [
+              "Профиль показывает вероятно потерянные goroutines.",
+              "Соберите команду из программы, подкоманды, флагов и аргумента. Не добавляйте sudo без причины.",
+              "`curl -sS http://localhost:6060/debug/pprof/goroutineleak?debug=1`"
+            ],
+            "expected": [
+              "curl -sS http://localhost:6060/debug/pprof/goroutineleak?debug=1"
+            ],
+            "success": "Готово. Профиль показывает вероятно потерянные goroutines."
+          },
+          {
+            "id": "t6",
+            "prompt": "Снимите 30-секундный CPU profile.",
+            "predict": "Что должно измениться или появиться после этой команды? Анализируйте под representative load.",
+            "hint": "Нужна команда: go tool pprof -http=:0 http://localhost:6060/debug/pprof/profile?seconds=30",
+            "hints": [
+              "Анализируйте под representative load.",
+              "Соберите команду из программы, подкоманды, флагов и аргумента. Не добавляйте sudo без причины.",
+              "`go tool pprof -http=:0 http://localhost:6060/debug/pprof/profile?seconds=30`"
+            ],
+            "expected": [
+              "go tool pprof -http=:0 http://localhost:6060/debug/pprof/profile?seconds=30"
+            ],
+            "success": "Готово. Анализируйте под representative load."
+          },
+          {
+            "id": "t7",
+            "prompt": "Посмотрите JSON logs Compose.",
+            "predict": "Что должно измениться или появиться после этой команды? Коррелируйте request_id/trace_id и error class.",
+            "hint": "Нужна команда: docker compose logs --tail=100 api",
+            "hints": [
+              "Коррелируйте request_id/trace_id и error class.",
+              "Соберите команду из программы, подкоманды, флагов и аргумента. Не добавляйте sudo без причины.",
+              "`docker compose logs --tail=100 api`"
+            ],
+            "expected": [
+              "docker compose logs --tail=100 api"
+            ],
+            "success": "Готово. Коррелируйте request_id/trace_id и error class."
+          }
+        ],
+        "challenge": "Создайте один slow request и одну DB error. Найдите их через metric exemplar/trace/log correlation и запишите путь диагностики в runbook.",
+        "debug": "Читайте stderr полностью и проверяйте код завершения. Если результат неожиданен, сузьте проблему одной командой и повторите её с минимальным вводом.\n\nТипичная ошибка: публиковать metrics с PII labels. Всегда начните с `pwd`, `ls -la` и чтения полного сообщения об ошибке.",
+        "resources": [
+          {
+            "url": "https://opentelemetry.io/docs/languages/go/",
+            "title": "OpenTelemetry Go",
+            "note": "Трейсы, метрики, логи и экспорт телеметрии."
+          },
+          {
+            "url": "https://prometheus.io/docs/guides/go-application/",
+            "title": "Prometheus Go application",
+            "note": "Инструментирование Go-приложения метриками."
+          },
+          {
+            "url": "https://go.dev/doc/go1.27",
+            "title": "Go 1.27 Release Notes",
+            "note": "Актуальные изменения языка, toolchain, runtime и стандартной библиотеки за 2026 год."
+          }
+        ]
+      }
+    },
+    {
+      "title": "HTTP logging middleware",
+      "kind": "code",
+      "summary": "Измерьте request без утечки body и high-cardinality labels.",
+      "durationMin": 22,
+      "content": {
+        "task": "Middleware принимает slog.Logger и routeName func. Сгенерируйте start time, оберните ResponseWriter для status, вызовите next, запишите method, route template, status, duration и request_id. Не логировать URL query/body.\n\n## Порядок работы\n\n1. Прочитайте контракт и назовите вход, выход и возможные ошибки.\n2. Допишите минимальный рабочий вариант.\n3. Проверьте обычный, граничный и ошибочный сценарии.\n4. Измените одно требование и адаптируйте код без копирования готового решения.\n5. Сравните с эталоном только после собственной попытки.\n\n## Обязательная проверка\n\nЗапустите форматирование и подходящие тесты. Для Go: `go fmt ./...`, `go vet ./...` и `go test ./...`. Ошибку не скрывайте пустым обработчиком.",
+        "starter": "package observability\n\nimport (\n    \"log/slog\"\n    \"net/http\"\n)\n\nfunc Logging(logger *slog.Logger, routeName func(*http.Request) string) func(http.Handler) http.Handler {\n    // TODO\n    return nil\n}",
+        "solution": "package observability\n\nimport (\n    \"log/slog\"\n    \"net/http\"\n    \"time\"\n)\n\ntype captureWriter struct { http.ResponseWriter; status int }\nfunc (w *captureWriter) WriteHeader(code int) {\n    if w.status != 0 { return }\n    w.status = code\n    w.ResponseWriter.WriteHeader(code)\n}\nfunc (w *captureWriter) Write(p []byte) (int, error) {\n    if w.status == 0 { w.WriteHeader(http.StatusOK) }\n    return w.ResponseWriter.Write(p)\n}\n\nfunc Logging(logger *slog.Logger, routeName func(*http.Request) string) func(http.Handler) http.Handler {\n    return func(next http.Handler) http.Handler {\n        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {\n            started := time.Now()\n            cw := &captureWriter{ResponseWriter: w}\n            next.ServeHTTP(cw, r)\n            status := cw.status\n            if status == 0 { status = http.StatusOK }\n            logger.InfoContext(r.Context(), \"http request\",\n                slog.String(\"method\", r.Method), slog.String(\"route\", routeName(r)),\n                slog.Int(\"status\", status), slog.Duration(\"duration\", time.Since(started)))\n        })\n    }\n}",
+        "checks": [
+          {
+            "type": "contains",
+            "value": "type captureWriter struct",
+            "message": "Проверка 1: в решении должна быть реализована конструкция `type captureWriter struct`."
+          },
+          {
+            "type": "contains",
+            "value": "WriteHeader(code int)",
+            "message": "Проверка 2: в решении должна быть реализована конструкция `WriteHeader(code int)`."
+          },
+          {
+            "type": "contains",
+            "value": "func (w *captureWriter) Write(",
+            "message": "Проверка 3: в решении должна быть реализована конструкция `func (w *captureWriter) Write(`."
+          },
+          {
+            "type": "contains",
+            "value": "time.Now()",
+            "message": "Проверка 4: в решении должна быть реализована конструкция `time.Now()`."
+          },
+          {
+            "type": "contains",
+            "value": "next.ServeHTTP",
+            "message": "Проверка 5: в решении должна быть реализована конструкция `next.ServeHTTP`."
+          },
+          {
+            "type": "contains",
+            "value": "logger.InfoContext",
+            "message": "Проверка 6: в решении должна быть реализована конструкция `logger.InfoContext`."
+          },
+          {
+            "type": "contains",
+            "value": "routeName(r)",
+            "message": "Проверка 7: в решении должна быть реализована конструкция `routeName(r)`."
+          },
+          {
+            "type": "contains",
+            "value": "slog.Duration",
+            "message": "Проверка 8: в решении должна быть реализована конструкция `slog.Duration`."
+          }
+        ],
+        "hint": "Response status нужно перехватить; path/query/body намеренно не пишутся. Для streaming/Hijacker/Flusher routes используйте wrapper, сохраняющий optional interfaces, либо проверенную middleware-библиотеку.\n\n## Шпаргалка по синтаксису\n\n- Файл начинается с `package`; зависимости подключаются через `import`.\n- `func name(arg Type) (Result, error)` задаёт типизированный контракт функции.\n- `:=` объявляет локальную переменную внутри функции; `=` присваивает уже объявленной.\n- Ошибку проверяют явно: `if err != nil`; контекст добавляют через `fmt.Errorf(\"operation: %w\", err)`, а цепочку проверяют `errors.Is/As`.\n- `context.Context` передают первым аргументом по цепочке вызовов и не сохраняют в глобальном состоянии.\n- После изменения выполните `gofmt`, `go vet ./...` и `go test ./...`; для конкурентного кода добавьте `go test -race ./...`.\n\n## Что проверяет автопроверка\n\n1. Проверка 1: в решении должна быть реализована конструкция `type captureWriter struct`.\n2. Проверка 2: в решении должна быть реализована конструкция `WriteHeader(code int)`.\n3. Проверка 3: в решении должна быть реализована конструкция `func (w *captureWriter) Write(`.\n4. Проверка 4: в решении должна быть реализована конструкция `time.Now()`.\n5. Проверка 5: в решении должна быть реализована конструкция `next.ServeHTTP`.\n6. Проверка 6: в решении должна быть реализована конструкция `logger.InfoContext`.\n7. Проверка 7: в решении должна быть реализована конструкция `routeName(r)`.\n8. Проверка 8: в решении должна быть реализована конструкция `slog.Duration`.\n\nАвтопроверка подтверждает обязательные конструкции, но не заменяет компиляцию, тесты, статический анализ и проверку поведения на границах.",
+        "language": "go",
+        "resources": [
+          {
+            "url": "https://pkg.go.dev/net/http",
+            "title": "net/http",
+            "note": "HTTP-клиент, сервер, handlers и transport стандартной библиотеки."
+          },
+          {
+            "url": "https://pkg.go.dev/",
+            "title": "Go Packages",
+            "note": "Документация стандартной библиотеки и модулей сообщества."
+          },
+          {
+            "url": "https://opentelemetry.io/docs/languages/go/",
+            "title": "OpenTelemetry Go",
+            "note": "Трейсы, метрики, логи и экспорт телеметрии."
+          }
+        ]
+      }
+    },
+    {
+      "title": "Readiness aggregator с timeout",
+      "kind": "code",
+      "summary": "Проверяйте critical dependencies параллельно и bounded.",
+      "durationMin": 30,
+      "content": {
+        "task": "Реализуйте Ready(ctx, checks, timeout): child timeout, параллельные checks, собрать names ошибок; общий result error если хотя бы одна; никакой goroutine leak. limit не нужен — checks мало и фиксированы.\n\n## Порядок работы\n\n1. Прочитайте контракт и назовите вход, выход и возможные ошибки.\n2. Допишите минимальный рабочий вариант.\n3. Проверьте обычный, граничный и ошибочный сценарии.\n4. Измените одно требование и адаптируйте код без копирования готового решения.\n5. Сравните с эталоном только после собственной попытки.\n\n## Обязательная проверка\n\nЗапустите форматирование и подходящие тесты. Для Go: `go fmt ./...`, `go vet ./...` и `go test ./...`. Ошибку не скрывайте пустым обработчиком.",
+        "starter": "package health\n\nimport (\n    \"context\"\n    \"time\"\n)\n\ntype Check func(context.Context) error\nfunc Ready(ctx context.Context, checks map[string]Check, timeout time.Duration) error {\n    // TODO\n    return nil\n}",
+        "solution": "package health\n\nimport (\n    \"context\"\n    \"errors\"\n    \"fmt\"\n    \"sort\"\n    \"time\"\n    \"golang.org/x/sync/errgroup\"\n)\n\ntype Check func(context.Context) error\nfunc Ready(ctx context.Context, checks map[string]Check, timeout time.Duration) error {\n    ctx, cancel := context.WithTimeout(ctx, timeout)\n    defer cancel()\n    group, ctx := errgroup.WithContext(ctx)\n    failed := make(chan string, len(checks))\n    for name, check := range checks {\n        name, check := name, check\n        group.Go(func() error { if err := check(ctx); err != nil { failed <- name; return err }; return nil })\n    }\n    err := group.Wait()\n    close(failed)\n    if err == nil { return nil }\n    names := make([]string, 0, len(failed))\n    for name := range failed { names = append(names, name) }\n    sort.Strings(names)\n    return fmt.Errorf(\"readiness failed for %v: %w\", names, errors.Join(err, ctx.Err()))\n}",
+        "checks": [
+          {
+            "type": "contains",
+            "value": "context.WithTimeout",
+            "message": "Проверка 1: в решении должна быть реализована конструкция `context.WithTimeout`."
+          },
+          {
+            "type": "contains",
+            "value": "errgroup.WithContext",
+            "message": "Проверка 2: в решении должна быть реализована конструкция `errgroup.WithContext`."
+          },
+          {
+            "type": "contains",
+            "value": "make(chan string, len(checks))",
+            "message": "Проверка 3: в решении должна быть реализована конструкция `make(chan string, len(checks))`."
+          },
+          {
+            "type": "contains",
+            "value": "group.Go",
+            "message": "Проверка 4: в решении должна быть реализована конструкция `group.Go`."
+          },
+          {
+            "type": "contains",
+            "value": "group.Wait",
+            "message": "Проверка 5: в решении должна быть реализована конструкция `group.Wait`."
+          },
+          {
+            "type": "contains",
+            "value": "sort.Strings",
+            "message": "Проверка 6: в решении должна быть реализована конструкция `sort.Strings`."
+          },
+          {
+            "type": "contains",
+            "value": "fmt.Errorf",
+            "message": "Проверка 7: в решении должна быть реализована конструкция `fmt.Errorf`."
+          }
+        ],
+        "hint": "Buffered channel не блокирует workers; Wait завершает всех до close/range.\n\n## Шпаргалка по синтаксису\n\n- Файл начинается с `package`; зависимости подключаются через `import`.\n- `func name(arg Type) (Result, error)` задаёт типизированный контракт функции.\n- `:=` объявляет локальную переменную внутри функции; `=` присваивает уже объявленной.\n- Ошибку проверяют явно: `if err != nil`; контекст добавляют через `fmt.Errorf(\"operation: %w\", err)`, а цепочку проверяют `errors.Is/As`.\n- `context.Context` передают первым аргументом по цепочке вызовов и не сохраняют в глобальном состоянии.\n- После изменения выполните `gofmt`, `go vet ./...` и `go test ./...`; для конкурентного кода добавьте `go test -race ./...`.\n\n## Что проверяет автопроверка\n\n1. Проверка 1: в решении должна быть реализована конструкция `context.WithTimeout`.\n2. Проверка 2: в решении должна быть реализована конструкция `errgroup.WithContext`.\n3. Проверка 3: в решении должна быть реализована конструкция `make(chan string, len(checks))`.\n4. Проверка 4: в решении должна быть реализована конструкция `group.Go`.\n5. Проверка 5: в решении должна быть реализована конструкция `group.Wait`.\n6. Проверка 6: в решении должна быть реализована конструкция `sort.Strings`.\n7. Проверка 7: в решении должна быть реализована конструкция `fmt.Errorf`.\n\nАвтопроверка подтверждает обязательные конструкции, но не заменяет компиляцию, тесты, статический анализ и проверку поведения на границах.",
+        "language": "go",
+        "resources": [
+          {
+            "url": "https://pkg.go.dev/context",
+            "title": "context",
+            "note": "Отмена, deadlines и request-scoped values."
+          },
+          {
+            "url": "https://kubernetes.io/docs/concepts/",
+            "title": "Kubernetes Concepts",
+            "note": "Workloads, Services, Config, probes, resources и security."
+          }
+        ]
+      }
+    },
+    {
+      "title": "Квиз модуля: Логи, метрики, трассировка и SLO",
+      "kind": "quiz",
+      "summary": "Проверка ключевых решений и ошибок по модулю «Логи, метрики, трассировка и SLO».",
+      "durationMin": 10,
+      "content": {
+        "intro": "Ответьте без запуска кода. Цель — проверить причинно-следственные связи. После ошибки вернитесь к уроку и воспроизведите пример своими руками. Положение правильного варианта меняется; ориентируйтесь на смысл, а не на букву ответа.",
+        "passScore": 70,
+        "questions": [
+          {
+            "id": "q1",
+            "text": "Почему structured attributes лучше конкатенации строки?",
+            "options": [
+              {
+                "id": "a",
+                "text": "Их можно стабильно фильтровать, агрегировать и типизировать",
+                "correct": true
+              },
+              {
+                "id": "b",
+                "text": "Они шифруют секреты автоматически",
+                "correct": false
+              },
+              {
+                "id": "c",
+                "text": "Они заменяют metrics",
+                "correct": false
+              }
+            ],
+            "explanation": "Структура улучшает поиск, но redaction всё равно обязателен."
+          },
+          {
+            "id": "q2",
+            "text": "Какой label почти наверняка опасен для cardinality?",
+            "options": [
+              {
+                "id": "a",
+                "text": "HTTP method",
+                "correct": false
+              },
+              {
+                "id": "b",
+                "text": "order_id или user_id",
+                "correct": true
+              },
+              {
+                "id": "c",
+                "text": "Небольшой фиксированный status_class",
+                "correct": false
+              }
+            ],
+            "explanation": "Неограниченные identifiers взрывают число series."
+          },
+          {
+            "id": "q3",
+            "text": "Что переносит trace между сервисами?",
+            "options": [
+              {
+                "id": "a",
+                "text": "Имя локальной goroutine",
+                "correct": false
+              },
+              {
+                "id": "b",
+                "text": "Номер строки кода",
+                "correct": false
+              },
+              {
+                "id": "c",
+                "text": "Стандартизированный trace context в headers/metadata/message envelope",
+                "correct": true
+              }
+            ],
+            "explanation": "Propagation связывает независимые процессы."
+          },
+          {
+            "id": "q4",
+            "text": "Должна ли liveness зависеть от PostgreSQL?",
+            "options": [
+              {
+                "id": "a",
+                "text": "Обычно нет; иначе outage БД вызовет бессмысленный restart storm приложений",
+                "correct": true
+              },
+              {
+                "id": "b",
+                "text": "Всегда да",
+                "correct": false
+              },
+              {
+                "id": "c",
+                "text": "Liveness должна делать миграции",
+                "correct": false
+              }
+            ],
+            "explanation": "Readiness лучше выражает невозможность обслуживать трафик."
+          },
+          {
+            "id": "q5",
+            "text": "Какие три сигнала входят в RED?",
+            "options": [
+              {
+                "id": "a",
+                "text": "RAM, Ethernet, Disk",
+                "correct": false
+              },
+              {
+                "id": "b",
+                "text": "Rate, Errors, Duration",
+                "correct": true
+              },
+              {
+                "id": "c",
+                "text": "Retry, Encode, Decode",
+                "correct": false
+              }
+            ],
+            "explanation": "RED ориентирован на request-driven services."
+          },
+          {
+            "id": "q6",
+            "text": "Что такое error budget?",
+            "options": [
+              {
+                "id": "a",
+                "text": "Количество строк логов",
+                "correct": false
+              },
+              {
+                "id": "b",
+                "text": "Размер heap",
+                "correct": false
+              },
+              {
+                "id": "c",
+                "text": "Допустимая доля плохих событий, следующая из SLO за окно",
+                "correct": true
+              }
+            ],
+            "explanation": "Budget связывает reliability и темп изменений."
+          }
+        ],
+        "resources": [
+          {
+            "url": "https://opentelemetry.io/docs/languages/go/",
+            "title": "OpenTelemetry Go",
+            "note": "Трейсы, метрики, логи и экспорт телеметрии."
+          },
+          {
+            "url": "https://prometheus.io/docs/guides/go-application/",
+            "title": "Prometheus Go application",
+            "note": "Инструментирование Go-приложения метриками."
+          },
+          {
+            "url": "https://go.dev/doc/go1.27",
+            "title": "Go 1.27 Release Notes",
+            "note": "Актуальные изменения языка, toolchain, runtime и стандартной библиотеки за 2026 год."
+          }
+        ]
+      }
+    }
+  ]
+}

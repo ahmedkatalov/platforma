@@ -1,0 +1,491 @@
+{
+  "title": "Webhooks, S3, внешние API и realtime",
+  "summary": "Безопасная проверка подписей, AWS SDK v2, presigned uploads, устойчивые клиенты и SSE/WebSocket boundaries.",
+  "lessons": [
+    {
+      "title": "Входящие и исходящие webhooks",
+      "kind": "text",
+      "summary": "Аутентифицируем raw body, защищаемся от replay и обрабатываем повторно.",
+      "durationMin": 14,
+      "content": {
+        "body": "## Зачем это нужно backend-разработчику\n\nВходящие и исходящие webhooks — часть ежедневной работы Go backend-разработчика. Важно не только знать синтаксис, но и понимать контракт, стоимость операции, поведение при ошибке и способ проверки результата.\n\n## Ментальная модель\n\nВходящие и исходящие webhooks: рассматривайте тему как набор явных входов, преобразований, выходов и отказов. Владение темой означает, что вы можете предсказать поведение до запуска и объяснить компромиссы коллеге.\n\n## Основные идеи по шагам\n\n1. Проверяйте HMAC над точным raw body до JSON parsing; canonical timestamp/event ID включают в подписываемые данные.\n2. Сравнивайте MAC constant-time, проверяйте допустимое окно timestamp и UNIQUE event ID против replay.\n3. Ответьте быстро после durable enqueue/inbox commit; тяжёлую работу выполняйте асинхронно.\n4. Исходящий webhook имеет per-destination secret, HTTPS, timeout, signature, retries, DLQ и disable policy после длительных permanent failures.\n\n## Разбор на примере\n\n```go\nmac := hmac.New(sha256.New, secret)\nmac.Write([]byte(timestamp))\nmac.Write([]byte(\".\"))\nmac.Write(rawBody)\nvalid := hmac.Equal(mac.Sum(nil), providedSignature)\n```\n\nTimestamp и raw bytes должны совпадать с документацией provider. После signature check парсите schema/version.\n\n## Где это встречается в production\n\nВ рабочем сервисе эта тема влияет на читаемость pull request, предсказуемость API, диагностику инцидентов и стоимость дальнейших изменений. Сначала зафиксируйте контракт тестом или примером, затем реализуйте простейшее корректное решение.\n\n## Как бывает неправильно\n\n- **Механическое копирование**\n  - Как проявляется: код компилируется, но автор не может объяснить граничные случаи\n  - Что делать: измените входные данные и предскажите результат до запуска\n- **Скрытая ошибка**\n  - Как проявляется: неверное состояние обнаруживается далеко от причины\n  - Что делать: возвращайте ошибку с контекстом и проверяйте её на нужном уровне\n- **Преждевременная сложность**\n  - Как проявляется: простая задача получает лишние абстракции и зависимости\n  - Что делать: сначала используйте стандартную библиотеку и измеримые требования\n\n## Проверьте себя\n\n1. Объясните своими словами: Входящие и исходящие webhooks: рассматривайте тему как набор явных входов, преобразований, выходов и отказов. Владение темой означает, что вы можете предсказать поведение до запуска и объяснить компромиссы коллеге.\n2. Как эта тема проявляется в реальном backend-сервисе?\n3. Какую ошибку из раздела выше вы сможете распознать по симптомам?\n\n## Практика после урока\n\nВоспроизведите пример, добавьте один ошибочный вход, напишите проверку результата и объясните решение вслух за две минуты.\n\n## Запомнить\n\n- Сначала понимайте контракт и ограничения, затем выбирайте инструмент.\n- Ошибка должна быть наблюдаемой: её проверяют, логируют с контекстом и возвращают на правильный уровень.\n- Любой пример из урока измените хотя бы один раз и снова проверьте результат.\n- Production-код отличается явными таймаутами, валидацией, тестами и способом безопасного завершения.",
+        "resources": [
+          {
+            "url": "https://cheatsheetseries.owasp.org/cheatsheets/REST_Security_Cheat_Sheet.html",
+            "title": "OWASP REST Security",
+            "note": "Практический checklist защиты REST API."
+          },
+          {
+            "url": "https://pkg.go.dev/",
+            "title": "Go Packages",
+            "note": "Документация стандартной библиотеки и модулей сообщества."
+          }
+        ]
+      }
+    },
+    {
+      "title": "Object storage и AWS SDK for Go v2",
+      "kind": "text",
+      "summary": "Храним большие объекты вне БД и не проксируем каждый байт без причины.",
+      "durationMin": 15,
+      "content": {
+        "body": "## Зачем это нужно backend-разработчику\n\nObject storage и AWS SDK for Go v2 — часть ежедневной работы Go backend-разработчика. Важно не только знать синтаксис, но и понимать контракт, стоимость операции, поведение при ошибке и способ проверки результата.\n\n## Ментальная модель\n\nObject storage и AWS SDK for Go v2: рассматривайте тему как набор явных входов, преобразований, выходов и отказов. Владение темой означает, что вы можете предсказать поведение до запуска и объяснить компромиссы коллеге.\n\n## Основные идеи по шагам\n\n1. S3 key — идентификатор объекта, не filesystem path; bucket policy/IAM определяют доступ, metadata БД связывает объект с владельцем.\n2. Presigned PUT/POST позволяет клиенту загрузить напрямую; сервер ограничивает key prefix, content length/type policy и короткий expiry.\n3. Multipart upload нужен большим файлам и должен abort незавершённые uploads lifecycle policy.\n4. После upload проверяйте ownership, size/checksum и antivirus/content pipeline асинхронно; публичный ACL не включайте по умолчанию.\n\n## Разбор на примере\n\n```go\npresigner := s3.NewPresignClient(client)\nreq, err := presigner.PresignPutObject(ctx, &s3.PutObjectInput{\n    Bucket: aws.String(bucket),\n    Key:    aws.String(\"tenant/\" + tenantID + \"/\" + objectID),\n}, s3.WithPresignExpires(10*time.Minute))\n```\n\nKey строит сервер из проверенной identity. Клиент не выбирает чужой tenant prefix.\n\n## Где это встречается в production\n\nВ рабочем сервисе эта тема влияет на читаемость pull request, предсказуемость API, диагностику инцидентов и стоимость дальнейших изменений. Сначала зафиксируйте контракт тестом или примером, затем реализуйте простейшее корректное решение.\n\n## Как бывает неправильно\n\n- **Механическое копирование**\n  - Как проявляется: код компилируется, но автор не может объяснить граничные случаи\n  - Что делать: измените входные данные и предскажите результат до запуска\n- **Скрытая ошибка**\n  - Как проявляется: неверное состояние обнаруживается далеко от причины\n  - Что делать: возвращайте ошибку с контекстом и проверяйте её на нужном уровне\n- **Преждевременная сложность**\n  - Как проявляется: простая задача получает лишние абстракции и зависимости\n  - Что делать: сначала используйте стандартную библиотеку и измеримые требования\n\n## Проверьте себя\n\n1. Объясните своими словами: Object storage и AWS SDK for Go v2: рассматривайте тему как набор явных входов, преобразований, выходов и отказов. Владение темой означает, что вы можете предсказать поведение до запуска и объяснить компромиссы коллеге.\n2. Как эта тема проявляется в реальном backend-сервисе?\n3. Какую ошибку из раздела выше вы сможете распознать по симптомам?\n\n## Практика после урока\n\nВоспроизведите пример, добавьте один ошибочный вход, напишите проверку результата и объясните решение вслух за две минуты.\n\n## Запомнить\n\n- Сначала понимайте контракт и ограничения, затем выбирайте инструмент.\n- Ошибка должна быть наблюдаемой: её проверяют, логируют с контекстом и возвращают на правильный уровень.\n- Любой пример из урока измените хотя бы один раз и снова проверьте результат.\n- Production-код отличается явными таймаутами, валидацией, тестами и способом безопасного завершения.",
+        "resources": [
+          {
+            "url": "https://docs.aws.amazon.com/sdk-for-go/v2/developer-guide/getting-started.html",
+            "title": "AWS SDK for Go v2",
+            "note": "Клиенты AWS, конфигурация, retries и credentials chain."
+          },
+          {
+            "url": "https://cheatsheetseries.owasp.org/cheatsheets/REST_Security_Cheat_Sheet.html",
+            "title": "OWASP REST Security",
+            "note": "Практический checklist защиты REST API."
+          }
+        ]
+      }
+    },
+    {
+      "title": "Устойчивый клиент внешнего API",
+      "kind": "text",
+      "summary": "Инкапсулируем authentication, limits и error contract одного provider.",
+      "durationMin": 16,
+      "content": {
+        "body": "## Зачем это нужно backend-разработчику\n\nУстойчивый клиент внешнего API — часть ежедневной работы Go backend-разработчика. Важно не только знать синтаксис, но и понимать контракт, стоимость операции, поведение при ошибке и способ проверки результата.\n\n## Ментальная модель\n\nУстойчивый клиент внешнего API: рассматривайте тему как набор явных входов, преобразований, выходов и отказов. Владение темой означает, что вы можете предсказать поведение до запуска и объяснить компромиссы коллеге.\n\n## Основные идеи по шагам\n\n1. Создайте typed client с базовым URL, переиспользуемым http.Client, credential provider, clock и metrics/tracing hooks.\n2. Каждый endpoint задаёт request/response DTO, timeout budget, max body, status mapping и idempotency semantics.\n3. 429/503 и transport errors могут быть transient; 400/401 часто permanent до изменения request/config.\n4. Circuit breaker и retry находятся в client boundary, но общий SLO/budget задаёт use case; nested retries нельзя бесконтрольно перемножать.\n\n## Разбор на примере\n\n```go\ntype PaymentsClient struct {\n    baseURL *url.URL\n    http *http.Client\n    token TokenSource\n}\n\nfunc (c *PaymentsClient) Charge(ctx context.Context, req ChargeRequest) (Charge, error)\n```\n\nОдин adapter переводит provider-specific errors в стабильные application errors и скрывает transport детали.\n\n## Где это встречается в production\n\nВ рабочем сервисе эта тема влияет на читаемость pull request, предсказуемость API, диагностику инцидентов и стоимость дальнейших изменений. Сначала зафиксируйте контракт тестом или примером, затем реализуйте простейшее корректное решение.\n\n## Как бывает неправильно\n\n- **Механическое копирование**\n  - Как проявляется: код компилируется, но автор не может объяснить граничные случаи\n  - Что делать: измените входные данные и предскажите результат до запуска\n- **Скрытая ошибка**\n  - Как проявляется: неверное состояние обнаруживается далеко от причины\n  - Что делать: возвращайте ошибку с контекстом и проверяйте её на нужном уровне\n- **Преждевременная сложность**\n  - Как проявляется: простая задача получает лишние абстракции и зависимости\n  - Что делать: сначала используйте стандартную библиотеку и измеримые требования\n\n## Проверьте себя\n\n1. Объясните своими словами: Устойчивый клиент внешнего API: рассматривайте тему как набор явных входов, преобразований, выходов и отказов. Владение темой означает, что вы можете предсказать поведение до запуска и объяснить компромиссы коллеге.\n2. Как эта тема проявляется в реальном backend-сервисе?\n3. Какую ошибку из раздела выше вы сможете распознать по симптомам?\n\n## Практика после урока\n\nВоспроизведите пример, добавьте один ошибочный вход, напишите проверку результата и объясните решение вслух за две минуты.\n\n## Запомнить\n\n- Сначала понимайте контракт и ограничения, затем выбирайте инструмент.\n- Ошибка должна быть наблюдаемой: её проверяют, логируют с контекстом и возвращают на правильный уровень.\n- Любой пример из урока измените хотя бы один раз и снова проверьте результат.\n- Production-код отличается явными таймаутами, валидацией, тестами и способом безопасного завершения.",
+        "resources": [
+          {
+            "url": "https://pkg.go.dev/net/http",
+            "title": "net/http",
+            "note": "HTTP-клиент, сервер, handlers и transport стандартной библиотеки."
+          },
+          {
+            "url": "https://pkg.go.dev/context",
+            "title": "context",
+            "note": "Отмена, deadlines и request-scoped values."
+          }
+        ]
+      }
+    },
+    {
+      "title": "SSE и WebSocket",
+      "kind": "text",
+      "summary": "Выбираем простой однонаправленный stream или полноценный duplex protocol.",
+      "durationMin": 17,
+      "content": {
+        "body": "## Зачем это нужно backend-разработчику\n\nSSE и WebSocket — часть ежедневной работы Go backend-разработчика. Важно не только знать синтаксис, но и понимать контракт, стоимость операции, поведение при ошибке и способ проверки результата.\n\n## Ментальная модель\n\nSSE и WebSocket: рассматривайте тему как набор явных входов, преобразований, выходов и отказов. Владение темой означает, что вы можете предсказать поведение до запуска и объяснить компромиссы коллеге.\n\n## Основные идеи по шагам\n\n1. SSE работает поверх HTTP, направлен server→browser, имеет event/id/retry и встроенное переподключение; хорош для статусов и notifications.\n2. WebSocket — full duplex frames; нужен для интерактивного двустороннего обмена, но требует ping/pong, read/write deadlines и backpressure.\n3. Каждое соединение потребляет память/file descriptor; ограничивайте connections per actor, message size и outbound queue.\n4. Процесс должен завершать streams при shutdown; client reconnect использует last event ID/cursor и не требует полной истории в памяти instance.\n\n## Разбор на примере\n\n```http\nHTTP/1.1 200 OK\nContent-Type: text/event-stream\nCache-Control: no-cache\n\nid: event-42\nevent: order.status\ndata: {\"status\":\"paid\"}\n```\n\nДвойной newline завершает SSE event. Handler flushes и наблюдает r.Context().Done.\n\n## Где это встречается в production\n\nВ рабочем сервисе эта тема влияет на читаемость pull request, предсказуемость API, диагностику инцидентов и стоимость дальнейших изменений. Сначала зафиксируйте контракт тестом или примером, затем реализуйте простейшее корректное решение.\n\n## Как бывает неправильно\n\n- **Механическое копирование**\n  - Как проявляется: код компилируется, но автор не может объяснить граничные случаи\n  - Что делать: измените входные данные и предскажите результат до запуска\n- **Скрытая ошибка**\n  - Как проявляется: неверное состояние обнаруживается далеко от причины\n  - Что делать: возвращайте ошибку с контекстом и проверяйте её на нужном уровне\n- **Преждевременная сложность**\n  - Как проявляется: простая задача получает лишние абстракции и зависимости\n  - Что делать: сначала используйте стандартную библиотеку и измеримые требования\n\n## Проверьте себя\n\n1. Объясните своими словами: SSE и WebSocket: рассматривайте тему как набор явных входов, преобразований, выходов и отказов. Владение темой означает, что вы можете предсказать поведение до запуска и объяснить компромиссы коллеге.\n2. Как эта тема проявляется в реальном backend-сервисе?\n3. Какую ошибку из раздела выше вы сможете распознать по симптомам?\n\n## Практика после урока\n\nВоспроизведите пример, добавьте один ошибочный вход, напишите проверку результата и объясните решение вслух за две минуты.\n\n## Запомнить\n\n- Сначала понимайте контракт и ограничения, затем выбирайте инструмент.\n- Ошибка должна быть наблюдаемой: её проверяют, логируют с контекстом и возвращают на правильный уровень.\n- Любой пример из урока измените хотя бы один раз и снова проверьте результат.\n- Production-код отличается явными таймаутами, валидацией, тестами и способом безопасного завершения.",
+        "resources": [
+          {
+            "url": "https://pkg.go.dev/net/http",
+            "title": "net/http",
+            "note": "HTTP-клиент, сервер, handlers и transport стандартной библиотеки."
+          }
+        ]
+      }
+    },
+    {
+      "title": "Терминал: webhooks, object storage и streams",
+      "kind": "terminal",
+      "summary": "Проверяем signature, redirects, headers и долгоживущий response.",
+      "durationMin": 16,
+      "content": {
+        "intro": "Используйте локальные emulators/test endpoints и фиктивные secrets. Не передавайте секрет в URL.\n\nПеред Enter назовите ожидаемый результат. После команды прочитайте вывод и код завершения; не переходите дальше, пока не понимаете, что именно подтвердили.\n\n## Разбор команд до практики\n\nНиже каждая команда разобрана до выполнения. Сначала прочитайте назначение и назовите ожидаемый результат, затем выполняйте задание в тренажёре.\n\n### 1. Отправьте подписанный тестовый webhook через helper.\n\n**Команда:**\n\n```bash\ngo test ./internal/webhook -run TestSignedDelivery -v\n```\n\n- **Инструмент:** Go toolchain.\n- **Зачем запускать:** Test строит raw body, timestamp и HMAC детерминированно.\n- **Что считать подтверждением:** Test строит raw body, timestamp и HMAC детерминированно.\n- **Перед запуском:** Проверьте текущий каталог и прочитайте команду слева направо: программа, подкоманда, флаги, аргументы.\n- **После запуска:** прочитайте stdout и stderr, затем проверьте код завершения командой `echo $?`, если результат неоднозначен.\n\n### 2. Проверьте replay test.\n\n**Команда:**\n\n```bash\ngo test ./internal/webhook -run TestReplayRejected -v\n```\n\n- **Инструмент:** Go toolchain.\n- **Зачем запускать:** Повторный event ID не создаёт второй side effect.\n- **Что считать подтверждением:** Повторный event ID не создаёт второй side effect.\n- **Перед запуском:** Проверьте текущий каталог и прочитайте команду слева направо: программа, подкоманда, флаги, аргументы.\n- **После запуска:** прочитайте stdout и stderr, затем проверьте код завершения командой `echo $?`, если результат неоднозначен.\n\n### 3. Проверьте redirect policy клиента.\n\n**Команда:**\n\n```bash\ngo test ./internal/upstream -run TestRedirectPolicy -v\n```\n\n- **Инструмент:** Go toolchain.\n- **Зачем запускать:** Redirect не должен увести credential на недоверенный host.\n- **Что считать подтверждением:** Redirect не должен увести credential на недоверенный host.\n- **Перед запуском:** Проверьте текущий каталог и прочитайте команду слева направо: программа, подкоманда, флаги, аргументы.\n- **После запуска:** прочитайте stdout и stderr, затем проверьте код завершения командой `echo $?`, если результат неоднозначен.\n\n### 4. Проверьте presign unit tests.\n\n**Команда:**\n\n```bash\ngo test ./internal/objectstore -run TestPresign -v\n```\n\n- **Инструмент:** Go toolchain.\n- **Зачем запускать:** Проверяются prefix, expiry и content policy.\n- **Что считать подтверждением:** Проверяются prefix, expiry и content policy.\n- **Перед запуском:** Проверьте текущий каталог и прочитайте команду слева направо: программа, подкоманда, флаги, аргументы.\n- **После запуска:** прочитайте stdout и stderr, затем проверьте код завершения командой `echo $?`, если результат неоднозначен.\n\n### 5. Подключитесь к SSE endpoint.\n\n**Команда:**\n\n```bash\ncurl -N -H 'Accept: text/event-stream' http://localhost:8080/v1/events\n```\n\n- **Инструмент:** curl.\n- **Зачем запускать:** Флаг -N отключает buffering curl.\n- **Что считать подтверждением:** Флаг -N отключает buffering curl.\n- **Перед запуском:** Проверьте адрес, порт и таймаут; команда должна обращаться только к разрешённой учебной цели.\n- **После запуска:** прочитайте stdout и stderr, затем проверьте код завершения командой `echo $?`, если результат неоднозначен.\n\n### 6. Ограничьте время SSE-проверки.\n\n**Команда:**\n\n```bash\ncurl -N --max-time 5 -H 'Accept: text/event-stream' http://localhost:8080/v1/events\n```\n\n- **Инструмент:** curl.\n- **Зачем запускать:** Команда завершится даже при живом потоке.\n- **Что считать подтверждением:** Команда завершится даже при живом потоке.\n- **Перед запуском:** Проверьте адрес, порт и таймаут; команда должна обращаться только к разрешённой учебной цели.\n- **После запуска:** прочитайте stdout и stderr, затем проверьте код завершения командой `echo $?`, если результат неоднозначен.",
+        "shell": "student@go-backend",
+        "tasks": [
+          {
+            "id": "t1",
+            "prompt": "Отправьте подписанный тестовый webhook через helper.",
+            "predict": "Что должно измениться или появиться после этой команды? Test строит raw body, timestamp и HMAC детерминированно.",
+            "hint": "Нужна команда: go test ./internal/webhook -run TestSignedDelivery -v",
+            "hints": [
+              "Test строит raw body, timestamp и HMAC детерминированно.",
+              "Соберите команду из программы, подкоманды, флагов и аргумента. Не добавляйте sudo без причины.",
+              "`go test ./internal/webhook -run TestSignedDelivery -v`"
+            ],
+            "expected": [
+              "go test ./internal/webhook -run TestSignedDelivery -v"
+            ],
+            "success": "Готово. Test строит raw body, timestamp и HMAC детерминированно."
+          },
+          {
+            "id": "t2",
+            "prompt": "Проверьте replay test.",
+            "predict": "Что должно измениться или появиться после этой команды? Повторный event ID не создаёт второй side effect.",
+            "hint": "Нужна команда: go test ./internal/webhook -run TestReplayRejected -v",
+            "hints": [
+              "Повторный event ID не создаёт второй side effect.",
+              "Соберите команду из программы, подкоманды, флагов и аргумента. Не добавляйте sudo без причины.",
+              "`go test ./internal/webhook -run TestReplayRejected -v`"
+            ],
+            "expected": [
+              "go test ./internal/webhook -run TestReplayRejected -v"
+            ],
+            "success": "Готово. Повторный event ID не создаёт второй side effect."
+          },
+          {
+            "id": "t3",
+            "prompt": "Проверьте redirect policy клиента.",
+            "predict": "Что должно измениться или появиться после этой команды? Redirect не должен увести credential на недоверенный host.",
+            "hint": "Нужна команда: go test ./internal/upstream -run TestRedirectPolicy -v",
+            "hints": [
+              "Redirect не должен увести credential на недоверенный host.",
+              "Соберите команду из программы, подкоманды, флагов и аргумента. Не добавляйте sudo без причины.",
+              "`go test ./internal/upstream -run TestRedirectPolicy -v`"
+            ],
+            "expected": [
+              "go test ./internal/upstream -run TestRedirectPolicy -v"
+            ],
+            "success": "Готово. Redirect не должен увести credential на недоверенный host."
+          },
+          {
+            "id": "t4",
+            "prompt": "Проверьте presign unit tests.",
+            "predict": "Что должно измениться или появиться после этой команды? Проверяются prefix, expiry и content policy.",
+            "hint": "Нужна команда: go test ./internal/objectstore -run TestPresign -v",
+            "hints": [
+              "Проверяются prefix, expiry и content policy.",
+              "Соберите команду из программы, подкоманды, флагов и аргумента. Не добавляйте sudo без причины.",
+              "`go test ./internal/objectstore -run TestPresign -v`"
+            ],
+            "expected": [
+              "go test ./internal/objectstore -run TestPresign -v"
+            ],
+            "success": "Готово. Проверяются prefix, expiry и content policy."
+          },
+          {
+            "id": "t5",
+            "prompt": "Подключитесь к SSE endpoint.",
+            "predict": "Что должно измениться или появиться после этой команды? Флаг -N отключает buffering curl.",
+            "hint": "Нужна команда: curl -N -H 'Accept: text/event-stream' http://localhost:8080/v1/events",
+            "hints": [
+              "Флаг -N отключает buffering curl.",
+              "Соберите команду из программы, подкоманды, флагов и аргумента. Не добавляйте sudo без причины.",
+              "`curl -N -H 'Accept: text/event-stream' http://localhost:8080/v1/events`"
+            ],
+            "expected": [
+              "curl -N -H 'Accept: text/event-stream' http://localhost:8080/v1/events"
+            ],
+            "success": "Готово. Флаг -N отключает buffering curl."
+          },
+          {
+            "id": "t6",
+            "prompt": "Ограничьте время SSE-проверки.",
+            "predict": "Что должно измениться или появиться после этой команды? Команда завершится даже при живом потоке.",
+            "hint": "Нужна команда: curl -N --max-time 5 -H 'Accept: text/event-stream' http://localhost:8080/v1/events",
+            "hints": [
+              "Команда завершится даже при живом потоке.",
+              "Соберите команду из программы, подкоманды, флагов и аргумента. Не добавляйте sudo без причины.",
+              "`curl -N --max-time 5 -H 'Accept: text/event-stream' http://localhost:8080/v1/events`"
+            ],
+            "expected": [
+              "curl -N --max-time 5 -H 'Accept: text/event-stream' http://localhost:8080/v1/events"
+            ],
+            "success": "Готово. Команда завершится даже при живом потоке."
+          }
+        ],
+        "challenge": "Сымитируйте webhook с неверной signature, timestamp старше окна, повторным event ID и большим body. Все четыре случая должны завершиться до business side effect.",
+        "debug": "Читайте stderr полностью и проверяйте код завершения. Если результат неожиданен, сузьте проблему одной командой и повторите её с минимальным вводом.\n\nТипичная ошибка: сравнивать signature обычным ==. Всегда начните с `pwd`, `ls -la` и чтения полного сообщения об ошибке.",
+        "resources": [
+          {
+            "url": "https://cheatsheetseries.owasp.org/cheatsheets/REST_Security_Cheat_Sheet.html",
+            "title": "OWASP REST Security",
+            "note": "Практический checklist защиты REST API."
+          },
+          {
+            "url": "https://docs.aws.amazon.com/sdk-for-go/v2/developer-guide/getting-started.html",
+            "title": "AWS SDK for Go v2",
+            "note": "Клиенты AWS, конфигурация, retries и credentials chain."
+          },
+          {
+            "url": "https://pkg.go.dev/net/http",
+            "title": "net/http",
+            "note": "HTTP-клиент, сервер, handlers и transport стандартной библиотеки."
+          }
+        ]
+      }
+    },
+    {
+      "title": "Проверка HMAC webhook",
+      "kind": "code",
+      "summary": "Реализуйте constant-time signature и anti-replay timestamp window.",
+      "durationMin": 28,
+      "content": {
+        "task": "Реализуйте Verify(secret, timestamp, body, signatureHex, now): распарсить Unix timestamp, окно ±5 минут, HMAC-SHA256 от timestamp+\".\"+body, hex decode, hmac.Equal. Ошибки без raw secret/body.\n\n## Порядок работы\n\n1. Прочитайте контракт и назовите вход, выход и возможные ошибки.\n2. Допишите минимальный рабочий вариант.\n3. Проверьте обычный, граничный и ошибочный сценарии.\n4. Измените одно требование и адаптируйте код без копирования готового решения.\n5. Сравните с эталоном только после собственной попытки.\n\n## Обязательная проверка\n\nЗапустите форматирование и подходящие тесты. Для Go: `go fmt ./...`, `go vet ./...` и `go test ./...`. Ошибку не скрывайте пустым обработчиком.",
+        "starter": "package webhook\n\nimport \"time\"\n\nfunc Verify(secret []byte, timestamp string, body []byte, signature string, now time.Time) error {\n    // TODO\n    return nil\n}",
+        "solution": "package webhook\n\nimport (\n    \"crypto/hmac\"\n    \"crypto/sha256\"\n    \"encoding/hex\"\n    \"fmt\"\n    \"strconv\"\n    \"time\"\n)\n\nfunc Verify(secret []byte, timestamp string, body []byte, signature string, now time.Time) error {\n    sec, err := strconv.ParseInt(timestamp, 10, 64)\n    if err != nil { return fmt.Errorf(\"invalid webhook timestamp\") }\n    delta := now.Sub(time.Unix(sec, 0))\n    if delta < -5*time.Minute || delta > 5*time.Minute { return fmt.Errorf(\"webhook timestamp outside window\") }\n    provided, err := hex.DecodeString(signature)\n    if err != nil { return fmt.Errorf(\"invalid webhook signature encoding\") }\n    mac := hmac.New(sha256.New, secret)\n    _, _ = mac.Write([]byte(timestamp + \".\"))\n    _, _ = mac.Write(body)\n    if !hmac.Equal(mac.Sum(nil), provided) { return fmt.Errorf(\"invalid webhook signature\") }\n    return nil\n}",
+        "checks": [
+          {
+            "type": "contains",
+            "value": "strconv.ParseInt",
+            "message": "Проверка 1: в решении должна быть реализована конструкция `strconv.ParseInt`."
+          },
+          {
+            "type": "contains",
+            "value": "5*time.Minute",
+            "message": "Проверка 2: в решении должна быть реализована конструкция `5*time.Minute`."
+          },
+          {
+            "type": "contains",
+            "value": "hex.DecodeString",
+            "message": "Проверка 3: в решении должна быть реализована конструкция `hex.DecodeString`."
+          },
+          {
+            "type": "contains",
+            "value": "hmac.New",
+            "message": "Проверка 4: в решении должна быть реализована конструкция `hmac.New`."
+          },
+          {
+            "type": "contains",
+            "value": "sha256.New",
+            "message": "Проверка 5: в решении должна быть реализована конструкция `sha256.New`."
+          },
+          {
+            "type": "contains",
+            "value": "hmac.Equal",
+            "message": "Проверка 6: в решении должна быть реализована конструкция `hmac.Equal`."
+          },
+          {
+            "type": "contains",
+            "value": "invalid webhook signature",
+            "message": "Проверка 7: в решении должна быть реализована конструкция `invalid webhook signature`."
+          }
+        ],
+        "hint": "Проверка времени идёт до MAC, но сообщения не должны раскрывать expected signature.\n\n## Шпаргалка по синтаксису\n\n- Файл начинается с `package`; зависимости подключаются через `import`.\n- `func name(arg Type) (Result, error)` задаёт типизированный контракт функции.\n- `:=` объявляет локальную переменную внутри функции; `=` присваивает уже объявленной.\n- Ошибку проверяют явно: `if err != nil`; контекст добавляют через `fmt.Errorf(\"operation: %w\", err)`, а цепочку проверяют `errors.Is/As`.\n- `context.Context` передают первым аргументом по цепочке вызовов и не сохраняют в глобальном состоянии.\n- После изменения выполните `gofmt`, `go vet ./...` и `go test ./...`; для конкурентного кода добавьте `go test -race ./...`.\n\n## Что проверяет автопроверка\n\n1. Проверка 1: в решении должна быть реализована конструкция `strconv.ParseInt`.\n2. Проверка 2: в решении должна быть реализована конструкция `5*time.Minute`.\n3. Проверка 3: в решении должна быть реализована конструкция `hex.DecodeString`.\n4. Проверка 4: в решении должна быть реализована конструкция `hmac.New`.\n5. Проверка 5: в решении должна быть реализована конструкция `sha256.New`.\n6. Проверка 6: в решении должна быть реализована конструкция `hmac.Equal`.\n7. Проверка 7: в решении должна быть реализована конструкция `invalid webhook signature`.\n\nАвтопроверка подтверждает обязательные конструкции, но не заменяет компиляцию, тесты, статический анализ и проверку поведения на границах.",
+        "language": "go",
+        "resources": [
+          {
+            "url": "https://pkg.go.dev/",
+            "title": "Go Packages",
+            "note": "Документация стандартной библиотеки и модулей сообщества."
+          },
+          {
+            "url": "https://cheatsheetseries.owasp.org/cheatsheets/REST_Security_Cheat_Sheet.html",
+            "title": "OWASP REST Security",
+            "note": "Практический checklist защиты REST API."
+          }
+        ]
+      }
+    },
+    {
+      "title": "SSE handler с cancellation",
+      "kind": "code",
+      "summary": "Реализуйте ограниченный stream без goroutine leak.",
+      "durationMin": 22,
+      "content": {
+        "task": "Handler получает <-chan Event, выставляет SSE headers, проверяет http.Flusher, в select пишет event и Flush либо выходит по r.Context().Done. JSON data однострочная.\n\n## Порядок работы\n\n1. Прочитайте контракт и назовите вход, выход и возможные ошибки.\n2. Допишите минимальный рабочий вариант.\n3. Проверьте обычный, граничный и ошибочный сценарии.\n4. Измените одно требование и адаптируйте код без копирования готового решения.\n5. Сравните с эталоном только после собственной попытки.\n\n## Обязательная проверка\n\nЗапустите форматирование и подходящие тесты. Для Go: `go fmt ./...`, `go vet ./...` и `go test ./...`. Ошибку не скрывайте пустым обработчиком.",
+        "starter": "package realtime\n\nimport \"net/http\"\n\nfunc Stream(events <-chan Event) http.HandlerFunc {\n    // TODO\n    return nil\n}",
+        "solution": "package realtime\n\nimport (\n    \"encoding/json\"\n    \"fmt\"\n    \"net/http\"\n)\n\nfunc Stream(events <-chan Event) http.HandlerFunc {\n    return func(w http.ResponseWriter, r *http.Request) {\n        flusher, ok := w.(http.Flusher)\n        if !ok { http.Error(w, \"streaming unsupported\", http.StatusInternalServerError); return }\n        w.Header().Set(\"Content-Type\", \"text/event-stream\")\n        w.Header().Set(\"Cache-Control\", \"no-cache\")\n        for {\n            select {\n            case <-r.Context().Done(): return\n            case event, ok := <-events:\n                if !ok { return }\n                data, err := json.Marshal(event)\n                if err != nil { return }\n                _, _ = fmt.Fprintf(w, \"event: update\\ndata: %s\\n\\n\", data)\n                flusher.Flush()\n            }\n        }\n    }\n}",
+        "checks": [
+          {
+            "type": "contains",
+            "value": "http.Flusher",
+            "message": "Проверка 1: в решении должна быть реализована конструкция `http.Flusher`."
+          },
+          {
+            "type": "contains",
+            "value": "text/event-stream",
+            "message": "Проверка 2: в решении должна быть реализована конструкция `text/event-stream`."
+          },
+          {
+            "type": "contains",
+            "value": "Cache-Control",
+            "message": "Проверка 3: в решении должна быть реализована конструкция `Cache-Control`."
+          },
+          {
+            "type": "contains",
+            "value": "r.Context().Done()",
+            "message": "Проверка 4: в решении должна быть реализована конструкция `r.Context().Done()`."
+          },
+          {
+            "type": "contains",
+            "value": "<-events",
+            "message": "Проверка 5: в решении должна быть реализована конструкция `<-events`."
+          },
+          {
+            "type": "contains",
+            "value": "json.Marshal",
+            "message": "Проверка 6: в решении должна быть реализована конструкция `json.Marshal`."
+          },
+          {
+            "type": "contains",
+            "value": "flusher.Flush()",
+            "message": "Проверка 7: в решении должна быть реализована конструкция `flusher.Flush()`."
+          }
+        ],
+        "hint": "Сначала проверить Flusher и headers, затем бесконечный select с двумя путями завершения.\n\n## Шпаргалка по синтаксису\n\n- Файл начинается с `package`; зависимости подключаются через `import`.\n- `func name(arg Type) (Result, error)` задаёт типизированный контракт функции.\n- `:=` объявляет локальную переменную внутри функции; `=` присваивает уже объявленной.\n- Ошибку проверяют явно: `if err != nil`; контекст добавляют через `fmt.Errorf(\"operation: %w\", err)`, а цепочку проверяют `errors.Is/As`.\n- `context.Context` передают первым аргументом по цепочке вызовов и не сохраняют в глобальном состоянии.\n- После изменения выполните `gofmt`, `go vet ./...` и `go test ./...`; для конкурентного кода добавьте `go test -race ./...`.\n\n## Что проверяет автопроверка\n\n1. Проверка 1: в решении должна быть реализована конструкция `http.Flusher`.\n2. Проверка 2: в решении должна быть реализована конструкция `text/event-stream`.\n3. Проверка 3: в решении должна быть реализована конструкция `Cache-Control`.\n4. Проверка 4: в решении должна быть реализована конструкция `r.Context().Done()`.\n5. Проверка 5: в решении должна быть реализована конструкция `<-events`.\n6. Проверка 6: в решении должна быть реализована конструкция `json.Marshal`.\n7. Проверка 7: в решении должна быть реализована конструкция `flusher.Flush()`.\n\nАвтопроверка подтверждает обязательные конструкции, но не заменяет компиляцию, тесты, статический анализ и проверку поведения на границах.",
+        "language": "go",
+        "resources": [
+          {
+            "url": "https://pkg.go.dev/net/http",
+            "title": "net/http",
+            "note": "HTTP-клиент, сервер, handlers и transport стандартной библиотеки."
+          },
+          {
+            "url": "https://pkg.go.dev/context",
+            "title": "context",
+            "note": "Отмена, deadlines и request-scoped values."
+          }
+        ]
+      }
+    },
+    {
+      "title": "Квиз модуля: Webhooks, S3, внешние API и realtime",
+      "kind": "quiz",
+      "summary": "Проверка ключевых решений и ошибок по модулю «Webhooks, S3, внешние API и realtime».",
+      "durationMin": 10,
+      "content": {
+        "intro": "Ответьте без запуска кода. Цель — проверить причинно-следственные связи. После ошибки вернитесь к уроку и воспроизведите пример своими руками. Положение правильного варианта меняется; ориентируйтесь на смысл, а не на букву ответа.",
+        "passScore": 70,
+        "questions": [
+          {
+            "id": "q1",
+            "text": "Почему signature проверяют до JSON unmarshal/remarshal?",
+            "options": [
+              {
+                "id": "a",
+                "text": "Пересериализация может изменить байты, а HMAC рассчитан по исходному body",
+                "correct": true
+              },
+              {
+                "id": "b",
+                "text": "JSON всегда зашифрован",
+                "correct": false
+              },
+              {
+                "id": "c",
+                "text": "Unmarshal удаляет network timeout",
+                "correct": false
+              }
+            ],
+            "explanation": "Криптографический input должен совпасть побайтно."
+          },
+          {
+            "id": "q2",
+            "text": "Почему key для presigned upload должен строить сервер?",
+            "options": [
+              {
+                "id": "a",
+                "text": "Потому что S3 не принимает строки",
+                "correct": false
+              },
+              {
+                "id": "b",
+                "text": "Чтобы пользователь не записал объект в namespace другого tenant",
+                "correct": true
+              },
+              {
+                "id": "c",
+                "text": "Чтобы URL не имел expiry",
+                "correct": false
+              }
+            ],
+            "explanation": "Object-level authorization действует и для storage keys."
+          },
+          {
+            "id": "q3",
+            "text": "Почему нельзя иметь retry одновременно во многих скрытых слоях?",
+            "options": [
+              {
+                "id": "a",
+                "text": "Go запрещает nested functions",
+                "correct": false
+              },
+              {
+                "id": "b",
+                "text": "HTTP автоматически дедуплицирует POST",
+                "correct": false
+              },
+              {
+                "id": "c",
+                "text": "Попытки перемножаются, превышая deadline и создавая load amplification",
+                "correct": true
+              }
+            ],
+            "explanation": "Retry budget должен быть согласован end-to-end."
+          },
+          {
+            "id": "q4",
+            "text": "Когда SSE проще WebSocket?",
+            "options": [
+              {
+                "id": "a",
+                "text": "Когда нужен в основном поток server→client поверх обычного HTTP",
+                "correct": true
+              },
+              {
+                "id": "b",
+                "text": "Когда нужен binary full-duplex game protocol",
+                "correct": false
+              },
+              {
+                "id": "c",
+                "text": "Когда нет сети",
+                "correct": false
+              }
+            ],
+            "explanation": "SSE имеет меньше протокольной сложности для однонаправленных updates."
+          },
+          {
+            "id": "q5",
+            "text": "Что предотвращает replay webhook надёжнее одного timestamp?",
+            "options": [
+              {
+                "id": "a",
+                "text": "Только User-Agent",
+                "correct": false
+              },
+              {
+                "id": "b",
+                "text": "Уникальный event ID/inbox плюс допустимое окно timestamp",
+                "correct": true
+              },
+              {
+                "id": "c",
+                "text": "Повторный JSON marshal",
+                "correct": false
+              }
+            ],
+            "explanation": "В пределах временного окна одно сообщение иначе можно повторить."
+          },
+          {
+            "id": "q6",
+            "text": "Какой AWS SDK использовать в новом Go backend в 2026?",
+            "options": [
+              {
+                "id": "a",
+                "text": "Устаревший v1 по умолчанию",
+                "correct": false
+              },
+              {
+                "id": "b",
+                "text": "Java SDK",
+                "correct": false
+              },
+              {
+                "id": "c",
+                "text": "AWS SDK for Go v2",
+                "correct": true
+              }
+            ],
+            "explanation": "v2 — актуальная поддерживаемая линия с context/config APIs."
+          }
+        ],
+        "resources": [
+          {
+            "url": "https://docs.aws.amazon.com/sdk-for-go/v2/developer-guide/getting-started.html",
+            "title": "AWS SDK for Go v2",
+            "note": "Клиенты AWS, конфигурация, retries и credentials chain."
+          },
+          {
+            "url": "https://cheatsheetseries.owasp.org/cheatsheets/REST_Security_Cheat_Sheet.html",
+            "title": "OWASP REST Security",
+            "note": "Практический checklist защиты REST API."
+          },
+          {
+            "url": "https://pkg.go.dev/net/http",
+            "title": "net/http",
+            "note": "HTTP-клиент, сервер, handlers и transport стандартной библиотеки."
+          }
+        ]
+      }
+    }
+  ]
+}

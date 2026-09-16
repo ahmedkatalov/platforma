@@ -13,6 +13,11 @@ import (
 //go:embed content/*.json
 var contentFS embed.FS
 
+// Второй курс (Go Backend Engineer) — в content-go/*.json.
+//
+//go:embed content-go/*.json
+var goContentFS embed.FS
+
 type lessonFile struct {
 	Title       string         `json:"title"`
 	Kind        string         `json:"kind"`
@@ -27,11 +32,18 @@ type moduleFile struct {
 	Lessons []lessonFile `json:"lessons"`
 }
 
-// loadModules читает главы курса из встроенных JSON-файлов, отсортированных по имени.
-func loadModules() []ModuleSeed {
-	entries, err := fs.ReadDir(contentFS, "content")
+// loadModules читает главы курса DevOps из content/*.json.
+func loadModules() []ModuleSeed { return readModules(contentFS, "content") }
+
+// loadGoModules читает главы курса Go из content-go/*.json.
+func loadGoModules() []ModuleSeed { return readModules(goContentFS, "content-go") }
+
+// readModules читает главы курса из встроенных JSON-файлов каталога dir,
+// отсортированных по имени.
+func readModules(contentFS embed.FS, dir string) []ModuleSeed {
+	entries, err := fs.ReadDir(contentFS, dir)
 	if err != nil {
-		panic("seed: не удалось прочитать content/: " + err.Error())
+		panic("seed: не удалось прочитать " + dir + "/: " + err.Error())
 	}
 
 	names := make([]string, 0, len(entries))
@@ -44,13 +56,13 @@ func loadModules() []ModuleSeed {
 
 	modules := make([]ModuleSeed, 0, len(names))
 	for _, name := range names {
-		data, err := contentFS.ReadFile("content/" + name)
+		data, err := contentFS.ReadFile(dir + "/" + name)
 		if err != nil {
-			panic("seed: не удалось прочитать content/" + name + ": " + err.Error())
+			panic("seed: не удалось прочитать " + dir + "/" + name + ": " + err.Error())
 		}
 		var mf moduleFile
 		if err := json.Unmarshal(data, &mf); err != nil {
-			panic("seed: битый JSON content/" + name + ": " + err.Error())
+			panic("seed: битый JSON " + dir + "/" + name + ": " + err.Error())
 		}
 		m := ModuleSeed{Title: mf.Title, Summary: mf.Summary}
 		for _, lf := range mf.Lessons {

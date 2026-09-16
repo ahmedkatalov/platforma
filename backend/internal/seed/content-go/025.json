@@ -1,0 +1,666 @@
+{
+  "title": "Итоговый проект OrderFlow: от ТЗ до production-ready релиза",
+  "summary": "Полноценный multi-tenant Orders API с PostgreSQL, Redis, async events, observability, CI/CD, Kubernetes и доказательствами качества.",
+  "lessons": [
+    {
+      "title": "Техническое задание и acceptance criteria",
+      "kind": "text",
+      "summary": "Собираем все знания в один проверяемый продуктовый контракт.",
+      "durationMin": 14,
+      "content": {
+        "body": "## Зачем это нужно backend-разработчику\n\nТехническое задание и acceptance criteria — часть ежедневной работы Go backend-разработчика. Важно не только знать синтаксис, но и понимать контракт, стоимость операции, поведение при ошибке и способ проверки результата.\n\n## Ментальная модель\n\nТехническое задание и acceptance criteria: рассматривайте тему как набор явных входов, преобразований, выходов и отказов. Владение темой означает, что вы можете предсказать поведение до запуска и объяснить компромиссы коллеге.\n\n## Основные идеи по шагам\n\n1. OrderFlow позволяет tenant users создать заказ идемпотентно, получить/листать только свои заказы, отменить допустимое состояние и наблюдать статус.\n2. HTTP OpenAPI — public contract, optional gRPC — internal read API, order.created.v1 — async contract; PostgreSQL 18 source of truth.\n3. Authentication через secure session/JWT policy, object-level authorization по tenant/user, Argon2id для локальных credentials.\n4. SLO: например 99.9% successful availability и p95 read latency <200ms при оговорённой workload; цифры подтверждаются тестом, а не обещанием.\n\n## Разбор на примере\n\n```markdown\nCore acceptance:\n- POST /v1/orders + Idempotency-Key\n- GET /v1/orders/{id}, cursor list, cancel transition\n- PostgreSQL constraints + migrations\n- Redis cache с safe fallback\n- outbox → Kafka или NATS → idempotent worker\n- logs + Prometheus + OpenTelemetry\n- Docker Compose + CI + Kubernetes manifests\n```\n\nScope достаточно большой для production-практики, но каждый компонент имеет конкретное требование.\n\n## Где это встречается в production\n\nВ рабочем сервисе эта тема влияет на читаемость pull request, предсказуемость API, диагностику инцидентов и стоимость дальнейших изменений. Сначала зафиксируйте контракт тестом или примером, затем реализуйте простейшее корректное решение.\n\n## Как бывает неправильно\n\n- **Механическое копирование**\n  - Как проявляется: код компилируется, но автор не может объяснить граничные случаи\n  - Что делать: измените входные данные и предскажите результат до запуска\n- **Скрытая ошибка**\n  - Как проявляется: неверное состояние обнаруживается далеко от причины\n  - Что делать: возвращайте ошибку с контекстом и проверяйте её на нужном уровне\n- **Преждевременная сложность**\n  - Как проявляется: простая задача получает лишние абстракции и зависимости\n  - Что делать: сначала используйте стандартную библиотеку и измеримые требования\n\n## Проверьте себя\n\n1. Объясните своими словами: Техническое задание и acceptance criteria: рассматривайте тему как набор явных входов, преобразований, выходов и отказов. Владение темой означает, что вы можете предсказать поведение до запуска и объяснить компромиссы коллеге.\n2. Как эта тема проявляется в реальном backend-сервисе?\n3. Какую ошибку из раздела выше вы сможете распознать по симптомам?\n\n## Практика после урока\n\nВоспроизведите пример, добавьте один ошибочный вход, напишите проверку результата и объясните решение вслух за две минуты.\n\n## Запомнить\n\n- Сначала понимайте контракт и ограничения, затем выбирайте инструмент.\n- Ошибка должна быть наблюдаемой: её проверяют, логируют с контекстом и возвращают на правильный уровень.\n- Любой пример из урока измените хотя бы один раз и снова проверьте результат.\n- Production-код отличается явными таймаутами, валидацией, тестами и способом безопасного завершения.",
+        "resources": [
+          {
+            "url": "https://www.postgresql.org/docs/18/",
+            "title": "PostgreSQL 18 Documentation",
+            "note": "Актуальная стабильная документация PostgreSQL на сентябрь 2026."
+          },
+          {
+            "url": "https://github.com/redis/go-redis",
+            "title": "go-redis v9",
+            "note": "Официальный Go-клиент Redis."
+          },
+          {
+            "url": "https://github.com/twmb/franz-go",
+            "title": "franz-go",
+            "note": "Современный Kafka-клиент без зависимости от librdkafka."
+          },
+          {
+            "url": "https://docs.nats.io/using-nats/developer/develop_jetstream",
+            "title": "NATS JetStream",
+            "note": "Streams, consumers, acknowledgements и delivery semantics."
+          }
+        ]
+      }
+    },
+    {
+      "title": "План реализации вертикальными slices",
+      "kind": "text",
+      "summary": "Каждый этап оставляет работающий и проверяемый сервис.",
+      "durationMin": 15,
+      "content": {
+        "body": "## Зачем это нужно backend-разработчику\n\nПлан реализации вертикальными slices — часть ежедневной работы Go backend-разработчика. Важно не только знать синтаксис, но и понимать контракт, стоимость операции, поведение при ошибке и способ проверки результата.\n\n## Ментальная модель\n\nПлан реализации вертикальными slices: рассматривайте тему как набор явных входов, преобразований, выходов и отказов. Владение темой означает, что вы можете предсказать поведение до запуска и объяснить компромиссы коллеге.\n\n## Основные идеи по шагам\n\n1. M0: ADR, threat model, OpenAPI/schema, repository skeleton, CI; M1: create/get с PostgreSQL и migrations.\n2. M2: auth/authorization/idempotency; M3: cursor list, Redis cache/rate limit; M4: outbox и worker.\n3. M5: metrics/traces/logs/SLO dashboards; M6: container/Kubernetes/rollout/failure tests и portfolio docs.\n4. Vertical slice проходит transport→use case→DB→test→observability; не пишите все interfaces, потом все SQL, потом все handlers без работающего flow.\n\n## Разбор на примере\n\n```text\nM0 contract/risk → M1 core write/read → M2 secure/idempotent\n→ M3 scale read → M4 async → M5 observe → M6 deploy/prove\n```\n\nПосле каждого milestone выполняются quality gates и demo. Следующий этап не маскирует красные tests предыдущего.\n\n## Где это встречается в production\n\nВ рабочем сервисе эта тема влияет на читаемость pull request, предсказуемость API, диагностику инцидентов и стоимость дальнейших изменений. Сначала зафиксируйте контракт тестом или примером, затем реализуйте простейшее корректное решение.\n\n## Как бывает неправильно\n\n- **Механическое копирование**\n  - Как проявляется: код компилируется, но автор не может объяснить граничные случаи\n  - Что делать: измените входные данные и предскажите результат до запуска\n- **Скрытая ошибка**\n  - Как проявляется: неверное состояние обнаруживается далеко от причины\n  - Что делать: возвращайте ошибку с контекстом и проверяйте её на нужном уровне\n- **Преждевременная сложность**\n  - Как проявляется: простая задача получает лишние абстракции и зависимости\n  - Что делать: сначала используйте стандартную библиотеку и измеримые требования\n\n## Проверьте себя\n\n1. Объясните своими словами: План реализации вертикальными slices: рассматривайте тему как набор явных входов, преобразований, выходов и отказов. Владение темой означает, что вы можете предсказать поведение до запуска и объяснить компромиссы коллеге.\n2. Как эта тема проявляется в реальном backend-сервисе?\n3. Какую ошибку из раздела выше вы сможете распознать по симптомам?\n\n## Практика после урока\n\nВоспроизведите пример, добавьте один ошибочный вход, напишите проверку результата и объясните решение вслух за две минуты.\n\n## Запомнить\n\n- Сначала понимайте контракт и ограничения, затем выбирайте инструмент.\n- Ошибка должна быть наблюдаемой: её проверяют, логируют с контекстом и возвращают на правильный уровень.\n- Любой пример из урока измените хотя бы один раз и снова проверьте результат.\n- Production-код отличается явными таймаутами, валидацией, тестами и способом безопасного завершения.",
+        "resources": [
+          {
+            "url": "https://docs.github.com/en/actions",
+            "title": "GitHub Actions",
+            "note": "CI pipelines, permissions, caching и artifacts."
+          },
+          {
+            "url": "https://www.postgresql.org/docs/18/",
+            "title": "PostgreSQL 18 Documentation",
+            "note": "Актуальная стабильная документация PostgreSQL на сентябрь 2026."
+          }
+        ]
+      }
+    },
+    {
+      "title": "Definition of Done и проверка качества",
+      "kind": "text",
+      "summary": "Доказываем корректность happy path, отказов, безопасности и эксплуатации.",
+      "durationMin": 16,
+      "content": {
+        "body": "## Зачем это нужно backend-разработчику\n\nDefinition of Done и проверка качества — часть ежедневной работы Go backend-разработчика. Важно не только знать синтаксис, но и понимать контракт, стоимость операции, поведение при ошибке и способ проверки результата.\n\n## Ментальная модель\n\nDefinition of Done и проверка качества: рассматривайте тему как набор явных входов, преобразований, выходов и отказов. Владение темой означает, что вы можете предсказать поведение до запуска и объяснить компромиссы коллеге.\n\n## Основные идеи по шагам\n\n1. Unit tests покрывают domain/errors; integration — PostgreSQL/Redis/broker; contract — OpenAPI/proto/events; smoke — запущенный artifact.\n2. Race, fuzz parsers, staticcheck, govulncheck, migration-from-zero/previous, generated diff и container scan входят в CI policy.\n3. Failure drills: DB/Redis/broker outage, slow upstream, duplicate event, SIGTERM during request; результат измеряется по SLO/signals.\n4. Security tests: IDOR, injection, oversized body, JWT claims, cookie/CSRF, webhook replay, SSRF и secrets exposure.\n\n## Разбор на примере\n\n```markdown\nEvidence pack:\n- CI run + test reports\n- EXPLAIN plans for critical queries\n- load test command/environment/result\n- trace of create order and async worker\n- failure drill timeline\n- threat model + fixed abuse tests\n- rollout and rollback record\n```\n\nАртефакты позволяют reviewer воспроизвести claims. Screenshots без команд/config менее ценны.\n\n## Где это встречается в production\n\nВ рабочем сервисе эта тема влияет на читаемость pull request, предсказуемость API, диагностику инцидентов и стоимость дальнейших изменений. Сначала зафиксируйте контракт тестом или примером, затем реализуйте простейшее корректное решение.\n\n## Как бывает неправильно\n\n- **Механическое копирование**\n  - Как проявляется: код компилируется, но автор не может объяснить граничные случаи\n  - Что делать: измените входные данные и предскажите результат до запуска\n- **Скрытая ошибка**\n  - Как проявляется: неверное состояние обнаруживается далеко от причины\n  - Что делать: возвращайте ошибку с контекстом и проверяйте её на нужном уровне\n- **Преждевременная сложность**\n  - Как проявляется: простая задача получает лишние абстракции и зависимости\n  - Что делать: сначала используйте стандартную библиотеку и измеримые требования\n\n## Проверьте себя\n\n1. Объясните своими словами: Definition of Done и проверка качества: рассматривайте тему как набор явных входов, преобразований, выходов и отказов. Владение темой означает, что вы можете предсказать поведение до запуска и объяснить компромиссы коллеге.\n2. Как эта тема проявляется в реальном backend-сервисе?\n3. Какую ошибку из раздела выше вы сможете распознать по симптомам?\n\n## Практика после урока\n\nВоспроизведите пример, добавьте один ошибочный вход, напишите проверку результата и объясните решение вслух за две минуты.\n\n## Запомнить\n\n- Сначала понимайте контракт и ограничения, затем выбирайте инструмент.\n- Ошибка должна быть наблюдаемой: её проверяют, логируют с контекстом и возвращают на правильный уровень.\n- Любой пример из урока измените хотя бы один раз и снова проверьте результат.\n- Production-код отличается явными таймаутами, валидацией, тестами и способом безопасного завершения.",
+        "resources": [
+          {
+            "url": "https://golang.testcontainers.org/",
+            "title": "Testcontainers for Go",
+            "note": "Интеграционные тесты с реальными контейнерами зависимостей."
+          },
+          {
+            "url": "https://go.dev/doc/security/vuln/",
+            "title": "Go Vulnerability Management",
+            "note": "govulncheck и модель уязвимостей Go."
+          },
+          {
+            "url": "https://opentelemetry.io/docs/languages/go/",
+            "title": "OpenTelemetry Go",
+            "note": "Трейсы, метрики, логи и экспорт телеметрии."
+          },
+          {
+            "url": "https://prometheus.io/docs/guides/go-application/",
+            "title": "Prometheus Go application",
+            "note": "Инструментирование Go-приложения метриками."
+          }
+        ]
+      }
+    },
+    {
+      "title": "README, demo и release checklist",
+      "kind": "text",
+      "summary": "Передаём проект так, чтобы другой инженер запустил и оценил его без автора.",
+      "durationMin": 17,
+      "content": {
+        "body": "## Зачем это нужно backend-разработчику\n\nREADME, demo и release checklist — часть ежедневной работы Go backend-разработчика. Важно не только знать синтаксис, но и понимать контракт, стоимость операции, поведение при ошибке и способ проверки результата.\n\n## Ментальная модель\n\nREADME, demo и release checklist: рассматривайте тему как набор явных входов, преобразований, выходов и отказов. Владение темой означает, что вы можете предсказать поведение до запуска и объяснить компромиссы коллеге.\n\n## Основные идеи по шагам\n\n1. README объясняет проблему, architecture, quickstart, API examples, decisions, security, observability, tests и ограничения.\n2. Demo показывает create/retry idempotency, authorization denial, async event, trace/log/metric correlation и graceful rollout.\n3. Release фиксирует semantic version, changelog, migrations, immutable image digest, SBOM/provenance, deployment и rollback verification.\n4. Roadmap честно отделяет выполненное от planned; удалите fake claims, default secrets и публичные debug endpoints.\n\n## Разбор на примере\n\n```markdown\nRelease gate:\n[ ] main green, generated diff clean\n[ ] migrations tested forward\n[ ] image digest scanned/signed\n[ ] config/secrets present, no secrets in artifact\n[ ] dashboards/alerts/runbook ready\n[ ] canary health and SLO observed\n[ ] rollback command and schema compatibility verified\n```\n\nChecklist выполняется ответственными людьми, а не существует только в документе.\n\n## Где это встречается в production\n\nВ рабочем сервисе эта тема влияет на читаемость pull request, предсказуемость API, диагностику инцидентов и стоимость дальнейших изменений. Сначала зафиксируйте контракт тестом или примером, затем реализуйте простейшее корректное решение.\n\n## Как бывает неправильно\n\n- **Механическое копирование**\n  - Как проявляется: код компилируется, но автор не может объяснить граничные случаи\n  - Что делать: измените входные данные и предскажите результат до запуска\n- **Скрытая ошибка**\n  - Как проявляется: неверное состояние обнаруживается далеко от причины\n  - Что делать: возвращайте ошибку с контекстом и проверяйте её на нужном уровне\n- **Преждевременная сложность**\n  - Как проявляется: простая задача получает лишние абстракции и зависимости\n  - Что делать: сначала используйте стандартную библиотеку и измеримые требования\n\n## Проверьте себя\n\n1. Объясните своими словами: README, demo и release checklist: рассматривайте тему как набор явных входов, преобразований, выходов и отказов. Владение темой означает, что вы можете предсказать поведение до запуска и объяснить компромиссы коллеге.\n2. Как эта тема проявляется в реальном backend-сервисе?\n3. Какую ошибку из раздела выше вы сможете распознать по симптомам?\n\n## Практика после урока\n\nВоспроизведите пример, добавьте один ошибочный вход, напишите проверку результата и объясните решение вслух за две минуты.\n\n## Запомнить\n\n- Сначала понимайте контракт и ограничения, затем выбирайте инструмент.\n- Ошибка должна быть наблюдаемой: её проверяют, логируют с контекстом и возвращают на правильный уровень.\n- Любой пример из урока измените хотя бы один раз и снова проверьте результат.\n- Production-код отличается явными таймаутами, валидацией, тестами и способом безопасного завершения.",
+        "resources": [
+          {
+            "url": "https://docs.docker.com/build/building/multi-stage/",
+            "title": "Docker multi-stage builds",
+            "note": "Минимальные и воспроизводимые container images."
+          },
+          {
+            "url": "https://docs.github.com/en/actions",
+            "title": "GitHub Actions",
+            "note": "CI pipelines, permissions, caching и artifacts."
+          },
+          {
+            "url": "https://kubernetes.io/docs/concepts/",
+            "title": "Kubernetes Concepts",
+            "note": "Workloads, Services, Config, probes, resources и security."
+          }
+        ]
+      }
+    },
+    {
+      "title": "Терминал: финальная аттестация проекта",
+      "kind": "terminal",
+      "summary": "Одна последовательность проверяет source, contracts, data, artifact и smoke behavior.",
+      "durationMin": 16,
+      "content": {
+        "intro": "Выполняйте из clean clone с documented prerequisites. Команды миграций используют только disposable CI database.\n\nПеред Enter назовите ожидаемый результат. После команды прочитайте вывод и код завершения; не переходите дальше, пока не понимаете, что именно подтвердили.\n\n## Разбор команд до практики\n\nНиже каждая команда разобрана до выполнения. Сначала прочитайте назначение и назовите ожидаемый результат, затем выполняйте задание в тренажёре.\n\n### 1. Проверьте format и vet.\n\n**Команда:**\n\n```bash\ntest -z \"$(gofmt -l .)\" && go vet ./...\n```\n\n- **Инструмент:** POSIX test.\n- **Зачем запускать:** Быстрый deterministic gate.\n- **Что считать подтверждением:** Быстрый deterministic gate.\n- **Перед запуском:** Проверьте текущий каталог и прочитайте команду слева направо: программа, подкоманда, флаги, аргументы.\n- **После запуска:** прочитайте stdout и stderr, затем проверьте код завершения командой `echo $?`, если результат неоднозначен.\n\n### 2. Запустите все race tests.\n\n**Команда:**\n\n```bash\ngo test -race ./...\n```\n\n- **Инструмент:** Go toolchain.\n- **Зачем запускать:** Unit и concurrency checks должны быть зелёными.\n- **Что считать подтверждением:** Unit и concurrency checks должны быть зелёными.\n- **Перед запуском:** Проверьте текущий каталог и прочитайте команду слева направо: программа, подкоманда, флаги, аргументы.\n- **После запуска:** прочитайте stdout и stderr, затем проверьте код завершения командой `echo $?`, если результат неоднозначен.\n\n### 3. Запустите integration suite.\n\n**Команда:**\n\n```bash\ngo test -tags=integration ./... -v\n```\n\n- **Инструмент:** Go toolchain.\n- **Зачем запускать:** Реальные PostgreSQL/Redis/broker contracts проверены.\n- **Что считать подтверждением:** Реальные PostgreSQL/Redis/broker contracts проверены.\n- **Перед запуском:** Проверьте текущий каталог и прочитайте команду слева направо: программа, подкоманда, флаги, аргументы.\n- **После запуска:** прочитайте stdout и stderr, затем проверьте код завершения командой `echo $?`, если результат неоднозначен.\n\n### 4. Проверьте vulnerabilities.\n\n**Команда:**\n\n```bash\ngovulncheck ./...\n```\n\n- **Инструмент:** govulncheck.\n- **Зачем запускать:** Достижимые known vulnerabilities блокируют release по policy.\n- **Что считать подтверждением:** Достижимые known vulnerabilities блокируют release по policy.\n- **Перед запуском:** Проверьте текущий каталог и прочитайте команду слева направо: программа, подкоманда, флаги, аргументы.\n- **После запуска:** прочитайте stdout и stderr, затем проверьте код завершения командой `echo $?`, если результат неоднозначен.\n\n### 5. Перегенерируйте contracts.\n\n**Команда:**\n\n```bash\ngo generate ./... && git diff --exit-code\n```\n\n- **Инструмент:** Go toolchain.\n- **Зачем запускать:** OpenAPI/proto/sqlc artifacts не расходятся.\n- **Что считать подтверждением:** OpenAPI/proto/sqlc artifacts не расходятся.\n- **Перед запуском:** Проверьте текущий каталог и прочитайте команду слева направо: программа, подкоманда, флаги, аргументы.\n- **После запуска:** прочитайте stdout и stderr, затем проверьте код завершения командой `echo $?`, если результат неоднозначен.\n\n### 6. Соберите production image.\n\n**Команда:**\n\n```bash\ndocker build --pull -t orderflow:release .\n```\n\n- **Инструмент:** Docker CLI.\n- **Зачем запускать:** Build проходит тем же Dockerfile, что CI release.\n- **Что считать подтверждением:** Build проходит тем же Dockerfile, что CI release.\n- **Перед запуском:** Проверьте активный Docker/Kubernetes-контекст и точное имя ресурса: команда может менять состояние учебного окружения.\n- **После запуска:** прочитайте stdout и stderr, затем проверьте код завершения командой `echo $?`, если результат неоднозначен.\n\n### 7. Поднимите полный stack.\n\n**Команда:**\n\n```bash\ndocker compose up -d\n```\n\n- **Инструмент:** Docker CLI.\n- **Зачем запускать:** Dependencies и application запускаются с healthchecks.\n- **Что считать подтверждением:** Dependencies и application запускаются с healthchecks.\n- **Перед запуском:** Проверьте активный Docker/Kubernetes-контекст и точное имя ресурса: команда может менять состояние учебного окружения.\n- **После запуска:** прочитайте stdout и stderr, затем проверьте код завершения командой `echo $?`, если результат неоднозначен.\n\n### 8. Запустите smoke/acceptance.\n\n**Команда:**\n\n```bash\ngo test ./test/smoke ./test/acceptance -v\n```\n\n- **Инструмент:** Go toolchain.\n- **Зачем запускать:** Внешние user flows подтверждают готовый artifact.\n- **Что считать подтверждением:** Внешние user flows подтверждают готовый artifact.\n- **Перед запуском:** Проверьте текущий каталог и прочитайте команду слева направо: программа, подкоманда, флаги, аргументы.\n- **После запуска:** прочитайте stdout и stderr, затем проверьте код завершения командой `echo $?`, если результат неоднозначен.\n\n### 9. Проверьте graceful stop.\n\n**Команда:**\n\n```bash\ndocker compose stop -t 30 api\n```\n\n- **Инструмент:** Docker CLI.\n- **Зачем запускать:** SIGTERM даёт 30 секунд на drain.\n- **Что считать подтверждением:** SIGTERM даёт 30 секунд на drain.\n- **Перед запуском:** Проверьте активный Docker/Kubernetes-контекст и точное имя ресурса: команда может менять состояние учебного окружения.\n- **После запуска:** прочитайте stdout и stderr, затем проверьте код завершения командой `echo $?`, если результат неоднозначен.",
+        "shell": "student@go-backend",
+        "tasks": [
+          {
+            "id": "t1",
+            "prompt": "Проверьте format и vet.",
+            "predict": "Что должно измениться или появиться после этой команды? Быстрый deterministic gate.",
+            "hint": "Нужна команда: test -z \"$(gofmt -l .)\" && go vet ./...",
+            "hints": [
+              "Быстрый deterministic gate.",
+              "Соберите команду из программы, подкоманды, флагов и аргумента. Не добавляйте sudo без причины.",
+              "`test -z \"$(gofmt -l .)\" && go vet ./...`"
+            ],
+            "expected": [
+              "test -z \"$(gofmt -l .)\" && go vet ./..."
+            ],
+            "success": "Готово. Быстрый deterministic gate."
+          },
+          {
+            "id": "t2",
+            "prompt": "Запустите все race tests.",
+            "predict": "Что должно измениться или появиться после этой команды? Unit и concurrency checks должны быть зелёными.",
+            "hint": "Нужна команда: go test -race ./...",
+            "hints": [
+              "Unit и concurrency checks должны быть зелёными.",
+              "Соберите команду из программы, подкоманды, флагов и аргумента. Не добавляйте sudo без причины.",
+              "`go test -race ./...`"
+            ],
+            "expected": [
+              "go test -race ./..."
+            ],
+            "success": "Готово. Unit и concurrency checks должны быть зелёными."
+          },
+          {
+            "id": "t3",
+            "prompt": "Запустите integration suite.",
+            "predict": "Что должно измениться или появиться после этой команды? Реальные PostgreSQL/Redis/broker contracts проверены.",
+            "hint": "Нужна команда: go test -tags=integration ./... -v",
+            "hints": [
+              "Реальные PostgreSQL/Redis/broker contracts проверены.",
+              "Соберите команду из программы, подкоманды, флагов и аргумента. Не добавляйте sudo без причины.",
+              "`go test -tags=integration ./... -v`"
+            ],
+            "expected": [
+              "go test -tags=integration ./... -v"
+            ],
+            "success": "Готово. Реальные PostgreSQL/Redis/broker contracts проверены."
+          },
+          {
+            "id": "t4",
+            "prompt": "Проверьте vulnerabilities.",
+            "predict": "Что должно измениться или появиться после этой команды? Достижимые known vulnerabilities блокируют release по policy.",
+            "hint": "Нужна команда: govulncheck ./...",
+            "hints": [
+              "Достижимые known vulnerabilities блокируют release по policy.",
+              "Соберите команду из программы, подкоманды, флагов и аргумента. Не добавляйте sudo без причины.",
+              "`govulncheck ./...`"
+            ],
+            "expected": [
+              "govulncheck ./..."
+            ],
+            "success": "Готово. Достижимые known vulnerabilities блокируют release по policy."
+          },
+          {
+            "id": "t5",
+            "prompt": "Перегенерируйте contracts.",
+            "predict": "Что должно измениться или появиться после этой команды? OpenAPI/proto/sqlc artifacts не расходятся.",
+            "hint": "Нужна команда: go generate ./... && git diff --exit-code",
+            "hints": [
+              "OpenAPI/proto/sqlc artifacts не расходятся.",
+              "Соберите команду из программы, подкоманды, флагов и аргумента. Не добавляйте sudo без причины.",
+              "`go generate ./... && git diff --exit-code`"
+            ],
+            "expected": [
+              "go generate ./... && git diff --exit-code"
+            ],
+            "success": "Готово. OpenAPI/proto/sqlc artifacts не расходятся."
+          },
+          {
+            "id": "t6",
+            "prompt": "Соберите production image.",
+            "predict": "Что должно измениться или появиться после этой команды? Build проходит тем же Dockerfile, что CI release.",
+            "hint": "Нужна команда: docker build --pull -t orderflow:release .",
+            "hints": [
+              "Build проходит тем же Dockerfile, что CI release.",
+              "Соберите команду из программы, подкоманды, флагов и аргумента. Не добавляйте sudo без причины.",
+              "`docker build --pull -t orderflow:release .`"
+            ],
+            "expected": [
+              "docker build --pull -t orderflow:release ."
+            ],
+            "success": "Готово. Build проходит тем же Dockerfile, что CI release."
+          },
+          {
+            "id": "t7",
+            "prompt": "Поднимите полный stack.",
+            "predict": "Что должно измениться или появиться после этой команды? Dependencies и application запускаются с healthchecks.",
+            "hint": "Нужна команда: docker compose up -d",
+            "hints": [
+              "Dependencies и application запускаются с healthchecks.",
+              "Соберите команду из программы, подкоманды, флагов и аргумента. Не добавляйте sudo без причины.",
+              "`docker compose up -d`"
+            ],
+            "expected": [
+              "docker compose up -d"
+            ],
+            "success": "Готово. Dependencies и application запускаются с healthchecks."
+          },
+          {
+            "id": "t8",
+            "prompt": "Запустите smoke/acceptance.",
+            "predict": "Что должно измениться или появиться после этой команды? Внешние user flows подтверждают готовый artifact.",
+            "hint": "Нужна команда: go test ./test/smoke ./test/acceptance -v",
+            "hints": [
+              "Внешние user flows подтверждают готовый artifact.",
+              "Соберите команду из программы, подкоманды, флагов и аргумента. Не добавляйте sudo без причины.",
+              "`go test ./test/smoke ./test/acceptance -v`"
+            ],
+            "expected": [
+              "go test ./test/smoke ./test/acceptance -v"
+            ],
+            "success": "Готово. Внешние user flows подтверждают готовый artifact."
+          },
+          {
+            "id": "t9",
+            "prompt": "Проверьте graceful stop.",
+            "predict": "Что должно измениться или появиться после этой команды? SIGTERM даёт 30 секунд на drain.",
+            "hint": "Нужна команда: docker compose stop -t 30 api",
+            "hints": [
+              "SIGTERM даёт 30 секунд на drain.",
+              "Соберите команду из программы, подкоманды, флагов и аргумента. Не добавляйте sudo без причины.",
+              "`docker compose stop -t 30 api`"
+            ],
+            "expected": [
+              "docker compose stop -t 30 api"
+            ],
+            "success": "Готово. SIGTERM даёт 30 секунд на drain."
+          }
+        ],
+        "challenge": "Запишите пятиминутное demo по сценарию: create с повтором key, forbidden чужой order, outbox delivery, trace correlation, DB outage/recovery и graceful shutdown.",
+        "debug": "Читайте stderr полностью и проверяйте код завершения. Если результат неожиданен, сузьте проблему одной командой и повторите её с минимальным вводом.\n\nТипичная ошибка: исправлять output только локальным editor setting. Всегда начните с `pwd`, `ls -la` и чтения полного сообщения об ошибке.",
+        "resources": [
+          {
+            "url": "https://go.dev/doc/go1.27",
+            "title": "Go 1.27 Release Notes",
+            "note": "Актуальные изменения языка, toolchain, runtime и стандартной библиотеки за 2026 год."
+          },
+          {
+            "url": "https://docs.docker.com/build/building/multi-stage/",
+            "title": "Docker multi-stage builds",
+            "note": "Минимальные и воспроизводимые container images."
+          },
+          {
+            "url": "https://docs.github.com/en/actions",
+            "title": "GitHub Actions",
+            "note": "CI pipelines, permissions, caching и artifacts."
+          },
+          {
+            "url": "https://kubernetes.io/docs/concepts/",
+            "title": "Kubernetes Concepts",
+            "note": "Workloads, Services, Config, probes, resources и security."
+          }
+        ]
+      }
+    },
+    {
+      "title": "Архитектурный паспорт OrderFlow",
+      "kind": "code",
+      "summary": "Зафиксируйте границы, данные, риски и измеримые цели до реализации.",
+      "durationMin": 22,
+      "content": {
+        "task": "Заполните документ: scope/non-goals, actors, 6 endpoints, data ownership/schema, authz model, idempotency, async event, dependencies/timeouts, SLO/SLI, threat model, rollout/rollback и 5 ADR.\n\n## Порядок работы\n\n1. Прочитайте контракт и назовите вход, выход и возможные ошибки.\n2. Допишите минимальный рабочий вариант.\n3. Проверьте обычный, граничный и ошибочный сценарии.\n4. Измените одно требование и адаптируйте код без копирования готового решения.\n5. Сравните с эталоном только после собственной попытки.\n\n## Обязательная проверка\n\nЗапустите форматирование и подходящие тесты. Для Go: `go fmt ./...`, `go vet ./...` и `go test ./...`. Ошибку не скрывайте пустым обработчиком.",
+        "starter": "# OrderFlow\n\n## Scope и non-goals\n\n## Contracts\n\n## Data и consistency\n\n## Security\n\n## Reliability и SLO\n\n## Delivery\n",
+        "solution": "# OrderFlow\n\n## Scope и non-goals\n\nMulti-tenant create/get/list/cancel order и async receipt. Не реализуем реальный payment acquiring и global multi-region writes.\n\n## Contracts\n\nOpenAPI: POST /v1/orders, GET /v1/orders/{id}, GET /v1/orders, POST /v1/orders/{id}/cancel, login/logout. Event order.created.v1; optional internal gRPC GetOrder.\n\n## Data и consistency\n\nPostgreSQL 18 source of truth; constraints на status/amount/tenant. Redis cache производный. Idempotency key unique per actor + request hash. Outbox/inbox для at-least-once.\n\n## Security\n\nArgon2id, secure session/JWT claim validation, tenant+object authorization, body limits, parameters, rate limits, secret redaction, SSRF policy.\n\n## Reliability и SLO\n\nRead p95 <200ms и availability 99.9% при documented load. End-to-end deadlines, bounded retries, cache degradation, readiness и RED metrics.\n\n## Delivery\n\nCI gates, migration expand/contract, immutable image digest, non-root container, Kubernetes rolling canary, graceful SIGTERM и verified rollback.\n\n## ADR\n\n1. net/http + chi v5. 2. pgx v5 + sqlc + goose. 3. Redis cache-aside. 4. Kafka or NATS by measured retention/ops needs. 5. OpenTelemetry + Prometheus.",
+        "checks": [
+          {
+            "type": "contains",
+            "value": "# OrderFlow",
+            "message": "Проверка 1: в решении должна быть реализована конструкция `# OrderFlow`."
+          },
+          {
+            "type": "contains",
+            "value": "## Scope и non-goals",
+            "message": "Проверка 2: в решении должна быть реализована конструкция `## Scope и non-goals`."
+          },
+          {
+            "type": "contains",
+            "value": "POST /v1/orders",
+            "message": "Проверка 3: в решении должна быть реализована конструкция `POST /v1/orders`."
+          },
+          {
+            "type": "contains",
+            "value": "PostgreSQL 18 source of truth",
+            "message": "Проверка 4: в решении должна быть реализована конструкция `PostgreSQL 18 source of truth`."
+          },
+          {
+            "type": "contains",
+            "value": "Idempotency",
+            "message": "Проверка 5: в решении должна быть реализована конструкция `Idempotency`."
+          },
+          {
+            "type": "contains",
+            "value": "Outbox/inbox",
+            "message": "Проверка 6: в решении должна быть реализована конструкция `Outbox/inbox`."
+          },
+          {
+            "type": "contains",
+            "value": "## Security",
+            "message": "Проверка 7: в решении должна быть реализована конструкция `## Security`."
+          },
+          {
+            "type": "contains",
+            "value": "Argon2id",
+            "message": "Проверка 8: в решении должна быть реализована конструкция `Argon2id`."
+          },
+          {
+            "type": "contains",
+            "value": "## Reliability и SLO",
+            "message": "Проверка 9: в решении должна быть реализована конструкция `## Reliability и SLO`."
+          },
+          {
+            "type": "contains",
+            "value": "immutable image digest",
+            "message": "Проверка 10: в решении должна быть реализована конструкция `immutable image digest`."
+          },
+          {
+            "type": "contains",
+            "value": "## ADR",
+            "message": "Проверка 11: в решении должна быть реализована конструкция `## ADR`."
+          }
+        ],
+        "hint": "Каждый раздел должен отвечать на проверяемый вопрос и содержать non-goals, чтобы scope не расползался.\n\n## Шпаргалка по синтаксису\n\n- `#`, `##`, `###` задают иерархию заголовков; не выбирайте уровень только ради размера шрифта.\n- Команды и код оформляйте fenced-блоками с языком, а короткие имена — обратными кавычками.\n- Чек-лист `- [ ]` должен проверять наблюдаемый результат, а не расплывчатое «всё работает».\n- Документируйте команды запуска, предпосылки, критерии готовности и доказательства проверки.\n\n## Что проверяет автопроверка\n\n1. Проверка 1: в решении должна быть реализована конструкция `# OrderFlow`.\n2. Проверка 2: в решении должна быть реализована конструкция `## Scope и non-goals`.\n3. Проверка 3: в решении должна быть реализована конструкция `POST /v1/orders`.\n4. Проверка 4: в решении должна быть реализована конструкция `PostgreSQL 18 source of truth`.\n5. Проверка 5: в решении должна быть реализована конструкция `Idempotency`.\n6. Проверка 6: в решении должна быть реализована конструкция `Outbox/inbox`.\n7. Проверка 7: в решении должна быть реализована конструкция `## Security`.\n8. Проверка 8: в решении должна быть реализована конструкция `Argon2id`.\n9. Проверка 9: в решении должна быть реализована конструкция `## Reliability и SLO`.\n10. Проверка 10: в решении должна быть реализована конструкция `immutable image digest`.\n11. Проверка 11: в решении должна быть реализована конструкция `## ADR`.\n\nАвтопроверка подтверждает обязательные конструкции, но не заменяет компиляцию, тесты, статический анализ и проверку поведения на границах.",
+        "language": "markdown",
+        "resources": [
+          {
+            "url": "https://go.dev/doc/go1.27",
+            "title": "Go 1.27 Release Notes",
+            "note": "Актуальные изменения языка, toolchain, runtime и стандартной библиотеки за 2026 год."
+          },
+          {
+            "url": "https://www.postgresql.org/docs/18/",
+            "title": "PostgreSQL 18 Documentation",
+            "note": "Актуальная стабильная документация PostgreSQL на сентябрь 2026."
+          },
+          {
+            "url": "https://cheatsheetseries.owasp.org/cheatsheets/REST_Security_Cheat_Sheet.html",
+            "title": "OWASP REST Security",
+            "note": "Практический checklist защиты REST API."
+          },
+          {
+            "url": "https://opentelemetry.io/docs/languages/go/",
+            "title": "OpenTelemetry Go",
+            "note": "Трейсы, метрики, логи и экспорт телеметрии."
+          }
+        ]
+      }
+    },
+    {
+      "title": "Финальный release и portfolio checklist",
+      "kind": "code",
+      "summary": "Создайте доказательный пакет, который можно отдать работодателю или команде.",
+      "durationMin": 22,
+      "content": {
+        "task": "Составьте checklist минимум из 25 пунктов в группах Contract, Correctness, Data, Security, Reliability, Observability, Delivery, Documentation. Каждый пункт должен иметь evidence/command или ссылку на versioned artifact.\n\n## Порядок работы\n\n1. Прочитайте контракт и назовите вход, выход и возможные ошибки.\n2. Допишите минимальный рабочий вариант.\n3. Проверьте обычный, граничный и ошибочный сценарии.\n4. Измените одно требование и адаптируйте код без копирования готового решения.\n5. Сравните с эталоном только после собственной попытки.\n\n## Обязательная проверка\n\nЗапустите форматирование и подходящие тесты. Для Go: `go fmt ./...`, `go vet ./...` и `go test ./...`. Ошибку не скрывайте пустым обработчиком.",
+        "starter": "# Release checklist\n\n## Contract\n\n- [ ] TODO\n",
+        "solution": "# Release checklist\n\n## Contract\n\n- [ ] OpenAPI/proto lint и breaking checks green; generated diff clean.\n- [ ] Success/error examples соответствуют running API.\n- [ ] Event schemas versioned и replay documented.\n\n## Correctness\n\n- [ ] Unit, integration, contract, smoke и race tests green.\n- [ ] Fuzz regression corpus committed.\n- [ ] Idempotency и duplicate delivery tests green.\n\n## Data\n\n- [ ] Migrations проверены с empty и previous schema.\n- [ ] Critical queries имеют EXPLAIN evidence и indexes.\n- [ ] Backup/restore и retention owner задокументированы.\n\n## Security\n\n- [ ] govulncheck/staticcheck и abuse tests green.\n- [ ] IDOR, injection, body limit, claims и SSRF проверены.\n- [ ] Secrets отсутствуют в Git/image/logs; rotation path описан.\n\n## Reliability\n\n- [ ] Deadlines/retries/bulkheads bounded.\n- [ ] DB, Redis, broker outage drills выполнены.\n- [ ] Graceful shutdown и idempotent workers подтверждены.\n\n## Observability\n\n- [ ] RED metrics без high-cardinality labels.\n- [ ] Logs redacted и связаны с trace/request ID.\n- [ ] SLO, burn-rate alerts и runbook имеют owner.\n\n## Delivery\n\n- [ ] Non-root read-only image собран и просканирован.\n- [ ] Immutable digest/SBOM/provenance записаны.\n- [ ] Rolling/canary deploy и rollback проверены.\n- [ ] Schema совместима со старой и новой app versions.\n\n## Documentation\n\n- [ ] Clean-clone quickstart проверен другим человеком.\n- [ ] ADR, threat model и known limitations актуальны.\n- [ ] Load test workload/environment/results воспроизводимы.\n- [ ] Demo script показывает success, denial, failure и recovery.",
+        "checks": [
+          {
+            "type": "contains",
+            "value": "## Contract",
+            "message": "Проверка 1: в решении должна быть реализована конструкция `## Contract`."
+          },
+          {
+            "type": "contains",
+            "value": "## Correctness",
+            "message": "Проверка 2: в решении должна быть реализована конструкция `## Correctness`."
+          },
+          {
+            "type": "contains",
+            "value": "## Data",
+            "message": "Проверка 3: в решении должна быть реализована конструкция `## Data`."
+          },
+          {
+            "type": "contains",
+            "value": "## Security",
+            "message": "Проверка 4: в решении должна быть реализована конструкция `## Security`."
+          },
+          {
+            "type": "contains",
+            "value": "govulncheck",
+            "message": "Проверка 5: в решении должна быть реализована конструкция `govulncheck`."
+          },
+          {
+            "type": "contains",
+            "value": "## Reliability",
+            "message": "Проверка 6: в решении должна быть реализована конструкция `## Reliability`."
+          },
+          {
+            "type": "contains",
+            "value": "outage drills",
+            "message": "Проверка 7: в решении должна быть реализована конструкция `outage drills`."
+          },
+          {
+            "type": "contains",
+            "value": "## Observability",
+            "message": "Проверка 8: в решении должна быть реализована конструкция `## Observability`."
+          },
+          {
+            "type": "contains",
+            "value": "SLO",
+            "message": "Проверка 9: в решении должна быть реализована конструкция `SLO`."
+          },
+          {
+            "type": "contains",
+            "value": "## Delivery",
+            "message": "Проверка 10: в решении должна быть реализована конструкция `## Delivery`."
+          },
+          {
+            "type": "contains",
+            "value": "Immutable digest",
+            "message": "Проверка 11: в решении должна быть реализована конструкция `Immutable digest`."
+          },
+          {
+            "type": "contains",
+            "value": "## Documentation",
+            "message": "Проверка 12: в решении должна быть реализована конструкция `## Documentation`."
+          },
+          {
+            "type": "contains",
+            "value": "known limitations",
+            "message": "Проверка 13: в решении должна быть реализована конструкция `known limitations`."
+          }
+        ],
+        "hint": "Evidence делает каждый checkbox проверяемым; «сделано» без команды/artifact недостаточно.\n\n## Шпаргалка по синтаксису\n\n- `#`, `##`, `###` задают иерархию заголовков; не выбирайте уровень только ради размера шрифта.\n- Команды и код оформляйте fenced-блоками с языком, а короткие имена — обратными кавычками.\n- Чек-лист `- [ ]` должен проверять наблюдаемый результат, а не расплывчатое «всё работает».\n- Документируйте команды запуска, предпосылки, критерии готовности и доказательства проверки.\n\n## Что проверяет автопроверка\n\n1. Проверка 1: в решении должна быть реализована конструкция `## Contract`.\n2. Проверка 2: в решении должна быть реализована конструкция `## Correctness`.\n3. Проверка 3: в решении должна быть реализована конструкция `## Data`.\n4. Проверка 4: в решении должна быть реализована конструкция `## Security`.\n5. Проверка 5: в решении должна быть реализована конструкция `govulncheck`.\n6. Проверка 6: в решении должна быть реализована конструкция `## Reliability`.\n7. Проверка 7: в решении должна быть реализована конструкция `outage drills`.\n8. Проверка 8: в решении должна быть реализована конструкция `## Observability`.\n9. Проверка 9: в решении должна быть реализована конструкция `SLO`.\n10. Проверка 10: в решении должна быть реализована конструкция `## Delivery`.\n11. Проверка 11: в решении должна быть реализована конструкция `Immutable digest`.\n12. Проверка 12: в решении должна быть реализована конструкция `## Documentation`.\n13. Проверка 13: в решении должна быть реализована конструкция `known limitations`.\n\nАвтопроверка подтверждает обязательные конструкции, но не заменяет компиляцию, тесты, статический анализ и проверку поведения на границах.",
+        "language": "markdown",
+        "resources": [
+          {
+            "url": "https://docs.github.com/en/actions",
+            "title": "GitHub Actions",
+            "note": "CI pipelines, permissions, caching и artifacts."
+          },
+          {
+            "url": "https://go.dev/doc/security/vuln/",
+            "title": "Go Vulnerability Management",
+            "note": "govulncheck и модель уязвимостей Go."
+          },
+          {
+            "url": "https://docs.docker.com/build/building/multi-stage/",
+            "title": "Docker multi-stage builds",
+            "note": "Минимальные и воспроизводимые container images."
+          },
+          {
+            "url": "https://kubernetes.io/docs/concepts/",
+            "title": "Kubernetes Concepts",
+            "note": "Workloads, Services, Config, probes, resources и security."
+          }
+        ]
+      }
+    },
+    {
+      "title": "Квиз модуля: Итоговый проект OrderFlow: от ТЗ до production-ready релиза",
+      "kind": "quiz",
+      "summary": "Проверка ключевых решений и ошибок по модулю «Итоговый проект OrderFlow: от ТЗ до production-ready релиза».",
+      "durationMin": 10,
+      "content": {
+        "intro": "Ответьте без запуска кода. Цель — проверить причинно-следственные связи. После ошибки вернитесь к уроку и воспроизведите пример своими руками. Положение правильного варианта меняется; ориентируйтесь на смысл, а не на букву ответа.",
+        "passScore": 70,
+        "questions": [
+          {
+            "id": "q1",
+            "text": "Что является source of truth OrderFlow?",
+            "options": [
+              {
+                "id": "a",
+                "text": "Redis cache всегда",
+                "correct": false
+              },
+              {
+                "id": "b",
+                "text": "PostgreSQL 18; Redis и broker содержат производные/доставляемые данные",
+                "correct": true
+              },
+              {
+                "id": "c",
+                "text": "Локальная память Pod",
+                "correct": false
+              }
+            ],
+            "explanation": "Authoritative store должен быть явно выбран."
+          },
+          {
+            "id": "q2",
+            "text": "Почему vertical slices полезнее реализации всех слоёв по очереди?",
+            "options": [
+              {
+                "id": "a",
+                "text": "Они запрещают architecture",
+                "correct": false
+              },
+              {
+                "id": "b",
+                "text": "Они не требуют тестов",
+                "correct": false
+              },
+              {
+                "id": "c",
+                "text": "Они рано проверяют интеграцию и оставляют работающий пользовательский сценарий",
+                "correct": true
+              }
+            ],
+            "explanation": "Feedback по границам появляется до большого объёма кода."
+          },
+          {
+            "id": "q3",
+            "text": "Что подтверждает заявление о p95 <200ms?",
+            "options": [
+              {
+                "id": "a",
+                "text": "Воспроизводимый load test с workload, environment, dataset и измерениями",
+                "correct": true
+              },
+              {
+                "id": "b",
+                "text": "Одна ручная curl команда",
+                "correct": false
+              },
+              {
+                "id": "c",
+                "text": "Количество строк Go",
+                "correct": false
+              }
+            ],
+            "explanation": "Performance claim требует контекста и samples."
+          },
+          {
+            "id": "q4",
+            "text": "Какой artifact развёртывать после успешного staging?",
+            "options": [
+              {
+                "id": "a",
+                "text": "Новый rebuild с тем же tag",
+                "correct": false
+              },
+              {
+                "id": "b",
+                "text": "Тот же проверенный immutable image digest",
+                "correct": true
+              },
+              {
+                "id": "c",
+                "text": "Локальный go run",
+                "correct": false
+              }
+            ],
+            "explanation": "Без идентичности bytes staging не доказывает production artifact."
+          },
+          {
+            "id": "q5",
+            "text": "Какой компонент можно убрать из первой версии capstone, если нет измеримой нужды?",
+            "options": [
+              {
+                "id": "a",
+                "text": "Тесты",
+                "correct": false
+              },
+              {
+                "id": "b",
+                "text": "Authorization",
+                "correct": false
+              },
+              {
+                "id": "c",
+                "text": "Один из брокеров: выбрать Kafka или NATS, а не эксплуатировать оба без требования",
+                "correct": true
+              }
+            ],
+            "explanation": "DB constraints"
+          },
+          {
+            "id": "q6",
+            "text": "Когда итоговый проект считается готовым?",
+            "options": [
+              {
+                "id": "a",
+                "text": "Когда contracts и acceptance/failure/security/operations criteria воспроизводимо подтверждены",
+                "correct": true
+              },
+              {
+                "id": "b",
+                "text": "Когда main.go компилируется один раз",
+                "correct": false
+              },
+              {
+                "id": "c",
+                "text": "Когда README обещает высокий RPS",
+                "correct": false
+              }
+            ],
+            "explanation": "Definition of Done охватывает весь lifecycle."
+          }
+        ],
+        "resources": [
+          {
+            "url": "https://go.dev/doc/go1.27",
+            "title": "Go 1.27 Release Notes",
+            "note": "Актуальные изменения языка, toolchain, runtime и стандартной библиотеки за 2026 год."
+          },
+          {
+            "url": "https://www.postgresql.org/docs/18/",
+            "title": "PostgreSQL 18 Documentation",
+            "note": "Актуальная стабильная документация PostgreSQL на сентябрь 2026."
+          },
+          {
+            "url": "https://github.com/redis/go-redis",
+            "title": "go-redis v9",
+            "note": "Официальный Go-клиент Redis."
+          },
+          {
+            "url": "https://grpc.io/docs/languages/go/quickstart/",
+            "title": "gRPC Go",
+            "note": "Официальный quickstart и toolchain для Go."
+          },
+          {
+            "url": "https://github.com/twmb/franz-go",
+            "title": "franz-go",
+            "note": "Современный Kafka-клиент без зависимости от librdkafka."
+          },
+          {
+            "url": "https://docs.nats.io/using-nats/developer/develop_jetstream",
+            "title": "NATS JetStream",
+            "note": "Streams, consumers, acknowledgements и delivery semantics."
+          },
+          {
+            "url": "https://opentelemetry.io/docs/languages/go/",
+            "title": "OpenTelemetry Go",
+            "note": "Трейсы, метрики, логи и экспорт телеметрии."
+          },
+          {
+            "url": "https://kubernetes.io/docs/concepts/",
+            "title": "Kubernetes Concepts",
+            "note": "Workloads, Services, Config, probes, resources и security."
+          }
+        ]
+      }
+    }
+  ]
+}

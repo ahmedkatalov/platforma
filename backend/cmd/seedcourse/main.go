@@ -1,8 +1,8 @@
-// Команда seedcourse наполняет платформу демонстрационным курсом по DevOps:
+// Команда seedcourse наполняет платформу курсами (DevOps и Go Backend):
 // модули, теория, квизы, задания для тренажёра терминала и практика с кодом.
 //
 //	go run ./cmd/seedcourse
-//	go run ./cmd/seedcourse -force     # пересоздать курс, если он уже есть
+//	go run ./cmd/seedcourse -force     # обновить курсы, если они уже есть
 //	go run ./cmd/seedcourse -publish=false
 package main
 
@@ -23,14 +23,14 @@ import (
 )
 
 func main() {
-	force := flag.Bool("force", false, "пересоздать курс, если он уже существует")
+	force := flag.Bool("force", false, "обновить курс, если он уже существует")
 	publish := flag.Bool("publish", true, "сразу опубликовать курс")
 	flag.Parse()
 
 	dotenv.Load(".env")
 	cfg := config.Load()
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
 	pool, err := db.New(ctx, cfg.DatabaseURL)
@@ -44,26 +44,34 @@ func main() {
 	}
 
 	courses := repository.NewCourseRepo(pool)
-	data := seed.DevOpsCourse()
-
-	existing, err := courses.GetBySlug(ctx, data.Slug)
-	if err != nil && !errors.Is(err, repository.ErrNotFound) {
-		log.Fatalf("поиск курса: %v", err)
-	}
 
 	status := "published"
 	if !*publish {
 		status = "draft"
 	}
 
-	// Курс уже есть: обновляем НА МЕСТЕ (id модулей/уроков сохраняются, а значит
-	// прогресс студентов и открытые главы не теряются), а не пересоздаём.
+	for i, data := range seed.AllCourses() {
+		if err := seedCourse(ctx, courses, data, *force, *publish, status, i+1); err != nil {
+			log.Fatalf("курс %q: %v", data.Slug, err)
+		}
+	}
+}
+
+// seedCourse создаёт курс или обновляет его НА МЕСТЕ (id модулей/уроков
+// сохраняются, значит прогресс студентов и открытые главы не теряются).
+func seedCourse(ctx context.Context, courses *repository.CourseRepo, data seed.CourseSeed, force, publish bool, status string, position int) error {
+	existing, err := courses.GetBySlug(ctx, data.Slug)
+	if err != nil && !errors.Is(err, repository.ErrNotFound) {
+		return fmt.Errorf("поиск курса: %w", err)
+	}
+
+	// Курс уже есть — обновляем на месте.
 	if err == nil {
-		if !*force {
-			log.Fatalf("курс %q уже существует — запустите с флагом -force, чтобы обновить", data.Slug)
+		if !force {
+			return fmt.Errorf("курс уже существует — запустите с флагом -force, чтобы обновить")
 		}
 		updStatus := existing.Status
-		if *publish {
+		if publish {
 			updStatus = "published"
 		}
 		if _, err := courses.Update(ctx, existing.ID, repository.CourseInput{
@@ -71,15 +79,16 @@ func main() {
 			Description: data.Description, Level: data.Level, Tags: data.Tags,
 			Status: updStatus, Position: existing.Position,
 		}); err != nil {
-			log.Fatalf("обновление курса: %v", err)
+			return fmt.Errorf("обновление курса: %w", err)
 		}
+
 		mods := make([]repository.ModuleSync, 0, len(data.Modules))
 		for _, ms := range data.Modules {
 			m := repository.ModuleSync{Title: ms.Title, Summary: ms.Summary}
 			for _, ls := range ms.Lessons {
 				content, err := json.Marshal(ls.Content)
 				if err != nil {
-					log.Fatalf("сериализация урока %q: %v", ls.Title, err)
+					return fmt.Errorf("сериализация урока %q: %w", ls.Title, err)
 				}
 				m.Lessons = append(m.Lessons, repository.LessonSync{
 					Title: ls.Title, Kind: ls.Kind, Summary: ls.Summary,
@@ -90,13 +99,13 @@ func main() {
 		}
 		res, err := courses.SyncContent(ctx, existing.ID, mods)
 		if err != nil {
-			log.Fatalf("обновление содержимого курса: %v", err)
+			return fmt.Errorf("обновление содержимого курса: %w", err)
 		}
 		fmt.Printf("\n✓ Курс «%s» обновлён на месте — прогресс студентов сохранён\n", data.Title)
 		fmt.Printf("  Модули: +%d ~%d -%d · Уроки: +%d ~%d -%d\n",
 			res.ModulesAdded, res.ModulesUpdated, res.ModulesRemoved,
 			res.LessonsAdded, res.LessonsUpdated, res.LessonsRemoved)
-		return
+		return nil
 	}
 
 	// Первая загрузка — создаём курс целиком.
@@ -108,10 +117,10 @@ func main() {
 		Level:       data.Level,
 		Tags:        data.Tags,
 		Status:      status,
-		Position:    1,
+		Position:    position,
 	}, "")
 	if err != nil {
-		log.Fatalf("создание курса: %v", err)
+		return fmt.Errorf("создание курса: %w", err)
 	}
 
 	lessonCount := 0
@@ -122,15 +131,14 @@ func main() {
 			Position: moduleIndex + 1,
 		})
 		if err != nil {
-			log.Fatalf("создание модуля %q: %v", moduleSeed.Title, err)
+			return fmt.Errorf("создание модуля %q: %w", moduleSeed.Title, err)
 		}
 
 		for lessonIndex, lessonSeed := range moduleSeed.Lessons {
 			content, err := json.Marshal(lessonSeed.Content)
 			if err != nil {
-				log.Fatalf("сериализация урока %q: %v", lessonSeed.Title, err)
+				return fmt.Errorf("сериализация урока %q: %w", lessonSeed.Title, err)
 			}
-
 			if _, err := courses.CreateLesson(ctx, module.ID, repository.LessonInput{
 				Title:       lessonSeed.Title,
 				Kind:        lessonSeed.Kind,
@@ -139,7 +147,7 @@ func main() {
 				DurationMin: lessonSeed.DurationMin,
 				Position:    lessonIndex + 1,
 			}); err != nil {
-				log.Fatalf("создание урока %q: %v", lessonSeed.Title, err)
+				return fmt.Errorf("создание урока %q: %w", lessonSeed.Title, err)
 			}
 			lessonCount++
 		}
@@ -149,4 +157,5 @@ func main() {
 		course.Title, len(data.Modules), lessonCount, status)
 	fmt.Printf("  Адрес курса: /learn/courses/%s\n", course.Slug)
 	fmt.Println("  Назначьте курс студентам в разделе «Студенты» админки.")
+	return nil
 }

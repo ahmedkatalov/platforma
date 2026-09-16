@@ -1,0 +1,541 @@
+{
+  "title": "Docker, Compose, CI/CD и supply chain",
+  "summary": "Минимальный non-root image, воспроизводимое окружение, GitHub Actions, security gates, SBOM и безопасная поставка.",
+  "lessons": [
+    {
+      "title": "Go binary, CGO и reproducible builds",
+      "kind": "text",
+      "summary": "Понимаем, что именно помещаем в container и как оно связано с runtime.",
+      "durationMin": 14,
+      "content": {
+        "body": "## Зачем это нужно backend-разработчику\n\nGo binary, CGO и reproducible builds — часть ежедневной работы Go backend-разработчика. Важно не только знать синтаксис, но и понимать контракт, стоимость операции, поведение при ошибке и способ проверки результата.\n\n## Ментальная модель\n\nGo binary, CGO и reproducible builds: рассматривайте тему как набор явных входов, преобразований, выходов и отказов. Владение темой означает, что вы можете предсказать поведение до запуска и объяснить компромиссы коллеге.\n\n## Основные идеи по шагам\n\n1. Go часто собирает статически связанный бинарник при CGO_ENABLED=0, но DNS/certificates/timezone и os/user behavior нужно проверить в выбранном base image.\n2. GOOS/GOARCH задают target, -trimpath убирает локальные пути, ldflags могут записать version/commit/build time без секретов.\n3. CGO нужен некоторым библиотекам и system integrations; тогда builder/runtime libc должны быть совместимы и cross compilation сложнее.\n4. Build metadata и /version endpoint связывают бинарник с immutable commit/image digest, но не делают сборку автоматически воспроизводимой.\n\n## Разбор на примере\n\n```bash\nCGO_ENABLED=0 GOOS=linux GOARCH=amd64 \\\n  go build -trimpath -ldflags \"-s -w -X main.version=$VERSION\" \\\n  -o bin/api ./cmd/api\n```\n\nVERSION поступает из trusted CI metadata. В реальном shell переменная валидируется, а command фиксируется Makefile/Taskfile.\n\n## Где это встречается в production\n\nВ рабочем сервисе эта тема влияет на читаемость pull request, предсказуемость API, диагностику инцидентов и стоимость дальнейших изменений. Сначала зафиксируйте контракт тестом или примером, затем реализуйте простейшее корректное решение.\n\n## Как бывает неправильно\n\n- **Механическое копирование**\n  - Как проявляется: код компилируется, но автор не может объяснить граничные случаи\n  - Что делать: измените входные данные и предскажите результат до запуска\n- **Скрытая ошибка**\n  - Как проявляется: неверное состояние обнаруживается далеко от причины\n  - Что делать: возвращайте ошибку с контекстом и проверяйте её на нужном уровне\n- **Преждевременная сложность**\n  - Как проявляется: простая задача получает лишние абстракции и зависимости\n  - Что делать: сначала используйте стандартную библиотеку и измеримые требования\n\n## Проверьте себя\n\n1. Объясните своими словами: Go binary, CGO и reproducible builds: рассматривайте тему как набор явных входов, преобразований, выходов и отказов. Владение темой означает, что вы можете предсказать поведение до запуска и объяснить компромиссы коллеге.\n2. Как эта тема проявляется в реальном backend-сервисе?\n3. Какую ошибку из раздела выше вы сможете распознать по симптомам?\n\n## Практика после урока\n\nВоспроизведите пример, добавьте один ошибочный вход, напишите проверку результата и объясните решение вслух за две минуты.\n\n## Запомнить\n\n- Сначала понимайте контракт и ограничения, затем выбирайте инструмент.\n- Ошибка должна быть наблюдаемой: её проверяют, логируют с контекстом и возвращают на правильный уровень.\n- Любой пример из урока измените хотя бы один раз и снова проверьте результат.\n- Production-код отличается явными таймаутами, валидацией, тестами и способом безопасного завершения.",
+        "resources": [
+          {
+            "url": "https://go.dev/doc/",
+            "title": "Официальная документация Go",
+            "note": "Спецификация, руководства, релизы и стандартная библиотека."
+          },
+          {
+            "url": "https://docs.docker.com/build/building/multi-stage/",
+            "title": "Docker multi-stage builds",
+            "note": "Минимальные и воспроизводимые container images."
+          }
+        ]
+      }
+    },
+    {
+      "title": "Multi-stage Dockerfile и non-root runtime",
+      "kind": "text",
+      "summary": "Уменьшаем attack surface и отделяем build tools от production.",
+      "durationMin": 15,
+      "content": {
+        "body": "## Зачем это нужно backend-разработчику\n\nMulti-stage Dockerfile и non-root runtime — часть ежедневной работы Go backend-разработчика. Важно не только знать синтаксис, но и понимать контракт, стоимость операции, поведение при ошибке и способ проверки результата.\n\n## Ментальная модель\n\nMulti-stage Dockerfile и non-root runtime: рассматривайте тему как набор явных входов, преобразований, выходов и отказов. Владение темой означает, что вы можете предсказать поведение до запуска и объяснить компромиссы коллеге.\n\n## Основные идеи по шагам\n\n1. Builder stage скачивает modules и компилирует; runtime получает только binary и необходимые CA/timezone assets.\n2. Запускайте non-root user, не устанавливайте shell/package manager без необходимости, используйте read-only filesystem и writable tmp volume при нужде.\n3. Копируйте go.mod/go.sum до source для cache layer, используйте BuildKit cache mounts и pin base image digest в строгом supply-chain процессе.\n4. HEALTHCHECK в image не заменяет Kubernetes probes; signal handling требует, чтобы Go process был PID 1 напрямую, без shell wrapper.\n\n## Разбор на примере\n\n```dockerfile\nFROM golang:1.27 AS build\nWORKDIR /src\nCOPY go.mod go.sum ./\nRUN go mod download\nCOPY . .\nRUN CGO_ENABLED=0 go build -trimpath -o /out/api ./cmd/api\n\nFROM gcr.io/distroless/static-debian12:nonroot\nCOPY --from=build /out/api /api\nUSER nonroot:nonroot\nENTRYPOINT [\"/api\"]\n```\n\nДля строгой повторяемости tags заменяют verified digests. Distroless runtime требует, чтобы диагностика происходила через endpoints/ephemeral containers.\n\n## Где это встречается в production\n\nВ рабочем сервисе эта тема влияет на читаемость pull request, предсказуемость API, диагностику инцидентов и стоимость дальнейших изменений. Сначала зафиксируйте контракт тестом или примером, затем реализуйте простейшее корректное решение.\n\n## Как бывает неправильно\n\n- **Механическое копирование**\n  - Как проявляется: код компилируется, но автор не может объяснить граничные случаи\n  - Что делать: измените входные данные и предскажите результат до запуска\n- **Скрытая ошибка**\n  - Как проявляется: неверное состояние обнаруживается далеко от причины\n  - Что делать: возвращайте ошибку с контекстом и проверяйте её на нужном уровне\n- **Преждевременная сложность**\n  - Как проявляется: простая задача получает лишние абстракции и зависимости\n  - Что делать: сначала используйте стандартную библиотеку и измеримые требования\n\n## Проверьте себя\n\n1. Объясните своими словами: Multi-stage Dockerfile и non-root runtime: рассматривайте тему как набор явных входов, преобразований, выходов и отказов. Владение темой означает, что вы можете предсказать поведение до запуска и объяснить компромиссы коллеге.\n2. Как эта тема проявляется в реальном backend-сервисе?\n3. Какую ошибку из раздела выше вы сможете распознать по симптомам?\n\n## Практика после урока\n\nВоспроизведите пример, добавьте один ошибочный вход, напишите проверку результата и объясните решение вслух за две минуты.\n\n## Запомнить\n\n- Сначала понимайте контракт и ограничения, затем выбирайте инструмент.\n- Ошибка должна быть наблюдаемой: её проверяют, логируют с контекстом и возвращают на правильный уровень.\n- Любой пример из урока измените хотя бы один раз и снова проверьте результат.\n- Production-код отличается явными таймаутами, валидацией, тестами и способом безопасного завершения.",
+        "resources": [
+          {
+            "url": "https://docs.docker.com/build/building/multi-stage/",
+            "title": "Docker multi-stage builds",
+            "note": "Минимальные и воспроизводимые container images."
+          }
+        ]
+      }
+    },
+    {
+      "title": "Docker Compose как локальная платформа",
+      "kind": "text",
+      "summary": "Поднимаем зависимости одинаково для команды и integration tests.",
+      "durationMin": 16,
+      "content": {
+        "body": "## Зачем это нужно backend-разработчику\n\nDocker Compose как локальная платформа — часть ежедневной работы Go backend-разработчика. Важно не только знать синтаксис, но и понимать контракт, стоимость операции, поведение при ошибке и способ проверки результата.\n\n## Ментальная модель\n\nDocker Compose как локальная платформа: рассматривайте тему как набор явных входов, преобразований, выходов и отказов. Владение темой означает, что вы можете предсказать поведение до запуска и объяснить компромиссы коллеге.\n\n## Основные идеи по шагам\n\n1. Compose описывает PostgreSQL, Redis, brokers и API networks/volumes/healthchecks; config без secrets можно version control.\n2. depends_on не гарантирует готовность по умолчанию; healthcheck/condition и application retry startup нужны отдельно.\n3. Named volumes сохраняют данные между restart; disposable test project использует уникальное project name и cleanup.\n4. Не имитируйте Kubernetes полностью в Compose: цель — быстрый локальный feedback и совместимые dependency versions.\n\n## Разбор на примере\n\n```yaml\nservices:\n  postgres:\n    image: postgres:18\n    environment:\n      POSTGRES_USER: app\n      POSTGRES_PASSWORD: app\n      POSTGRES_DB: app\n    healthcheck:\n      test: [\"CMD-SHELL\", \"pg_isready -U app -d app\"]\n      interval: 2s\n      timeout: 2s\n      retries: 15\n```\n\nУчебные credentials допустимы только локально. Production secrets приходят из отдельного secret manager.\n\n## Где это встречается в production\n\nВ рабочем сервисе эта тема влияет на читаемость pull request, предсказуемость API, диагностику инцидентов и стоимость дальнейших изменений. Сначала зафиксируйте контракт тестом или примером, затем реализуйте простейшее корректное решение.\n\n## Как бывает неправильно\n\n- **Механическое копирование**\n  - Как проявляется: код компилируется, но автор не может объяснить граничные случаи\n  - Что делать: измените входные данные и предскажите результат до запуска\n- **Скрытая ошибка**\n  - Как проявляется: неверное состояние обнаруживается далеко от причины\n  - Что делать: возвращайте ошибку с контекстом и проверяйте её на нужном уровне\n- **Преждевременная сложность**\n  - Как проявляется: простая задача получает лишние абстракции и зависимости\n  - Что делать: сначала используйте стандартную библиотеку и измеримые требования\n\n## Проверьте себя\n\n1. Объясните своими словами: Docker Compose как локальная платформа: рассматривайте тему как набор явных входов, преобразований, выходов и отказов. Владение темой означает, что вы можете предсказать поведение до запуска и объяснить компромиссы коллеге.\n2. Как эта тема проявляется в реальном backend-сервисе?\n3. Какую ошибку из раздела выше вы сможете распознать по симптомам?\n\n## Практика после урока\n\nВоспроизведите пример, добавьте один ошибочный вход, напишите проверку результата и объясните решение вслух за две минуты.\n\n## Запомнить\n\n- Сначала понимайте контракт и ограничения, затем выбирайте инструмент.\n- Ошибка должна быть наблюдаемой: её проверяют, логируют с контекстом и возвращают на правильный уровень.\n- Любой пример из урока измените хотя бы один раз и снова проверьте результат.\n- Production-код отличается явными таймаутами, валидацией, тестами и способом безопасного завершения.",
+        "resources": [
+          {
+            "url": "https://docs.docker.com/compose/",
+            "title": "Docker Compose",
+            "note": "Локальное окружение из нескольких сервисов."
+          },
+          {
+            "url": "https://www.postgresql.org/docs/18/",
+            "title": "PostgreSQL 18 Documentation",
+            "note": "Актуальная стабильная документация PostgreSQL на сентябрь 2026."
+          }
+        ]
+      }
+    },
+    {
+      "title": "GitHub Actions и software supply chain",
+      "kind": "text",
+      "summary": "Строим least-privilege pipeline от проверки до immutable artifact.",
+      "durationMin": 17,
+      "content": {
+        "body": "## Зачем это нужно backend-разработчику\n\nGitHub Actions и software supply chain — часть ежедневной работы Go backend-разработчика. Важно не только знать синтаксис, но и понимать контракт, стоимость операции, поведение при ошибке и способ проверки результата.\n\n## Ментальная модель\n\nGitHub Actions и software supply chain: рассматривайте тему как набор явных входов, преобразований, выходов и отказов. Владение темой означает, что вы можете предсказать поведение до запуска и объяснить компромиссы коллеге.\n\n## Основные идеи по шагам\n\n1. Pull request gate: format check, vet/staticcheck, unit/race, integration, generated diff, vuln scan и build.\n2. Cache ускоряет downloads, но ключ учитывает go.sum/toolchain; cache не является доверенным релизным artifact.\n3. Workflow permissions задают минимально, untrusted fork code не получает secrets, third-party actions pin по commit SHA.\n4. Release создаёт image digest, SBOM/provenance/signature и deploy promotion между environments; один и тот же digest продвигается без rebuild.\n\n## Разбор на примере\n\n```yaml\npermissions:\n  contents: read\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@<pinned-commit-sha>\n      - uses: actions/setup-go@<pinned-commit-sha>\n        with: { go-version: \"1.27.x\", cache: true }\n      - run: go test -race ./...\n      - run: govulncheck ./...\n```\n\nРеальный workflow pinит полные immutable SHAs и проверяет обновления через автоматизированный PR.\n\n## Где это встречается в production\n\nВ рабочем сервисе эта тема влияет на читаемость pull request, предсказуемость API, диагностику инцидентов и стоимость дальнейших изменений. Сначала зафиксируйте контракт тестом или примером, затем реализуйте простейшее корректное решение.\n\n## Как бывает неправильно\n\n- **Механическое копирование**\n  - Как проявляется: код компилируется, но автор не может объяснить граничные случаи\n  - Что делать: измените входные данные и предскажите результат до запуска\n- **Скрытая ошибка**\n  - Как проявляется: неверное состояние обнаруживается далеко от причины\n  - Что делать: возвращайте ошибку с контекстом и проверяйте её на нужном уровне\n- **Преждевременная сложность**\n  - Как проявляется: простая задача получает лишние абстракции и зависимости\n  - Что делать: сначала используйте стандартную библиотеку и измеримые требования\n\n## Проверьте себя\n\n1. Объясните своими словами: GitHub Actions и software supply chain: рассматривайте тему как набор явных входов, преобразований, выходов и отказов. Владение темой означает, что вы можете предсказать поведение до запуска и объяснить компромиссы коллеге.\n2. Как эта тема проявляется в реальном backend-сервисе?\n3. Какую ошибку из раздела выше вы сможете распознать по симптомам?\n\n## Практика после урока\n\nВоспроизведите пример, добавьте один ошибочный вход, напишите проверку результата и объясните решение вслух за две минуты.\n\n## Запомнить\n\n- Сначала понимайте контракт и ограничения, затем выбирайте инструмент.\n- Ошибка должна быть наблюдаемой: её проверяют, логируют с контекстом и возвращают на правильный уровень.\n- Любой пример из урока измените хотя бы один раз и снова проверьте результат.\n- Production-код отличается явными таймаутами, валидацией, тестами и способом безопасного завершения.",
+        "resources": [
+          {
+            "url": "https://docs.github.com/en/actions",
+            "title": "GitHub Actions",
+            "note": "CI pipelines, permissions, caching и artifacts."
+          },
+          {
+            "url": "https://go.dev/doc/security/vuln/",
+            "title": "Go Vulnerability Management",
+            "note": "govulncheck и модель уязвимостей Go."
+          },
+          {
+            "url": "https://docs.docker.com/build/building/multi-stage/",
+            "title": "Docker multi-stage builds",
+            "note": "Минимальные и воспроизводимые container images."
+          }
+        ]
+      }
+    },
+    {
+      "title": "Терминал: собираем и проверяем container",
+      "kind": "terminal",
+      "summary": "От локальных тестов до запуска non-root image и smoke test.",
+      "durationMin": 16,
+      "content": {
+        "intro": "Команды работают с учебным image go-backend-course:local. Не используйте production registry credentials.\n\nПеред Enter назовите ожидаемый результат. После команды прочитайте вывод и код завершения; не переходите дальше, пока не понимаете, что именно подтвердили.\n\n## Разбор команд до практики\n\nНиже каждая команда разобрана до выполнения. Сначала прочитайте назначение и назовите ожидаемый результат, затем выполняйте задание в тренажёре.\n\n### 1. Запустите тесты до сборки.\n\n**Команда:**\n\n```bash\ngo test -race ./...\n```\n\n- **Инструмент:** Go toolchain.\n- **Зачем запускать:** Не тратьте image build на заведомо сломанный commit.\n- **Что считать подтверждением:** Не тратьте image build на заведомо сломанный commit.\n- **Перед запуском:** Проверьте текущий каталог и прочитайте команду слева направо: программа, подкоманда, флаги, аргументы.\n- **После запуска:** прочитайте stdout и stderr, затем проверьте код завершения командой `echo $?`, если результат неоднозначен.\n\n### 2. Соберите image.\n\n**Команда:**\n\n```bash\ndocker build --pull -t go-backend-course:local .\n```\n\n- **Инструмент:** Docker CLI.\n- **Зачем запускать:** Builder создаёт runtime image из текущего source.\n- **Что считать подтверждением:** Builder создаёт runtime image из текущего source.\n- **Перед запуском:** Проверьте активный Docker/Kubernetes-контекст и точное имя ресурса: команда может менять состояние учебного окружения.\n- **После запуска:** прочитайте stdout и stderr, затем проверьте код завершения командой `echo $?`, если результат неоднозначен.\n\n### 3. Покажите размер image.\n\n**Команда:**\n\n```bash\ndocker image ls go-backend-course:local\n```\n\n- **Инструмент:** Docker CLI.\n- **Зачем запускать:** Сравните multi-stage с полным golang image.\n- **Что считать подтверждением:** Сравните multi-stage с полным golang image.\n- **Перед запуском:** Проверьте активный Docker/Kubernetes-контекст и точное имя ресурса: команда может менять состояние учебного окружения.\n- **После запуска:** прочитайте stdout и stderr, затем проверьте код завершения командой `echo $?`, если результат неоднозначен.\n\n### 4. Проверьте configured user.\n\n**Команда:**\n\n```bash\ndocker image inspect go-backend-course:local --format '{{.Config.User}}'\n```\n\n- **Инструмент:** Docker CLI.\n- **Зачем запускать:** Ожидайте non-root identity.\n- **Что считать подтверждением:** Ожидайте non-root identity.\n- **Перед запуском:** Проверьте активный Docker/Kubernetes-контекст и точное имя ресурса: команда может менять состояние учебного окружения.\n- **После запуска:** прочитайте stdout и stderr, затем проверьте код завершения командой `echo $?`, если результат неоднозначен.\n\n### 5. Запустите read-only container.\n\n**Команда:**\n\n```bash\ndocker run --rm --read-only --tmpfs /tmp -p 8080:8080 go-backend-course:local\n```\n\n- **Инструмент:** Docker CLI.\n- **Зачем запускать:** Процесс должен стартовать без записи в image filesystem.\n- **Что считать подтверждением:** Процесс должен стартовать без записи в image filesystem.\n- **Перед запуском:** Проверьте активный Docker/Kubernetes-контекст и точное имя ресурса: команда может менять состояние учебного окружения.\n- **После запуска:** прочитайте stdout и stderr, затем проверьте код завершения командой `echo $?`, если результат неоднозначен.\n\n### 6. Проверьте health в другом терминале.\n\n**Команда:**\n\n```bash\ncurl -i --max-time 2 http://localhost:8080/healthz\n```\n\n- **Инструмент:** curl.\n- **Зачем запускать:** Smoke test подтверждает network contract image.\n- **Что считать подтверждением:** Smoke test подтверждает network contract image.\n- **Перед запуском:** Проверьте адрес, порт и таймаут; команда должна обращаться только к разрешённой учебной цели.\n- **После запуска:** прочитайте stdout и stderr, затем проверьте код завершения командой `echo $?`, если результат неоднозначен.\n\n### 7. Покажите историю layers.\n\n**Команда:**\n\n```bash\ndocker history go-backend-course:local\n```\n\n- **Инструмент:** Docker CLI.\n- **Зачем запускать:** Ищите лишние файлы и случайные секреты в instructions.\n- **Что считать подтверждением:** Ищите лишние файлы и случайные секреты в instructions.\n- **Перед запуском:** Проверьте активный Docker/Kubernetes-контекст и точное имя ресурса: команда может менять состояние учебного окружения.\n- **После запуска:** прочитайте stdout и stderr, затем проверьте код завершения командой `echo $?`, если результат неоднозначен.",
+        "shell": "student@go-backend",
+        "tasks": [
+          {
+            "id": "t1",
+            "prompt": "Запустите тесты до сборки.",
+            "predict": "Что должно измениться или появиться после этой команды? Не тратьте image build на заведомо сломанный commit.",
+            "hint": "Нужна команда: go test -race ./...",
+            "hints": [
+              "Не тратьте image build на заведомо сломанный commit.",
+              "Соберите команду из программы, подкоманды, флагов и аргумента. Не добавляйте sudo без причины.",
+              "`go test -race ./...`"
+            ],
+            "expected": [
+              "go test -race ./..."
+            ],
+            "success": "Готово. Не тратьте image build на заведомо сломанный commit."
+          },
+          {
+            "id": "t2",
+            "prompt": "Соберите image.",
+            "predict": "Что должно измениться или появиться после этой команды? Builder создаёт runtime image из текущего source.",
+            "hint": "Нужна команда: docker build --pull -t go-backend-course:local .",
+            "hints": [
+              "Builder создаёт runtime image из текущего source.",
+              "Соберите команду из программы, подкоманды, флагов и аргумента. Не добавляйте sudo без причины.",
+              "`docker build --pull -t go-backend-course:local .`"
+            ],
+            "expected": [
+              "docker build --pull -t go-backend-course:local ."
+            ],
+            "success": "Готово. Builder создаёт runtime image из текущего source."
+          },
+          {
+            "id": "t3",
+            "prompt": "Покажите размер image.",
+            "predict": "Что должно измениться или появиться после этой команды? Сравните multi-stage с полным golang image.",
+            "hint": "Нужна команда: docker image ls go-backend-course:local",
+            "hints": [
+              "Сравните multi-stage с полным golang image.",
+              "Соберите команду из программы, подкоманды, флагов и аргумента. Не добавляйте sudo без причины.",
+              "`docker image ls go-backend-course:local`"
+            ],
+            "expected": [
+              "docker image ls go-backend-course:local"
+            ],
+            "success": "Готово. Сравните multi-stage с полным golang image."
+          },
+          {
+            "id": "t4",
+            "prompt": "Проверьте configured user.",
+            "predict": "Что должно измениться или появиться после этой команды? Ожидайте non-root identity.",
+            "hint": "Нужна команда: docker image inspect go-backend-course:local --format '{{.Config.User}}'",
+            "hints": [
+              "Ожидайте non-root identity.",
+              "Соберите команду из программы, подкоманды, флагов и аргумента. Не добавляйте sudo без причины.",
+              "`docker image inspect go-backend-course:local --format '{{.Config.User}}'`"
+            ],
+            "expected": [
+              "docker image inspect go-backend-course:local --format '{{.Config.User}}'"
+            ],
+            "success": "Готово. Ожидайте non-root identity."
+          },
+          {
+            "id": "t5",
+            "prompt": "Запустите read-only container.",
+            "predict": "Что должно измениться или появиться после этой команды? Процесс должен стартовать без записи в image filesystem.",
+            "hint": "Нужна команда: docker run --rm --read-only --tmpfs /tmp -p 8080:8080 go-backend-course:local",
+            "hints": [
+              "Процесс должен стартовать без записи в image filesystem.",
+              "Соберите команду из программы, подкоманды, флагов и аргумента. Не добавляйте sudo без причины.",
+              "`docker run --rm --read-only --tmpfs /tmp -p 8080:8080 go-backend-course:local`"
+            ],
+            "expected": [
+              "docker run --rm --read-only --tmpfs /tmp -p 8080:8080 go-backend-course:local"
+            ],
+            "success": "Готово. Процесс должен стартовать без записи в image filesystem."
+          },
+          {
+            "id": "t6",
+            "prompt": "Проверьте health в другом терминале.",
+            "predict": "Что должно измениться или появиться после этой команды? Smoke test подтверждает network contract image.",
+            "hint": "Нужна команда: curl -i --max-time 2 http://localhost:8080/healthz",
+            "hints": [
+              "Smoke test подтверждает network contract image.",
+              "Соберите команду из программы, подкоманды, флагов и аргумента. Не добавляйте sudo без причины.",
+              "`curl -i --max-time 2 http://localhost:8080/healthz`"
+            ],
+            "expected": [
+              "curl -i --max-time 2 http://localhost:8080/healthz"
+            ],
+            "success": "Готово. Smoke test подтверждает network contract image."
+          },
+          {
+            "id": "t7",
+            "prompt": "Покажите историю layers.",
+            "predict": "Что должно измениться или появиться после этой команды? Ищите лишние файлы и случайные секреты в instructions.",
+            "hint": "Нужна команда: docker history go-backend-course:local",
+            "hints": [
+              "Ищите лишние файлы и случайные секреты в instructions.",
+              "Соберите команду из программы, подкоманды, флагов и аргумента. Не добавляйте sudo без причины.",
+              "`docker history go-backend-course:local`"
+            ],
+            "expected": [
+              "docker history go-backend-course:local"
+            ],
+            "success": "Готово. Ищите лишние файлы и случайные секреты в instructions."
+          }
+        ],
+        "challenge": "Соберите дважды один commit, сравните размеры/digests, объясните различия и зафиксируйте build metadata/provenance, нужные для расследования.",
+        "debug": "Читайте stderr полностью и проверяйте код завершения. Если результат неожиданен, сузьте проблему одной командой и повторите её с минимальным вводом.\n\nТипичная ошибка: проверять только запуск container. Всегда начните с `pwd`, `ls -la` и чтения полного сообщения об ошибке.",
+        "resources": [
+          {
+            "url": "https://docs.docker.com/build/building/multi-stage/",
+            "title": "Docker multi-stage builds",
+            "note": "Минимальные и воспроизводимые container images."
+          },
+          {
+            "url": "https://docs.github.com/en/actions",
+            "title": "GitHub Actions",
+            "note": "CI pipelines, permissions, caching и artifacts."
+          },
+          {
+            "url": "https://go.dev/doc/security/vuln/",
+            "title": "Go Vulnerability Management",
+            "note": "govulncheck и модель уязвимостей Go."
+          }
+        ]
+      }
+    },
+    {
+      "title": "Production Dockerfile",
+      "kind": "code",
+      "summary": "Соберите минимальный Go image с cache и non-root runtime.",
+      "durationMin": 22,
+      "content": {
+        "task": "Создайте multi-stage Dockerfile для ./cmd/api: Go 1.27 builder, module cache, CGO_ENABLED=0, -trimpath; distroless nonroot runtime; copy только binary; expose 8080; ENTRYPOINT exec form.\n\n## Порядок работы\n\n1. Прочитайте контракт и назовите вход, выход и возможные ошибки.\n2. Допишите минимальный рабочий вариант.\n3. Проверьте обычный, граничный и ошибочный сценарии.\n4. Измените одно требование и адаптируйте код без копирования готового решения.\n5. Сравните с эталоном только после собственной попытки.\n\n## Обязательная проверка\n\nЗапустите форматирование и подходящие тесты. Для Go: `go fmt ./...`, `go vet ./...` и `go test ./...`. Ошибку не скрывайте пустым обработчиком.",
+        "starter": "FROM golang:1.27 AS build\n# TODO\n",
+        "solution": "FROM golang:1.27 AS build\nWORKDIR /src\nCOPY go.mod go.sum ./\nRUN --mount=type=cache,target=/go/pkg/mod go mod download\nCOPY . .\nRUN --mount=type=cache,target=/root/.cache/go-build CGO_ENABLED=0 go build -trimpath -o /out/api ./cmd/api\n\nFROM gcr.io/distroless/static-debian12:nonroot\nCOPY --from=build --chown=nonroot:nonroot /out/api /api\nUSER nonroot:nonroot\nEXPOSE 8080\nENTRYPOINT [\"/api\"]",
+        "checks": [
+          {
+            "type": "contains",
+            "value": "FROM golang:1.27 AS build",
+            "message": "Проверка 1: в решении должна быть реализована конструкция `FROM golang:1.27 AS build`."
+          },
+          {
+            "type": "contains",
+            "value": "COPY go.mod go.sum",
+            "message": "Проверка 2: в решении должна быть реализована конструкция `COPY go.mod go.sum`."
+          },
+          {
+            "type": "contains",
+            "value": "go mod download",
+            "message": "Проверка 3: в решении должна быть реализована конструкция `go mod download`."
+          },
+          {
+            "type": "contains",
+            "value": "CGO_ENABLED=0",
+            "message": "Проверка 4: в решении должна быть реализована конструкция `CGO_ENABLED=0`."
+          },
+          {
+            "type": "contains",
+            "value": "go build -trimpath",
+            "message": "Проверка 5: в решении должна быть реализована конструкция `go build -trimpath`."
+          },
+          {
+            "type": "contains",
+            "value": "FROM gcr.io/distroless",
+            "message": "Проверка 6: в решении должна быть реализована конструкция `FROM gcr.io/distroless`."
+          },
+          {
+            "type": "contains",
+            "value": "USER nonroot:nonroot",
+            "message": "Проверка 7: в решении должна быть реализована конструкция `USER nonroot:nonroot`."
+          },
+          {
+            "type": "contains",
+            "value": "ENTRYPOINT [\"/api\"]",
+            "message": "Проверка 8: в решении должна быть реализована конструкция `ENTRYPOINT [\"/api\"]`."
+          }
+        ],
+        "hint": "Отделите download-cache layer, compile в /out и минимальный runtime stage.\n\n## Шпаргалка по синтаксису\n\n- `FROM` выбирает базовый образ; несколько `FROM` разделяют build- и runtime-стадии.\n- `WORKDIR`, `COPY` и `RUN` формируют слои образа; располагайте редко меняющиеся слои раньше.\n- Для запуска используйте exec-форму `ENTRYPOINT [\"/app\"]`, задавайте непривилегированного `USER` и минимальный runtime-образ.\n- Не передавайте секреты через `ARG`/`ENV` и проверяйте результат через повторяемую сборку и smoke test.\n\n## Что проверяет автопроверка\n\n1. Проверка 1: в решении должна быть реализована конструкция `FROM golang:1.27 AS build`.\n2. Проверка 2: в решении должна быть реализована конструкция `COPY go.mod go.sum`.\n3. Проверка 3: в решении должна быть реализована конструкция `go mod download`.\n4. Проверка 4: в решении должна быть реализована конструкция `CGO_ENABLED=0`.\n5. Проверка 5: в решении должна быть реализована конструкция `go build -trimpath`.\n6. Проверка 6: в решении должна быть реализована конструкция `FROM gcr.io/distroless`.\n7. Проверка 7: в решении должна быть реализована конструкция `USER nonroot:nonroot`.\n8. Проверка 8: в решении должна быть реализована конструкция `ENTRYPOINT [\"/api\"]`.\n\nАвтопроверка подтверждает обязательные конструкции, но не заменяет компиляцию, тесты, статический анализ и проверку поведения на границах.",
+        "language": "dockerfile",
+        "resources": [
+          {
+            "url": "https://docs.docker.com/build/building/multi-stage/",
+            "title": "Docker multi-stage builds",
+            "note": "Минимальные и воспроизводимые container images."
+          },
+          {
+            "url": "https://go.dev/doc/go1.27",
+            "title": "Go 1.27 Release Notes",
+            "note": "Актуальные изменения языка, toolchain, runtime и стандартной библиотеки за 2026 год."
+          }
+        ]
+      }
+    },
+    {
+      "title": "CI workflow для Go backend",
+      "kind": "code",
+      "summary": "Зафиксируйте быстрые и security gates с минимальными permissions.",
+      "durationMin": 22,
+      "content": {
+        "task": "Создайте GitHub Actions workflow на pull_request: contents:read, Go 1.27.x, gofmt diff, vet, test -race, staticcheck, govulncheck, build. Commands должны падать при ошибке; third-party actions отметить для pin SHA.\n\n## Порядок работы\n\n1. Прочитайте контракт и назовите вход, выход и возможные ошибки.\n2. Допишите минимальный рабочий вариант.\n3. Проверьте обычный, граничный и ошибочный сценарии.\n4. Измените одно требование и адаптируйте код без копирования готового решения.\n5. Сравните с эталоном только после собственной попытки.\n\n## Обязательная проверка\n\nЗапустите форматирование и подходящие тесты. Для Go: `go fmt ./...`, `go vet ./...` и `go test ./...`. Ошибку не скрывайте пустым обработчиком.",
+        "starter": "name: ci\non: [pull_request]\n\n# TODO",
+        "solution": "name: ci\non: [pull_request]\n\npermissions:\n  contents: read\n\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@<pin-full-commit-sha>\n      - uses: actions/setup-go@<pin-full-commit-sha>\n        with:\n          go-version: 1.27.x\n          cache: true\n      - run: test -z \"$(gofmt -l .)\"\n      - run: go vet ./...\n      - run: go test -race ./...\n      - run: staticcheck ./...\n      - run: govulncheck ./...\n      - run: go build -trimpath ./...",
+        "checks": [
+          {
+            "type": "contains",
+            "value": "pull_request",
+            "message": "Проверка 1: в решении должна быть реализована конструкция `pull_request`."
+          },
+          {
+            "type": "contains",
+            "value": "permissions:",
+            "message": "Проверка 2: в решении должна быть реализована конструкция `permissions:`."
+          },
+          {
+            "type": "contains",
+            "value": "contents: read",
+            "message": "Проверка 3: в решении должна быть реализована конструкция `contents: read`."
+          },
+          {
+            "type": "contains",
+            "value": "go-version: 1.27.x",
+            "message": "Проверка 4: в решении должна быть реализована конструкция `go-version: 1.27.x`."
+          },
+          {
+            "type": "contains",
+            "value": "gofmt -l",
+            "message": "Проверка 5: в решении должна быть реализована конструкция `gofmt -l`."
+          },
+          {
+            "type": "contains",
+            "value": "go vet ./...",
+            "message": "Проверка 6: в решении должна быть реализована конструкция `go vet ./...`."
+          },
+          {
+            "type": "contains",
+            "value": "go test -race ./...",
+            "message": "Проверка 7: в решении должна быть реализована конструкция `go test -race ./...`."
+          },
+          {
+            "type": "contains",
+            "value": "staticcheck ./...",
+            "message": "Проверка 8: в решении должна быть реализована конструкция `staticcheck ./...`."
+          },
+          {
+            "type": "contains",
+            "value": "govulncheck ./...",
+            "message": "Проверка 9: в решении должна быть реализована конструкция `govulncheck ./...`."
+          },
+          {
+            "type": "contains",
+            "value": "go build -trimpath",
+            "message": "Проверка 10: в решении должна быть реализована конструкция `go build -trimpath`."
+          }
+        ],
+        "hint": "Сначала least privilege и toolchain, затем gates от дешёвых к дорогим. Placeholder SHA заменяется реальным verified commit.\n\n## Шпаргалка по синтаксису\n\n- Отступ задаёт вложенность: используйте пробелы, не табуляцию.\n- Пара `key: value` создаёт поле, а строка с `-` — элемент списка.\n- Строки с двоеточиями, `#` или неоднозначными значениями лучше заключать в кавычки.\n- Сначала проверьте синтаксис и схему, затем изучите итоговый diff; секреты не помещайте в открытый YAML.\n\n## Что проверяет автопроверка\n\n1. Проверка 1: в решении должна быть реализована конструкция `pull_request`.\n2. Проверка 2: в решении должна быть реализована конструкция `permissions:`.\n3. Проверка 3: в решении должна быть реализована конструкция `contents: read`.\n4. Проверка 4: в решении должна быть реализована конструкция `go-version: 1.27.x`.\n5. Проверка 5: в решении должна быть реализована конструкция `gofmt -l`.\n6. Проверка 6: в решении должна быть реализована конструкция `go vet ./...`.\n7. Проверка 7: в решении должна быть реализована конструкция `go test -race ./...`.\n8. Проверка 8: в решении должна быть реализована конструкция `staticcheck ./...`.\n9. Проверка 9: в решении должна быть реализована конструкция `govulncheck ./...`.\n10. Проверка 10: в решении должна быть реализована конструкция `go build -trimpath`.\n\nАвтопроверка подтверждает обязательные конструкции, но не заменяет компиляцию, тесты, статический анализ и проверку поведения на границах.",
+        "language": "yaml",
+        "resources": [
+          {
+            "url": "https://docs.github.com/en/actions",
+            "title": "GitHub Actions",
+            "note": "CI pipelines, permissions, caching и artifacts."
+          },
+          {
+            "url": "https://go.dev/doc/security/vuln/",
+            "title": "Go Vulnerability Management",
+            "note": "govulncheck и модель уязвимостей Go."
+          },
+          {
+            "url": "https://staticcheck.dev/docs/",
+            "title": "Staticcheck",
+            "note": "Статический анализ корректности и качества Go-кода."
+          }
+        ]
+      }
+    },
+    {
+      "title": "Квиз модуля: Docker, Compose, CI/CD и supply chain",
+      "kind": "quiz",
+      "summary": "Проверка ключевых решений и ошибок по модулю «Docker, Compose, CI/CD и supply chain».",
+      "durationMin": 10,
+      "content": {
+        "intro": "Ответьте без запуска кода. Цель — проверить причинно-следственные связи. После ошибки вернитесь к уроку и воспроизведите пример своими руками. Положение правильного варианта меняется; ориентируйтесь на смысл, а не на букву ответа.",
+        "passScore": 70,
+        "questions": [
+          {
+            "id": "q1",
+            "text": "Что меняется при CGO_ENABLED=0?",
+            "options": [
+              {
+                "id": "a",
+                "text": "Go не использует cgo для сборки, что часто упрощает статический Linux binary",
+                "correct": true
+              },
+              {
+                "id": "b",
+                "text": "Отключается garbage collector",
+                "correct": false
+              },
+              {
+                "id": "c",
+                "text": "Запрещается net/http",
+                "correct": false
+              }
+            ],
+            "explanation": "Зависимости с обязательным cgo могут перестать собираться."
+          },
+          {
+            "id": "q2",
+            "text": "Почему multi-stage image безопаснее/меньше?",
+            "options": [
+              {
+                "id": "a",
+                "text": "Он автоматически исправляет все CVE",
+                "correct": false
+              },
+              {
+                "id": "b",
+                "text": "Build toolchain и исходники не попадают в runtime layer",
+                "correct": true
+              },
+              {
+                "id": "c",
+                "text": "Он запускает два процесса",
+                "correct": false
+              }
+            ],
+            "explanation": "Меньшая поверхность не отменяет scanning и patching."
+          },
+          {
+            "id": "q3",
+            "text": "Гарантирует ли просто depends_on готовность PostgreSQL принимать queries?",
+            "options": [
+              {
+                "id": "a",
+                "text": "Да, всегда",
+                "correct": false
+              },
+              {
+                "id": "b",
+                "text": "Compose запускает SQL автоматически",
+                "correct": false
+              },
+              {
+                "id": "c",
+                "text": "Нет; нужен health/readiness и устойчивый startup клиента",
+                "correct": true
+              }
+            ],
+            "explanation": "Started process ещё может выполнять recovery/init."
+          },
+          {
+            "id": "q4",
+            "text": "Почему release image продвигают по digest?",
+            "options": [
+              {
+                "id": "a",
+                "text": "Digest неизменно идентифицирует те же bytes во всех environments",
+                "correct": true
+              },
+              {
+                "id": "b",
+                "text": "Digest хранит DB password",
+                "correct": false
+              },
+              {
+                "id": "c",
+                "text": "Tag всегда immutable",
+                "correct": false
+              }
+            ],
+            "explanation": "Mutable tag может указывать на другой image позже."
+          },
+          {
+            "id": "q5",
+            "text": "Можно ли безопасно передать secret через Docker ARG, а потом удалить?",
+            "options": [
+              {
+                "id": "a",
+                "text": "Да, history его забывает",
+                "correct": false
+              },
+              {
+                "id": "b",
+                "text": "Нет, secret может остаться в history/cache; используйте BuildKit secret mount или runtime secret",
+                "correct": true
+              },
+              {
+                "id": "c",
+                "text": "ARG шифруется автоматически",
+                "correct": false
+              }
+            ],
+            "explanation": "Layers и build metadata могут сохранить значение."
+          },
+          {
+            "id": "q6",
+            "text": "Что продвигать из staging в production?",
+            "options": [
+              {
+                "id": "a",
+                "text": "Пересобранный вручную source",
+                "correct": false
+              },
+              {
+                "id": "b",
+                "text": "Локальный binary разработчика",
+                "correct": false
+              },
+              {
+                "id": "c",
+                "text": "Тот же immutable image digest",
+                "correct": true
+              }
+            ],
+            "explanation": "Promotion сохраняет доказанную идентичность artifact."
+          }
+        ],
+        "resources": [
+          {
+            "url": "https://docs.docker.com/build/building/multi-stage/",
+            "title": "Docker multi-stage builds",
+            "note": "Минимальные и воспроизводимые container images."
+          },
+          {
+            "url": "https://docs.docker.com/compose/",
+            "title": "Docker Compose",
+            "note": "Локальное окружение из нескольких сервисов."
+          },
+          {
+            "url": "https://docs.github.com/en/actions",
+            "title": "GitHub Actions",
+            "note": "CI pipelines, permissions, caching и artifacts."
+          },
+          {
+            "url": "https://go.dev/doc/security/vuln/",
+            "title": "Go Vulnerability Management",
+            "note": "govulncheck и модель уязвимостей Go."
+          }
+        ]
+      }
+    }
+  ]
+}
